@@ -1,0 +1,19 @@
+{
+  "app.name": { "ja": "きゃすほ！" },
+  "tab.reservations": { "ja": "予約" },
+  "tab.schedule": { "ja": "受付" },
+  "tab.casts": { "ja": "キャスト" },
+  "tab.analytics": { "ja": "分析" },
+  "tab.settings": { "ja": "設定" },
+  "common.wip": { "ja": "準備中" },
+  "placeholder.reservations.title": { "ja": "予約台帳" },
+  "placeholder.reservations.desc": { "ja": "日付別の予約タイムラインで、受付・変更・キャンセル・来店チェックインを管理します。" },
+  "placeholder.schedule.title": { "ja": "受付設定" },
+  "placeholder.schedule.desc": { "ja": "営業日・席数・受付の解禁／〆切、客向け公開予約ページのURL発行を設定します。" },
+  "placeholder.casts.title": { "ja": "キャスト管理" },
+  "placeholder.casts.desc": { "ja": "キャストの登録、出勤スケジュール、指名予約の受付ON／OFFを管理します。" },
+  "placeholder.analytics.title": { "ja": "分析" },
+  "placeholder.analytics.desc": { "ja": "来店・予約数の集計や指名ランキングを表示します（今後のアップデートで実装）。" },
+  "placeholder.settings.title": { "ja": "設定" },
+  "placeholder.settings.desc": { "ja": "店舗プロフィール・アカウント・利用規約／プライバシー・言語・テーマを設定します。" }
+}
