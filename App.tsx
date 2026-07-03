@@ -6,6 +6,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { LoadingScreen } from './src/components/common/LoadingScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 import { ReservationsScreen } from './src/screens/ReservationsScreen';
 import { ScheduleScreen } from './src/screens/ScheduleScreen';
 import { CastsScreen } from './src/screens/CastsScreen';
@@ -80,15 +83,28 @@ function Tabs() {
   );
 }
 
+// 認証状態でルートを出し分け（初回復元中→ローディング／未ログイン→AuthScreen／ログイン→タブ）。
+function RootGate() {
+  const { isReady, session } = useAuth();
+  const { t } = useLanguage();
+  if (!isReady) return <LoadingScreen label={t('common.loading')} />;
+  if (!session) return <AuthScreen />;
+  return (
+    <NavigationContainer>
+      <Tabs />
+    </NavigationContainer>
+  );
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <NavigationContainer>
-            <Tabs />
-          </NavigationContainer>
-          <StatusBar style="auto" />
+          <AuthProvider>
+            <RootGate />
+            <StatusBar style="auto" />
+          </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
