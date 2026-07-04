@@ -23,14 +23,13 @@ import type { ThemeColor } from '../types';
  * 背景色は標準グレー #8E8E93 で固定（テーマ primary にしない＝メモリ厳命）。
  */
 export function KeyboardDoneBar({
-  theme,
   bottomOffset = 0,
   extraBottomRetreat = 0,
 }: {
-  theme: ThemeColor;
+  theme?: ThemeColor;
   bottomOffset?: number;
   extraBottomRetreat?: number;
-}) {
+} = {}) {
   const [kbHeight, setKbHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();

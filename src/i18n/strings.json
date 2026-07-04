@@ -130,5 +130,17 @@
   "block.unblockConfirm": { "ja": "ブロックを解除しますか？" },
   "block.unblockSuccess": { "ja": "ブロックを解除しました。" },
   "contact.email": { "ja": "rurifukuro@gmail.com" },
-  "contact.label": { "ja": "お問い合わせ" }
+  "contact.label": { "ja": "お問い合わせ" },
+  "common.close": { "ja": "閉じる" },
+  "settings.terms": { "ja": "利用規約" },
+  "settings.privacy": { "ja": "プライバシーポリシー" },
+  "settings.lastUpdated": { "ja": "最終更新" },
+  "settings.deleteAccount": { "ja": "アカウント削除" },
+  "settings.deleteAccountWarningTitle": { "ja": "この操作は取り消せません" },
+  "settings.deleteAccountWarningBody": { "ja": "アカウントを削除すると、テナント・キャスト・予約・出勤・通知トークン・通報・ブロックなど、すべてのデータが即座に完全削除されます。復元はできません。" },
+  "settings.deleteAccountConfirmLabel": { "ja": "確認のため「削除」と入力してください" },
+  "settings.deleteConfirmWord": { "ja": "削除" },
+  "settings.deleteAccountConfirmTitle": { "ja": "最終確認" },
+  "settings.deleteAccountConfirmBody": { "ja": "本当にアカウントを削除しますか？すべてのデータが完全に削除されます。" },
+  "settings.deleteAccountButton": { "ja": "アカウントを完全に削除する" }
 }
