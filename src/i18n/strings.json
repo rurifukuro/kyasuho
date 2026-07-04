@@ -94,6 +94,8 @@
   "cast.shiftEnd": { "ja": "出勤終了" },
   "cast.shiftDeleteConfirm": { "ja": "この出勤枠を削除しますか？" },
   "cast.count": { "ja": "{count}名" },
+  "notification.newReservation": { "ja": "新しい予約が入りました" },
+  "notification.newReservationBody": { "ja": "{name}さんが {date} {time} の予約を追加しました" },
   "auth.mode.signin": { "ja": "ログイン" },
   "auth.mode.signup": { "ja": "新規登録" },
   "auth.email": { "ja": "メールアドレス" },

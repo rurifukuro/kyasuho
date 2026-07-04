@@ -8,6 +8,7 @@ import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { TenantProvider } from './src/context/TenantContext';
+import { NotificationProvider } from './src/context/NotificationContext';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ReservationsScreen } from './src/screens/ReservationsScreen';
@@ -92,9 +93,11 @@ function RootGate() {
   if (!session) return <AuthScreen />;
   return (
     <TenantProvider>
-      <NavigationContainer>
-        <Tabs />
-      </NavigationContainer>
+      <NotificationProvider>
+        <NavigationContainer>
+          <Tabs />
+        </NavigationContainer>
+      </NotificationProvider>
     </TenantProvider>
   );
 }
