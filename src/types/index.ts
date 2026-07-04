@@ -130,6 +130,16 @@ export type Cast = {
   sortOrder: number;
 };
 
+/** キャストの出勤枠。 */
+export type Shift = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  date: string; // YYYY-MM-DD
+  startAt: string; // HH:MM
+  endAt: string; // HH:MM
+};
+
 /** 受付解禁ウィンドウ＋自動〆切（concafe-yoyaku unlock_windows ＋ レジさぽっ！ close_at 流用）。 */
 export type UnlockWindow = {
   id: string;
