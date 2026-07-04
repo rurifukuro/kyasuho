@@ -7,6 +7,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { TenantProvider } from './src/context/TenantContext';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { ReservationsScreen } from './src/screens/ReservationsScreen';
@@ -90,9 +91,11 @@ function RootGate() {
   if (!isReady) return <LoadingScreen label={t('common.loading')} />;
   if (!session) return <AuthScreen />;
   return (
-    <NavigationContainer>
-      <Tabs />
-    </NavigationContainer>
+    <TenantProvider>
+      <NavigationContainer>
+        <Tabs />
+      </NavigationContainer>
+    </TenantProvider>
   );
 }
 
