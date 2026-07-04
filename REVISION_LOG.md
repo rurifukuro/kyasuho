@@ -240,3 +240,62 @@ SPEC §3-G / §19-#10「設定」を実装。PlaceholderScreenを完全置き換
 - **`REVISION_LOG.md`**：ヘッダを「きゃすりん」に更新（歴史的エントリは不変）
 - **検証**：`npx tsc --noEmit` EXIT:0
 - **注意**：supabase/migrations/*.sql のコメント内「きゃすほ！」は歴史的記録のため不変
+
+---
+
+## Rev12 (2026-07-04) — 客側公開Web（§19-#5・カレンダー→空き枠→予約→PIN編集）
+
+SPEC §3-D / §19-#5「客Web予約」を実装。concafe-yoyaku の CustomerPage を流用し、マルチテナント化＋きゃすりん固有仕様（HH:MM時刻・窓毎席数/セット時間・キャスト指名）に適合。
+
+- **`web/` プロジェクト新規作成**（Vite + React 19 + TypeScript strict + HashRouter）：
+  - `package.json`：react ^19.1.0 / react-dom / react-router-dom ^7.6.3 / @supabase/supabase-js ^2.49.9 / vite ^6.3.5 / typescript ~5.8.3 / @vitejs/plugin-react
+  - `vite.config.ts`：react plugin + VITE_BASE_PATH 対応（WEB3＝GitHub Pages サブパス対応）
+  - `tsconfig.json` / `tsconfig.app.json` / `tsconfig.node.json`：composite TS config, strict=true
+  - `index.html`：`<title>きゃすりん - 予約</title>`
+  - `.env.example`：VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY / VITE_BASE_PATH
+  - `.env`：実際のanon key設定（.gitignore済み・WEB4公開安全キー）
+
+- **lib層**：
+  - `supabase.ts`：createClient(VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)
+  - `types.ts`：KyTenant / KyUnlockWindow / KyCast / KyShift / KyReservation / DayStatus / MakeReservationResult / VerifyPinResult / CancelResult
+  - `timeUtils.ts`：slotToMinutes('HH:MM'→int) / minutesToSlot / formatDate / getDaysInMonth / getFirstDayOfWeek / countAvailableSeats / computeDayStatus / getAvailableSlots（10分刻みスロット生成）
+
+- **hooks層**：
+  - `useTenant.ts`：URL slug → ky_tenants SELECT single → KyTenant
+  - `useUnlockWindows.ts`：useUnlockWindows(tenantId, date) / useNextOpenDate(tenantId) / useMonthAvailability(tenantId, year, month)＝月単位で日毎DayStatus(available/low/full)算出
+  - `useReservations.ts`：useReservations(tenantId, date) → active予約一覧 + refresh
+  - `useCasts.ts`：useCasts(tenantId) / useShifts(tenantId, date)
+
+- **コンポーネント**：
+  - `Calendar.tsx`：月表示カレンダー。useMonthAvailabilityで日毎〇/▲/×色分け。前月/翌月ナビ＋凡例
+  - `TimeSlotList.tsx`：選択日の空き枠グリッド。getAvailableSlotsで10分刻みスロット＋出勤キャストチップ表示。満席=disabled
+  - `ReservationModal.tsx`：予約フォーム（名前*/連絡先/人数/指名キャスト/備考/PIN(4桁任意)）→ky_make_reservation RPC→完了画面（席番号＋PIN表示）。指名可キャストは出勤シフト照合で自動フィルタ
+  - `ReservationEditModal.tsx`：PIN検証→予約キャンセルフロー（ky_verify_reservation_pin→ky_cancel_reservation RPC）
+  - `TenantPage.tsx`：統合ページ（Calendar + TimeSlotList + ReservationModal + ReservationEditModal）。nextOpenDate自動誘導・予約一覧からPINキャンセル
+
+- **エントリーポイント**：
+  - `main.tsx`：createRoot + StrictMode
+  - `App.tsx`：HashRouter + Routes（`/:slug` → TenantPage）
+  - `App.css`：カレンダー/スロット/モーダル/フォーム/PIN表示のスタイル一式（モバイルファースト・max-width:480px）
+
+- **concafe-yoyaku との設計差異**（マルチテナント化で変更した点）：
+  | 項目 | concafe-yoyaku | きゃすりん客Web |
+  |---|---|---|
+  | テナント | シングル | マルチ（URL `/#/:slug`→slug解決） |
+  | 時刻 | 整数(BUSINESS_START起点分) | 'HH:MM'文字列(0時起点) |
+  | メニュー/注文 | あり | なし |
+  | キャスト指名 | なし | あり（ky_casts/ky_shifts） |
+  | テーブル名 | unlock_windows等 | ky_*プレフィックス |
+  | 席数 | settings.seat_count(全体) | ky_unlock_windows.seats(窓毎) |
+  | セット時間 | SET_DURATION=40固定 | ky_unlock_windows.set_minutes(窓毎) |
+
+- **`supabase/migrations/0008_ky_customer_web_rpcs.sql`**：
+  - `ky_reservations_public_read` anon SELECTポリシー（active予約＋未停止テナントのみ・客WebのUIは空き席数のみ表示で名前は非表示）
+  - `ky_verify_reservation_pin(uuid, text)` RPC（SECURITY DEFINER・PIN照合→ok/no_pin/mismatch）
+  - `ky_cancel_reservation(uuid, text)` RPC（SECURITY DEFINER・PIN照合→cancelled）
+  - anon/authenticated へ GRANT EXECUTE
+- **実DB適用（2026-07-04・非破壊migration自走・`supabase db query --linked`）**：
+  - concafe-yoyaku 本番に `0008_ky_customer_web_rpcs.sql` を適用→「rows: []」（DDL成功）
+  - 検証: `pg_policies` で `ky_reservations_public_read` 実在確認 / `pg_proc` で `ky_verify_reservation_pin` + `ky_cancel_reservation` 実在確認
+- **検証**：`npx tsc --noEmit` EXIT:0（web側）
+- **dev server動作確認**：Vite dev server（port 5175）起動→`/#/test-shop`でTenantPageレンダリング確認。Supabase REST API（`ky_tenants?slug=eq.test-shop`）への問い合わせ発行＋テナント不在時「店舗が見つかりません」エラーページ表示を確認。コンソールエラーなし
