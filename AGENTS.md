@@ -6,7 +6,7 @@
 
 # 必読ルール（開発前・サーバ起動前に読む）
 
-- **`SPEC.md`** — きゃすほ！仕様書（コンセプト・機能一覧§3・画面§9・データモデル§10・流用源§11・マルチテナント§12・予約ロジック§13・課金境界§14・UGC§15・法務§16）
+- **`SPEC.md`** — きゃすりん仕様書（コンセプト・機能一覧§3・画面§9・データモデル§10・流用源§11・マルチテナント§12・予約ロジック§13・課金境界§14・UGC§15・法務§16）
 - `memory/app_dev_rules.md` — INIT / MODAL-SAFE / Z-KBD（KAVの外・#8E8E93）/ VER / FONT-JP / PRICE / GATE-1 / BE-1〜3 / TAB-ICON
 - `memory/rules_workflow.md` — W1〜W22（W1日本語・W19 mutation試打禁止・W21ビルド種別3点）
 - `memory/store_release_rules.md` — R1（Bundle IDロック）/ R13（APIキー埋め込み禁止）/ R17（連絡先=rurifukuro@gmail.com）/ R28（UGC 4要件）/ R35（地域別価格）

@@ -1,4 +1,4 @@
-# きゃすほ！ REVISION_LOG
+# きゃすりん REVISION_LOG
 
 コンカフェ特化予約管理SaaS（マルチテナント・提供者iOSアプリ＋客側公開Web）。
 **1指示=1Rev=1コミット**。流用元（concafe-yoyaku/とれはんっ！/レジさぽっ！）のRevコメントは無視し **Rev1から独自採番**（ルールINIT）。
@@ -220,3 +220,23 @@ SPEC §3-G / §19-#10「設定」を実装。PlaceholderScreenを完全置き換
 - **検証**：`npx tsc --noEmit` EXIT:0
 - **§3-G 設定チェック**：Auth✅（AuthScreen既存）/アカウント削除✅（Rev9 DeleteAccountModal）/店プロフィール✅/規約PP✅/通報ブロック✅（Rev8基盤・導線はSettingsからReportInbox後続）/IAP（OFF）✅/テーマ✅/バージョン✅
 - **G4エミュスモーク＝Rev3〜10まとめて次段階で実施**
+
+---
+
+## Rev11 (2026-07-04) — アプリ名称変更「きゃすほ！」→「きゃすりん」
+
+ユーザー決定に基づくアプリ名変更。理由＝4文字・人名風で覚えやすい・マスコットキャラ展開に好適・同人誌関係の「っ！」系統と差別化。J-PlatPat未衝突・Web衝突なし確認済み。
+
+**変更対象**（Bundle ID `com.kyasuho.app` / slug `kyasuho-app` / scheme `kyasuho` / 内部プレフィックス `ky_*` はR1ロックのため不変）：
+- **`app.json`**：`name` → `"きゃすりん"`（slug/scheme/bundleIdentifier/package は不変＝R1）
+- **`src/i18n/strings.json`**：`app.name` → `"きゃすりん"`
+- **`src/data/termsOfUse.ts`**：アプリ名参照を「きゃすりん」に更新
+- **`src/data/privacyPolicy.ts`**：アプリ名参照を「きゃすりん」に更新
+- **`SPEC.md`**：タイトル・§2確定方向性（語源説明更新）・§7ポート・§8競合分析・§11流用表・§14課金設計・§18 app.json参照を全て「きゃすりん」に更新
+- **`AGENTS.md`**：仕様書参照を「きゃすりん」に更新
+- **`.env.example`**：コメントを「きゃすりん」に更新
+- **`src/types/index.ts`**：ファイルヘッダコメント更新
+- **`src/config/supabase.ts`**：コメント更新
+- **`REVISION_LOG.md`**：ヘッダを「きゃすりん」に更新（歴史的エントリは不変）
+- **検証**：`npx tsc --noEmit` EXIT:0
+- **注意**：supabase/migrations/*.sql のコメント内「きゃすほ！」は歴史的記録のため不変

@@ -1,4 +1,4 @@
-# きゃすほ！ 仕様書（SPEC）
+# きゃすりん 仕様書（SPEC）
 
 - 作成日: 2026-07-03
 - ステータス: **仕様検討中（実装未着手・Phase -1法務ゲート＝条件付きGo通過済み）**
@@ -24,7 +24,7 @@
 
 | 項目 | 決定内容 |
 |---|---|
-| アプリ名 | **きゃすほ！**（キャストの予定を確保→キャス＋ほ。J-PlatPat称呼0件・Web衝突なし・ASC作成成功で名称予約完了） |
+| アプリ名 | **きゃすりん**（キャスト＋りん＝人名風の4文字。覚えやすくマスコットキャラ展開に好適。J-PlatPat未衝突・Web衝突なし。旧名「きゃすほ！」から改名。Bundle IDは旧名 com.kyasuho.app をR1ロック済） |
 | Bundle ID | **`com.kyasuho.app`**（ロック済・以後変更不可） |
 | ベース | concafe-yoyaku（予約ロジック・客Web）＋ とれはんっ！/レジさぽっ！（UI部品・UGC・i18n・IAP） |
 | 構成 | **二面**＝提供者iOSアプリ ＋ 客側公開Web（GitHub Pages）。同一Supabaseを共有 |
@@ -100,7 +100,7 @@
   - 情報ページ ← **レジさぽっ！/とれはんっ！** InfoScreen
 - **マルチテナント**：全業務テーブルに `tenant_id`（＝店舗ID）＋ RLS。提供者は自テナントのみ、客Webは公開読み取り＋予約INSERTのみ（§12）
 - **認証**：Supabase Auth（メール＋パスワード・セルフサインアップ）。客側はアカウント不要（PIN方式）
-- **ポート**：**8086**をきゃすほ！に固定割当（expo-startスキルの割当表＋references/port_assignment.md へ実装着手時に追記）
+- **ポート**：**8086**をきゃすりんに固定割当（expo-startスキルの割当表＋references/port_assignment.md へ実装着手時に追記）
 - **i18n**：MVPは `ja`（コンカフェは国内主）。将来 `en`/`zh-TW`/`ko`（訪日客のコンカフェ需要）。全文言`t()`経由
 - **フォント**：日本語字形固定（ルールFONT-JP）
 - **Supabase相乗り→分離**：MVPは concafe-yoyaku プロジェクト（ref=rhmuitgbvilqwdevxxox・Tokyo）に `ky_` プレフィックステーブルで相乗り。**本番前に専用プロジェクトへ分離**（kashikari/daiposの轍＝相乗りは分離計画必須）
@@ -146,7 +146,7 @@
 - **チェキチェキ**（App Store id6759213579）＝コンカフェ/地下アイドルのキャスト向け「チェキ写真整理・顧客・タスク管理」。端末内保存・サーバーなし。**予約・公開受付ページは無し**＝軸が別（手元記録 vs 予約導線）
 - **コンカフェGo**（株式会社Code and DESIGN・2026-07-02）＝コンカフェ専門の**店舗向けCRM/MA**（出勤プッシュ・チェックインQR・ステップ配信・スタンプカード・分析）。店舗フリー0円/スタンダード月4,800円。**予約機能は無し**（再来店促進が軸）。**無料で店舗接点を持つ＝将来予約機能追加の可能性で要警戒**
 - 汎用予約SaaS（RESERVA/STORES予約/tol等）＝無料でも高機能だが**コンカフェ特化ではない**（席×キャスト指名×生誕祭という業界固有の予約軸を持たない）
-- **結論＝「客側の公開予約受付ページを自動発行するコンカフェ特化SaaS」は依然空白＝差別化成立**。チェキチェキ=手元記録／コンカフェGo=CRM／汎用SaaS=非特化。きゃすほ！の軸＝**予約受付導線 × コンカフェ特化（席・指名・生誕祭）× 客はWebだけ**
+- **結論＝「客側の公開予約受付ページを自動発行するコンカフェ特化SaaS」は依然空白＝差別化成立**。チェキチェキ=手元記録／コンカフェGo=CRM／汎用SaaS=非特化。きゃすりんの軸＝**予約受付導線 × コンカフェ特化（席・指名・生誕祭）× 客はWebだけ**
 
 ---
 ---
@@ -266,7 +266,7 @@ type Reservation = {
 | CalendarModal | とれはんっ！（DATE-POPUP正準） | 営業日/予約日選択 |
 | ThemeContext | とれはんっ！ `src/context/ThemeContext.tsx` | AsyncStorageキーを `ky_theme` に |
 | LanguageContext / i18n | とれはんっ！ `src/context/LanguageContext.tsx` / `src/i18n` | エンジン流用・翻訳JSON新規 |
-| TermsOfUseModal / PrivacyPolicyModal / ContactFormModal | とれはんっ！ | 文面をきゃすほ用（§16の表明保証条項） |
+| TermsOfUseModal / PrivacyPolicyModal / ContactFormModal | とれはんっ！ | 文面をきゃすりん用（§16の表明保証条項） |
 | **通報/ブロックUI** | とれはんっ！（R28実装） | §15の4要件 |
 | 自動〆切（close_at） | レジさぽっ！ 取り置きRev13 | ScheduleScreenの〆切設定 |
 
@@ -340,13 +340,13 @@ create policy public_read_casts on ky_casts
 
 ### 境界の設計案（叩き台）
 
-| 機能 | 無料（Free） | 有料（きゃすほプロ・月額サブスク） |
+| 機能 | 無料（Free） | 有料（きゃすりんプロ・月額サブスク） |
 |---|---|---|
 | 店舗数 | 1店舗 | 複数店舗 |
 | キャスト登録 | 〜3人 | 無制限 |
 | 月間予約受付 | 〜100件 | 無制限 |
 | 基本予約（席・日時・PIN編集） | ◯ | ◯ |
-| 公開予約ページ | ◯（「きゃすほ！」バッジ付き） | ◯（バッジ非表示・独自ブランディング） |
+| 公開予約ページ | ◯（「きゃすりん」バッジ付き） | ◯（バッジ非表示・独自ブランディング） |
 | キャスト指名予約 | △（1キャストのみ or なし） | ◯ |
 | 生誕祭/周年イベント枠 | ✗ | ◯ |
 | 客向けメール/リマインダー | ✗ | ◯ |
@@ -464,7 +464,7 @@ src/
 ### 6. app.json
 ```json
 { "expo": {
-  "name": "きゃすほ！", "slug": "kyasuho-app", "scheme": "kyasuho", "version": "1.0.0",
+  "name": "きゃすりん", "slug": "kyasuho-app", "scheme": "kyasuho", "version": "1.0.0",
   "orientation": "portrait", "userInterfaceStyle": "automatic",
   "ios": { "supportsTablet": false, "bundleIdentifier": "com.kyasuho.app" },
   "android": { "package": "com.kyasuho.app", "softwareKeyboardLayoutMode": "resize" },

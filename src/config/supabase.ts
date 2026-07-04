@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // 提供者アプリ用 Supabase クライアント。
-// ※とれはんっ！は匿名共有モデル（persistSession:false）だが、きゃすほ！は認証あり
+// ※とれはんっ！は匿名共有モデル（persistSession:false）だが、きゃすりんは認証あり
 //   ＝ログイン状態を端末に永続化する（persistSession:true / autoRefreshToken:true）。
 // URL/anon キーは EXPO_PUBLIC_ 経由（クライアントJSにバンドル・anon は公開安全＝WEB4）。
 //   **service_role キーは絶対に埋め込まない**（R13/WEB4・出荷禁止）。
