@@ -17,6 +17,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
 import * as reservationService from '../services/reservations';
+import { guardFields } from '../utils/contentGuard';
 import type { Reservation, ReservationStatus, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
@@ -339,6 +340,7 @@ function AddReservationModal({ visible, onClose, onAdd, theme, t }: AddProps) {
       Alert.alert(t('common.error'), t('reservation.errorNameRequired'));
       return;
     }
+    if (!guardFields({ name, note }, t)) return;
     setSaving(true);
     await onAdd(name.trim(), contact.trim(), slot, partySize, note.trim());
     setSaving(false);

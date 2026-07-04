@@ -114,5 +114,21 @@
   "auth.error.generic": { "ja": "エラーが発生しました。時間をおいて再度お試しください。" },
   "auth.emailConfirmSent": { "ja": "確認メールを送信しました。メール内のリンクを開いてからログインしてください。" },
   "auth.notConfigured.title": { "ja": "接続設定が未完了です" },
-  "auth.notConfigured.desc": { "ja": ".env に EXPO_PUBLIC_SUPABASE_URL と EXPO_PUBLIC_SUPABASE_ANON_KEY を設定し、アプリを再起動してください。" }
+  "auth.notConfigured.desc": { "ja": ".env に EXPO_PUBLIC_SUPABASE_URL と EXPO_PUBLIC_SUPABASE_ANON_KEY を設定し、アプリを再起動してください。" },
+  "filter.blockedTitle": { "ja": "送信できません" },
+  "filter.blockedBody": { "ja": "不適切な表現が含まれています。内容を修正してください。" },
+  "report.title": { "ja": "通報" },
+  "report.reason": { "ja": "理由" },
+  "report.reasonPlaceholder": { "ja": "通報の理由を入力してください" },
+  "report.submit": { "ja": "通報する" },
+  "report.success": { "ja": "通報を受け付けました。24時間以内に対応いたします。" },
+  "report.confirm": { "ja": "この内容を通報しますか？" },
+  "block.title": { "ja": "ブロック" },
+  "block.confirm": { "ja": "このユーザーをブロックしますか？ブロックすると、このユーザーの予約が表示されなくなります。" },
+  "block.success": { "ja": "ブロックしました。" },
+  "block.unblock": { "ja": "ブロック解除" },
+  "block.unblockConfirm": { "ja": "ブロックを解除しますか？" },
+  "block.unblockSuccess": { "ja": "ブロックを解除しました。" },
+  "contact.email": { "ja": "rurifukuro@gmail.com" },
+  "contact.label": { "ja": "お問い合わせ" }
 }

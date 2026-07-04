@@ -18,6 +18,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
 import * as castService from '../services/casts';
+import { guardFields } from '../utils/contentGuard';
 import type { Cast, Shift, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
@@ -520,6 +521,7 @@ function CastEditModal({
       Alert.alert(t('common.error'), t('cast.errorNameRequired'));
       return;
     }
+    if (!guardFields({ name, bio }, t)) return;
     setSaving(true);
     try {
       const links = snsLinks.filter((l) => l.label.trim() || l.url.trim());
