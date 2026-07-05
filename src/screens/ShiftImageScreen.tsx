@@ -8,6 +8,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   ScrollView,
   Alert,
@@ -24,7 +25,10 @@ import type { ShiftTemplateDefinition } from '../shiftTemplates/definitions';
 import { buildShiftDays, yearMonthLabel } from '../shiftTemplates/shiftData';
 import type { ShiftFlatRow } from '../shiftTemplates/shiftData';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
+import { buildAiDefinition } from '../shiftTemplates/aiDesign';
 import * as castService from '../services/casts';
+import { requestAiShiftDesign } from '../services/aiDesign';
+import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
 import type { Cast, Shift, Tenant, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
@@ -69,6 +73,11 @@ export function ShiftImageScreen({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
 
+  // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
+  const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
+  const [aiMood, setAiMood] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -98,9 +107,12 @@ export function ShiftImageScreen({
   }, [shifts, castNameById, yearMonth, t]);
 
   const def: ShiftTemplateDefinition = useMemo(() => {
-    const base = SHIFT_TEMPLATES.find((tp) => tp.id === templateId) ?? SHIFT_TEMPLATES[0];
+    const base =
+      aiDef && templateId === aiDef.id
+        ? aiDef
+        : (SHIFT_TEMPLATES.find((tp) => tp.id === templateId) ?? SHIFT_TEMPLATES[0]);
     return tall ? { ...base, size: SIZE_916 } : base;
-  }, [templateId, tall]);
+  }, [templateId, tall, aiDef]);
 
   // プレビュー縮小率（RNのscaleは中心基準→translateで左上合わせ）
   const previewW = winW - 32;
@@ -153,6 +165,30 @@ export function ShiftImageScreen({
     }
   }, [busy, doCapture, t]);
 
+  const handleGenerateAi = useCallback(async () => {
+    const mood = aiMood.trim();
+    if (!mood || aiBusy) return;
+    setAiBusy(true);
+    try {
+      const raw = await requestAiShiftDesign(mood, tenant.name);
+      const generated = buildAiDefinition(raw, `ai-${Date.now()}`);
+      setAiDef(generated);
+      setTemplateId(generated.id);
+    } catch (e: unknown) {
+      console.warn('[kyasuho] requestAiShiftDesign:', e);
+      const msg = e instanceof Error ? e.message : '';
+      const key: TKey =
+        msg === 'rate_limit'
+          ? 'shiftImage.aiRateLimit'
+          : msg === 'global_limit'
+            ? 'shiftImage.aiGlobalLimit'
+            : 'shiftImage.aiFailed';
+      Alert.alert(t('common.error'), t(key));
+    } finally {
+      setAiBusy(false);
+    }
+  }, [aiMood, aiBusy, tenant.name, t]);
+
   return (
     <View style={[s.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={[s.header, { borderBottomColor: theme.border }]}>
@@ -195,6 +231,73 @@ export function ShiftImageScreen({
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* AIデザイン（§22） */}
+        <Text style={[s.sectionLabel, { color: theme.text }]}>{t('shiftImage.aiSection')}</Text>
+        <Text style={[s.aiHint, { color: theme.subtext }]}>{t('shiftImage.aiHint')}</Text>
+        <View style={s.aiRow}>
+          <TextInput
+            style={[
+              s.aiInput,
+              { color: theme.text, borderColor: theme.border, backgroundColor: theme.card },
+            ]}
+            value={aiMood}
+            onChangeText={setAiMood}
+            placeholder={t('shiftImage.aiPlaceholder')}
+            placeholderTextColor={theme.subtext}
+            maxLength={200}
+          />
+          <TouchableOpacity
+            style={[
+              s.aiBtn,
+              { backgroundColor: theme.primary, opacity: aiBusy || !aiMood.trim() ? 0.5 : 1 },
+            ]}
+            onPress={handleGenerateAi}
+            disabled={aiBusy || !aiMood.trim()}
+          >
+            {aiBusy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="auto-fix" size={18} color="#fff" />
+                <Text style={s.actionText}>{t('shiftImage.aiGenerate')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        {aiDef ? (
+          <TouchableOpacity
+            style={[
+              s.tplCard,
+              {
+                backgroundColor: theme.card,
+                borderColor: aiDef.id === templateId ? theme.primary : theme.border,
+                borderWidth: aiDef.id === templateId ? 2 : 1,
+              },
+            ]}
+            onPress={() => setTemplateId(aiDef.id)}
+            activeOpacity={0.7}
+          >
+            <View style={s.swatchRow}>
+              <View
+                style={[
+                  s.swatch,
+                  {
+                    backgroundColor: aiDef.palette.bg,
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: '#ccc',
+                  },
+                ]}
+              />
+              <View style={[s.swatch, { backgroundColor: aiDef.palette.accent }]} />
+              <View style={[s.swatch, { backgroundColor: aiDef.palette.headerText }]} />
+            </View>
+            <Text style={[s.tplName, { color: theme.text }]} numberOfLines={1}>
+              {aiDef.name}
+            </Text>
+            <Text style={[s.tplCat, { color: theme.subtext }]}>{t('shiftImage.aiSection')}</Text>
+          </TouchableOpacity>
+        ) : null}
 
         {/* テンプレートギャラリー */}
         <Text style={[s.sectionLabel, { color: theme.text }]}>{t('shiftImage.template')}</Text>
@@ -319,6 +422,9 @@ export function ShiftImageScreen({
       >
         <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
       </View>
+
+      {/* Z-KBD: AI雰囲気入力（TextInput）があるため必須。KAVなし＝ルート直下の兄弟に置く */}
+      <KeyboardDoneBar />
     </View>
   );
 }
@@ -347,4 +453,8 @@ const s = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 10 },
   actionText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  aiHint: { fontSize: 12, marginBottom: 8 },
+  aiRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  aiInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 10 },
 });

@@ -403,3 +403,32 @@ SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0（G1）／web `npm run build` EXIT:0（`tsc -b`含む・客側チャンク非破壊）
 - 実機系（view-shotキャプチャ・写真保存・共有シート）はTask #15エミュスモークで確認予定
+
+---
+
+## Rev18（2026-07-06）AIシフトデザイン（§3-I・§22＝SPEC順序16）
+
+「お店の雰囲気」テキスト→AIが配色・書体・レイアウトのパラメータを生成→クライアント側で検証・完全定義化→Rev17共通レンダラーで描画。AI＝パラメータ生成器に限定し、レンダラーの溢れゼロ保証（cornerRadius/cellGapクランプ）を維持する構成。APIキーはEdge Function Secretのみ（R13）。
+
+### サーバー側
+- **`supabase/migrations/0010_ky_ai_usage.sql`**（**実DB適用済み**・`db query --linked` EXIT:0）：`ky_ai_usage`（tenant_key×usage_date PK・RLS有効＋**revoke all**＝service_role専用）＋`reserve_ky_ai_slot(p_tenant_id uuid)`（**予約方式レート制限**＝先にINSERT ON CONFLICTで+1してから判定→同時リクエストでも上限突破不可。テナント行と`__global__`行を同時+1し両カウント返却。uuid型引数で`__global__`センチネル偽装を型レベル遮断）。security definer＋revoke from public後に**`grant execute to service_role`明示**（42501対策＝supabase_edge_function_rpc_grantの教訓）
+- **`supabase/functions/ky-shift-design/index.ts`**（**デプロイ済み**・verify_jwt有効=--no-verify-jwtなし）：OPTIONS→ENV3種チェック（**ANTHROPIC_API_KEY未設定は前段500 server_not_configured＝レート枠不消費**）→入力検証（mood必須≤500字・store_name≤100字）→`/auth/v1/user`でユーザー実在確認→`ky_tenants.owner_user_id`照合でtenant解決（オーナー以外403）→`reserve_ky_ai_slot` RPC（テナント毎日20回/全体日次400回・429 rate_limit/503 global_limit）→Anthropic API（claude-haiku-4-5・max_tokens 1024・日本語プロンプトでJSONスキーマ＋コントラスト4.5:1指示）→`extractJsonObject`→`{design}`返却。エラーは`{error:code}`形式でクライアントへ伝搬
+
+### クライアント共通（sanitizer）
+- **`web/src/shiftTemplates/aiDesign.ts`**（**正準**）＋**`src/shiftTemplates/aiDesign.ts`**（同一コピー）：`buildAiDefinition(raw, id)`＝AI出力を検証し完全な`ShiftTemplateDefinition`へ（hex 3形式regex・enum照合・cornerRadius 0-28/cellGap 4-12クランプ・name20字制御文字除去・不正値はFALLBACKへ）。`extractAiDesign(def)`＝お気に入り保存用の逆変換（**入出力同一構造＝ラウンドトリップ保証**）。id=`ai-<Date.now()>`クライアント採番・category='ai'・size 1080×1350固定・logoSlot=true固定
+
+### Web側（管理Web）
+- **`web/src/admin/adminApi.ts`**：`requestAiShiftDesign(mood, storeName)`＝`functions.invoke('ky-shift-design')`。FunctionsHttpError.context.json()からエラーコード抽出→`Error(code)`
+- **`web/src/admin/AdminShiftImage.tsx`**：AIデザインカード（テンプレギャラリーの前・mood入力＋生成ボタン＋エラー3種日本語文言＋生成済みスウォッチ表示）。`base`計算をaiDef分岐に（`aiDef && templateId === aiDef.id ? aiDef : findTemplate(...)`）。お気に入り保存=`template_key='ai'`＋`custom_settings.ai=extractAiDesign(base)`／読込=`buildAiDefinition(fav.custom_settings['ai'], 新id)`で復元。一覧表示は「AIデザイン」
+
+### アプリ側
+- **`src/services/aiDesign.ts`**：adminApi版と同等（RN=DOM libなしのためcontextを構造型`{ json?: () => Promise<unknown> }`で扱う）
+- **`src/screens/ShiftImageScreen.tsx`**：AIデザインセクション（比率切替の後・ギャラリーの前：説明文＋TextInput＋auto-fixアイコン生成ボタン＋生成済みカード）。def計算にaiDef分岐（useMemo deps: [templateId, tall, aiDef]）。エラーは`shiftImage.aiRateLimit/aiGlobalLimit/aiFailed`をAlert表示。**`KeyboardDoneBar`をルートView末尾にマウント**（本画面はKAVなし＝兄弟配置でZ-KBD充足・TextInput初追加のため本Revで必須化）
+- **`src/i18n/strings.json`**：`shiftImage.ai*` 7キー追加（aiSection/aiHint/aiPlaceholder/aiGenerate/aiRateLimit/aiGlobalLimit/aiFailed）
+- **`tsconfig.json`**：excludeに`supabase`追加（Deno関数コードをアプリtscから除外）
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0（G1）／web `npm run build` EXIT:0（vite 123 modules）
+- migration 0010適用EXIT:0→**RESTプローブ**：anon直RPC→42501 permission denied（遮断○）・`ky_ai_usage` anon SELECT→42501（revoke効果○）・`routine_privileges`でservice_role EXECUTE存在確認○
+- **Edge Functionデプロイ後3プローブ**：OPTIONS→200（CORS○）／無Authorization POST→401（ゲートウェイverify_jwt遮断○）／anon JWT POST→**500 server_not_configured**（Secret未設定の前段チェック動作○）→直後`ky_ai_usage`カウント0行＝**未設定期間はレート枠不消費を実証**
+- **残（Secret登録待ち）**：concafe-yoyakuプロジェクトへ`ANTHROPIC_API_KEY`のSecret登録はユーザー作業（キー値はローカル非存在のため）。登録後の正常系200・実ユーザーJWT 200/非オーナー403はTask #15スモークで確認

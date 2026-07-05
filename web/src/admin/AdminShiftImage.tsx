@@ -14,6 +14,7 @@ import {
   fetchShiftTemplateList,
   fetchShiftsByMonth,
   removeShiftTemplate,
+  requestAiShiftDesign,
 } from './adminApi';
 import type {
   ShiftLayout,
@@ -28,6 +29,7 @@ import {
   findTemplate,
 } from '../shiftTemplates/definitions';
 import { buildShiftDays } from '../shiftTemplates/shiftData';
+import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
@@ -105,6 +107,12 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [favName, setFavName] = useState('');
   const [favBusy, setFavBusy] = useState(false);
 
+  // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
+  const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
+  const [aiMood, setAiMood] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   const exportRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -147,7 +155,8 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     return buildShiftDays(flatRows, yearMonth);
   }, [shifts, castNameById, yearMonth]);
 
-  const base = findTemplate(templateId) ?? DEFAULT_TEMPLATE;
+  const base =
+    aiDef && templateId === aiDef.id ? aiDef : (findTemplate(templateId) ?? DEFAULT_TEMPLATE);
 
   // ベース定義＋上書き＋サイズ → 実際に描画する定義（§22: 不正値は既定値へマージ）
   const def = useMemo<ShiftTemplateDefinition>(() => {
@@ -196,15 +205,42 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     }
   };
 
+  const handleGenerateAi = async () => {
+    const mood = aiMood.trim();
+    if (!mood || aiBusy) return;
+    setAiBusy(true);
+    setAiError(null);
+    try {
+      const raw = await requestAiShiftDesign(mood, tenant.name);
+      const def = buildAiDefinition(raw, `ai-${Date.now()}`);
+      setAiDef(def);
+      setTemplateId(def.id);
+      setOv({});
+    } catch (e) {
+      console.warn('[kyasuho] requestAiShiftDesign failed:', e);
+      const msg = e instanceof Error ? e.message : '';
+      setAiError(
+        msg === 'rate_limit'
+          ? '本日のAI生成回数の上限に達しました。明日またお試しください。'
+          : msg === 'global_limit'
+            ? 'ただいま混み合っています。時間をおいてお試しください。'
+            : 'AI生成に失敗しました。しばらくしてからもう一度お試しください。',
+      );
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
   const handleSaveFavorite = async () => {
     if (favBusy) return;
     setFavBusy(true);
     try {
+      const isAi = base.category === 'ai';
       await addShiftTemplate({
         tenantId: tenant.id,
         name: favName.trim() || `${base.name}（${aspect}）`,
-        templateKey: base.id,
-        customSettings: { ...ov, aspect },
+        templateKey: isAi ? 'ai' : base.id,
+        customSettings: isAi ? { ...ov, aspect, ai: extractAiDesign(base) } : { ...ov, aspect },
       });
       setFavName('');
       setFavorites(await fetchShiftTemplateList(tenant.id));
@@ -217,12 +253,21 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   };
 
   const handleLoadFavorite = (fav: KyShiftTemplate) => {
+    const parsed = parseCustomSettings(fav.custom_settings);
+    if (fav.template_key === 'ai') {
+      // AI生成デザインの復元（custom_settings.ai → buildAiDefinition＝保存時とラウンドトリップ）
+      const def = buildAiDefinition(fav.custom_settings['ai'], `ai-${Date.now()}`);
+      setAiDef(def);
+      setTemplateId(def.id);
+      setOv(parsed.ov);
+      setAspect(parsed.aspect);
+      return;
+    }
     const baseDef = findTemplate(fav.template_key);
     if (!baseDef) {
       window.alert('このお気に入りの元テンプレートが見つかりませんでした。');
       return;
     }
-    const parsed = parseCustomSettings(fav.custom_settings);
     setTemplateId(baseDef.id);
     setOv(parsed.ov);
     setAspect(parsed.aspect);
@@ -290,6 +335,55 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
         {/* 設定パネル */}
         <div className="shift-panel">
+          <div className="admin-card" style={{ marginBottom: 0 }}>
+            <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
+              AIデザイン
+            </div>
+            <p className="admin-note" style={{ marginTop: 0 }}>
+              お店の雰囲気を書くと、AIが配色デザインを提案します（1日20回まで）。
+            </p>
+            <div className="admin-form-row">
+              <div className="admin-field" style={{ flex: 1 }}>
+                <label htmlFor="ai-mood">雰囲気（例: 桜色でかわいい／大人シックな夜カフェ）</label>
+                <input
+                  id="ai-mood"
+                  type="text"
+                  style={{ width: '100%' }}
+                  value={aiMood}
+                  maxLength={200}
+                  onChange={(e) => setAiMood(e.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={aiBusy || !aiMood.trim()}
+                onClick={() => void handleGenerateAi()}
+              >
+                {aiBusy ? '生成中…' : 'AIで生成'}
+              </button>
+            </div>
+            {aiError ? <p className="admin-error">{aiError}</p> : null}
+            {aiDef ? (
+              <div className="shift-gallery">
+                <button
+                  type="button"
+                  className={`shift-swatch${templateId === aiDef.id ? ' selected' : ''}`}
+                  style={{ background: aiDef.palette.bg }}
+                  onClick={() => {
+                    setTemplateId(aiDef.id);
+                    setOv({});
+                  }}
+                >
+                  <span className="shift-swatch-bar" style={{ background: aiDef.palette.accent }} />
+                  <span className="shift-swatch-name" style={{ color: aiDef.palette.headerText }}>
+                    {aiDef.name}
+                  </span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
               テンプレート（20種）
@@ -460,7 +554,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                   <div key={fav.id} className="shift-fav-item">
                     <span className="shift-fav-name">{fav.name}</span>
                     <span className="shift-fav-base">
-                      {findTemplate(fav.template_key)?.name ?? fav.template_key}
+                      {fav.template_key === 'ai'
+                        ? 'AIデザイン'
+                        : (findTemplate(fav.template_key)?.name ?? fav.template_key)}
                     </span>
                     <span className="admin-spacer" />
                     <button type="button" className="admin-btn" onClick={() => handleLoadFavorite(fav)}>

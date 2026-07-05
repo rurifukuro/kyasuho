@@ -542,3 +542,29 @@ export async function removeShiftTemplate(id: string): Promise<void> {
   const { error } = await supabase.from('ky_shift_templates').delete().eq('id', id);
   if (error) throw error;
 }
+
+/**
+ * AIシフトデザイン生成（Edge Function `ky-shift-design`・SPEC §22）。
+ * 返り値は raw デザイン（検証・完全定義化は shiftTemplates/aiDesign.ts の buildAiDefinition）。
+ * 失敗時は Edge Function のエラーコード（rate_limit / global_limit 等）を message に載せて投げる。
+ */
+export async function requestAiShiftDesign(mood: string, storeName: string): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('ky-shift-design', {
+    body: { mood, store_name: storeName },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        code = ((await ctx.json()) as { error?: string }).error ?? '';
+      }
+    } catch (e) {
+      console.warn('[kyasuho] ky-shift-design error body unreadable:', e);
+    }
+    throw new Error(code || error.message);
+  }
+  const design = (data as { design?: unknown } | null)?.design;
+  if (design === undefined || design === null) throw new Error('bad_ai_output');
+  return design;
+}
