@@ -353,3 +353,23 @@ SPEC §5実装順序13。客Webと同一Viteアプリ（`web/`）に管理Webを
 - **`web/src/vite-env.d.ts`**：新規（`/// <reference types="vite/client" />`）。web単体`tsc -b`が`import.meta.env`型エラーになる欠落を是正（Rev12でVite標準ファイルが漏れていた）
 - **検証**：`web`で`npx tsc -b` EXIT:0＋`npm run build`成功＝AdminAppが別チャンク（JS 30KB/CSS 5KB）に分離。dev server（5175）で `#/admin`ログイン画面表示・客側`#/<slug>`非破壊・コンソールエラーなしを確認。ログイン後画面の実操作はエミュスモーク時にテストアカウントで実施予定（Task #15）
 - **既知の残確認**：preview toolsの合成クリックではフォームsubmit発火を確認できず（auth POST未観測）。コード配線はReact標準パターンのため実ブラウザでの動作をTask #15で要実証
+
+---
+
+## Rev16（2026-07-05）管理Web 売上・給与・勤怠＋税金CSV（§3-J残り3画面＝§23）
+
+SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差し替え（残Placeholderはシフト表作成のみ＝順序15）。
+
+- **`web/src/admin/payrollCalc.ts`**：アプリ側 `src/utils/payrollCalc.ts` のコピー（§24＝同一計算式の共有）。型importだけ自己完結化（`PayrollCalcSettings`=camelCase 4値）・関数本体は原本と同一
+- **`web/src/admin/csv.ts`**：`toCsv`（UTF-8 BOM・CRLF・RFC4180エスケープ＝アプリ側 `src/utils/csv.ts` と同一）＋`downloadCsv`（Blob＋`<a download>`＝Web版はシェアシートでなくブラウザダウンロード）
+- **`web/src/lib/types.ts`**：`KySales`/`KyAttendanceStatus`/`KyAttendanceReason`/`KyAttendance`/`KyPayrollSettings`/`KyCastPayroll` 追加（DB snake_caseそのまま＝Web側の既存流儀）
+- **`web/src/admin/adminApi.ts`**：売上/勤怠/給与のCRUD追記（アプリ側 services 3本と同クエリ・同onConflict）＋`DEFAULT_PAYROLL_SETTINGS`＋`countNominationsByMonth`（status≠cancelled）＋`generatePayrollFromAttendance`（出勤扱い4値のみ・既存明細スキップ＋ignoreDuplicates＝手修正保護・アプリ側と同ロジック）
+- **`web/src/admin/AdminSales.tsx`**：月ナビ＋月次集計カード（月間売上/営業日数/セット/ドリンク/指名/その他）＋入力フォーム（同日付はupsert上書き・別月保存時はその月へ移動）＋日別テーブル（編集/削除）＋売上CSV
+- **`web/src/admin/AdminPayroll.tsx`**：給与設定4値フォーム（未保存テナントはdefault表示・保存はupsert(tenant_id)）＋「勤怠から自動生成」（勤怠0件/新規0件/N件作成の文言分岐）＋支給額合計・キャスト別集計カード（出勤日数・勤務h:mm）＋明細テーブル＋編集フォーム（時間/分・指名・ドリンク・その他・控除・メモ→`calcPayroll`で§23式再計算・控除は手入力値採用）＋給与CSV（§23列＝キャスト別月次集計行・総勤務時間h:mm）
+- **`web/src/admin/AdminAttendance.tsx`**：月ナビ＋記録フォーム（ステータス5値・理由5値・代打キャストselect=substitute時のみ・入退店time未入力可・同キャスト×日付upsert上書き）＋記録テーブル（状態色分け）＋キャスト別月次集計（出勤/遅刻/欠勤/出勤率＝アプリ側AttendanceViewと同定義）＋勤怠CSV（理由=ラベル+詳細を': '結合＝アプリ側と同形式）
+- **`web/src/admin/AdminApp.tsx`**：sales/payroll/attendance の3ルートを実コンポーネントへ差し替え
+- **`web/src/admin/admin.css`**：`.admin-stat`系（集計カード）・`.admin-spacer`・`.att-*`（勤怠ステータス色分け）追加
+- **CSV列名**：§23の3種（売上=日付,総売上,セット数,ドリンク数,指名数,その他収入,メモ／給与=対象月,キャスト名,出勤日数,総勤務時間,基本給,指名バック,ドリンクバック,その他,控除,支給額／勤怠=日付,キャスト名,状態,入店時刻,退店時刻,理由）＝アプリ側 `csv.*.headers` i18n値と同一の日本語直書き
+- **`monthRange`のnoUncheckedIndexedAccess対応**：web側tsconfigで `const [y, m]` 分割代入がTS18048になるため `const [y = 0, m = 0]` へ（動作不変）。**アプリ側原本 `src/utils/payrollCalc.ts` も同表記に統一**（§24「同式を保つ」・アプリ側tsc EXIT:0のまま）
+- **検証**：web `npx tsc -b` EXIT:0＋`npm run build`成功（AdminAppチャンク JS 65.20KB/CSS 5.37KBに成長・分離維持）・アプリ側 `npx tsc --noEmit` EXIT:0
+- **Rev15残確認の解消**：dev server上で `form.requestSubmit()`→`auth/v1/token` POST発行（ダミー資格情報に400）→「メールアドレスまたはパスワードが違います。」表示まで確認＝**ログインフォーム配線は正常**。前回の未発火はpreview_clickの合成イベントがReactのonSubmitを起こさないツール側事象と確定。ログイン後3画面の実操作はTask #15（テストアカウント）で実施

@@ -1,10 +1,16 @@
-// src/utils/payrollCalc.ts — 給与計算の純関数（SPEC §23）
+// web/src/admin/payrollCalc.ts — 給与計算の純関数（SPEC §23・アプリ src/utils/payrollCalc.ts と同式）
 //
-// アプリ・管理Webで同一の計算式を使う（§24連携仕様）。ここは React / Supabase に依存しない
-// 純関数だけを置く＝Web側（kyasuho/web）へそのままコピーして共有できる形を保つ。
+// §24連携仕様: アプリ・管理Webで同一の計算式を使う。アプリ側原本から型import部分だけ
+// 自己完結化してコピーしたもの（関数本体は一字一句同じに保つ）。式を変える時は両方同時に変える。
 // 金額は円（int）・勤務時間は分単位（int・小数回避）。
 
-import type { PayrollSettings } from '../types';
+/** 給与計算に必要な設定4値（アプリ側 PayrollSettings のサブセット・camelCase）。 */
+export type PayrollCalcSettings = {
+  baseHourlyRate: number; // 円/時
+  nominationBackRate: number; // 円/件
+  drinkBackRate: number; // 円/杯
+  lateDeduction: number; // 円/回（遅刻控除）
+};
 
 /** 'HH:MM'（深夜0時起点・26:00表記なし）→ 分。不正形式は null。 */
 export function hhmmToMinutes(hhmm: string | null): number | null {
@@ -57,13 +63,7 @@ export type PayrollBreakdown = {
  *   deductions      = 遅刻回数 × late_deduction
  *   total_pay       = base_pay + nomination_back + drink_back + other_back − deductions
  */
-export function calcPayroll(
-  settings: Pick<
-    PayrollSettings,
-    'baseHourlyRate' | 'nominationBackRate' | 'drinkBackRate' | 'lateDeduction'
-  >,
-  input: PayrollInput,
-): PayrollBreakdown {
+export function calcPayroll(settings: PayrollCalcSettings, input: PayrollInput): PayrollBreakdown {
   const basePay = Math.floor((input.minutesWorked * settings.baseHourlyRate) / 60);
   const nominationBack = input.nominationCount * settings.nominationBackRate;
   const drinkBack = input.drinkCount * settings.drinkBackRate;

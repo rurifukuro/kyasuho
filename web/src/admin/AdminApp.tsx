@@ -9,6 +9,9 @@ import { AdminLayout } from './AdminLayout';
 import { AdminReservations } from './AdminReservations';
 import { AdminSchedule } from './AdminSchedule';
 import { AdminCasts } from './AdminCasts';
+import { AdminSales } from './AdminSales';
+import { AdminPayroll } from './AdminPayroll';
+import { AdminAttendance } from './AdminAttendance';
 import { AdminPlaceholder } from './AdminPlaceholder';
 import './admin.css';
 
@@ -99,9 +102,9 @@ export default function AdminApp() {
         <Route path="reservations" element={<AdminReservations tenant={tenant} />} />
         <Route path="schedule" element={<AdminSchedule tenant={tenant} />} />
         <Route path="casts" element={<AdminCasts tenant={tenant} />} />
-        <Route path="sales" element={<AdminPlaceholder title="売上管理" />} />
-        <Route path="payroll" element={<AdminPlaceholder title="給与計算" />} />
-        <Route path="attendance" element={<AdminPlaceholder title="勤怠管理" />} />
+        <Route path="sales" element={<AdminSales tenant={tenant} />} />
+        <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
+        <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
         <Route path="shift-image" element={<AdminPlaceholder title="シフト表作成" />} />
         <Route path="*" element={<Navigate to="reservations" replace />} />
       </Route>
