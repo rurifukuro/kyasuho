@@ -299,3 +299,18 @@ SPEC §3-D / §19-#5「客Web予約」を実装。concafe-yoyaku の CustomerPag
   - 検証: `pg_policies` で `ky_reservations_public_read` 実在確認 / `pg_proc` で `ky_verify_reservation_pin` + `ky_cancel_reservation` 実在確認
 - **検証**：`npx tsc --noEmit` EXIT:0（web側）
 - **dev server動作確認**：Vite dev server（port 5175）起動→`/#/test-shop`でTenantPageレンダリング確認。Supabase REST API（`ky_tenants?slug=eq.test-shop`）への問い合わせ発行＋テナント不在時「店舗が見つかりません」エラーページ表示を確認。コンソールエラーなし
+
+---
+
+## Rev13（2026-07-05）仕様書を三面構成へ改訂（SPEC.md＋AGENTS.md・コミット223d7b2）
+
+- **ユーザー指示**：「アプリ／PC作業用サイト／アプリとサイトの連携」の3点を必須要件として仕様書を練り直し
+- **§1/§2**：二面→**三面構成**（提供者iOSアプリ＋提供者管理Web(PC)＋客側公開Web・同一Supabase Auth/DB/RLS共有）
+- **§3-J新設**：提供者管理Web（#/admin・同一アカウント・予約台帳/受付設定/キャスト/売上給与勤怠/CSV/シフト表生成・PC優先UI）
+- **§8-2新設**：ナイトレジャー業界POS価格調査（NIGHTCORE¥9,800/GROW¥10,000〜/夜レジ¥29,800/YONAREZI¥50,000〜/VENUS買切¥95,000等10サービス）→ボリュームゾーン月1〜3万円・予約管理主軸は空白・フリーミアム不在＝きゃすりん¥1,980〜2,980案の根拠
+- **§9-3/§11/§17/§19/§21**：管理Web設計（客Webと同一Viteアプリ・React.lazyチャンク分離・既存RLSが自動適用でバックエンド追加ほぼ不要・AdminXxx 11コンポーネント）
+- **§22新設**：シフト表画像生成エンジン＝「テンプレート=純データShiftTemplateDefinition＋共通レンダラー、AI=パラメータ生成器（画像を描かせない）」。Web正準=html-to-image/アプリ=view-shot。AIはEdge Function ky-shift-design（ANTHROPIC_API_KEY=Secret・R13準拠）・フォールバック設計
+- **§23新設**：給与計算式（時給×時間＋指名バック＋ドリンクバック−控除）・勤怠5値・税金CSV 3種の列仕様（UTF-8 BOM・税務助言はしない=税理士法回避）
+- **§24新設**：アプリ⇔Web連携7項目（Auth共有/データ共有/相互導線/Realtime/時刻表現/plan共有）
+- **§10**：ky_tenants.plan列追加（三面共通エンティトルメント源泉）／**§14**：価格根拠＋Web課金論点
+- **AGENTS.md**：チェックリストにJ/§24行追加
