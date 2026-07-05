@@ -2,6 +2,10 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { KyTenant } from '../lib/types';
 
+/** App Store製品ページ（ASCアプリID 6787006154）。アプリ公開後に SHOW_APP_STORE_LINK を true へ（§24）。 */
+const APP_STORE_URL = 'https://apps.apple.com/jp/app/id6787006154';
+const SHOW_APP_STORE_LINK = false;
+
 const NAV_ITEMS: { path: string; label: string }[] = [
   { path: 'reservations', label: '予約台帳' },
   { path: 'schedule', label: '受付設定' },
@@ -36,6 +40,16 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
           </NavLink>
         ))}
         <div className="admin-sidebar-footer">
+          {SHOW_APP_STORE_LINK ? (
+            <a
+              className="admin-appstore-link"
+              href={APP_STORE_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              アプリで予約通知を受け取る
+            </a>
+          ) : null}
           スマホでの操作は
           <br />
           「きゃすりん」アプリをご利用ください。

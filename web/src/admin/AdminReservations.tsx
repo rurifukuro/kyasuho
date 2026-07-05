@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyCast, KyReservationFull, KyTenant } from '../lib/types';
+import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/timeUtils';
 import {
   adminMakeReservation,
@@ -63,6 +64,23 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // §24: Supabase Realtime — 予約の追加・変更を台帳へ自動反映（アプリ/客Webからの書き込みも拾う）
+  useEffect(() => {
+    const channel = supabase
+      .channel(`ky-reservations-admin-${tenant.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ky_reservations', filter: `tenant_id=eq.${tenant.id}` },
+        () => {
+          void load();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [tenant.id, load]);
 
   useEffect(() => {
     fetchCastList(tenant.id)

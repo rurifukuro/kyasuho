@@ -432,3 +432,29 @@ SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差
 - migration 0010適用EXIT:0→**RESTプローブ**：anon直RPC→42501 permission denied（遮断○）・`ky_ai_usage` anon SELECT→42501（revoke効果○）・`routine_privileges`でservice_role EXECUTE存在確認○
 - **Edge Functionデプロイ後3プローブ**：OPTIONS→200（CORS○）／無Authorization POST→401（ゲートウェイverify_jwt遮断○）／anon JWT POST→**500 server_not_configured**（Secret未設定の前段チェック動作○）→直後`ky_ai_usage`カウント0行＝**未設定期間はレート枠不消費を実証**
 - **残（Secret登録待ち）**：concafe-yoyakuプロジェクトへ`ANTHROPIC_API_KEY`のSecret登録はユーザー作業（キー値はローカル非存在のため）。登録後の正常系200・実ユーザーJWT 200/非オーナー403はTask #15スモークで確認
+
+---
+
+## Rev19（2026-07-06）アプリ⇔管理Web連携仕上げ（§24＝SPEC順序17）
+
+§24連携仕様の未実装3点（アプリ→Web導線・Web→アプリ導線・台帳リアルタイム）を実装。アカウント共有（Auth）・データ共有（ky_*）・時刻表現（timeUtils）・エンティトルメント（ky_tenants.plan）は既存実装で§24充足済み＝これで§24全項目完了。
+
+### アプリ側（§24 アプリ→Web導線＋§3-B QR残債解消）
+- **`src/components/QrLinkCard.tsx`**（新規・共通部品）：URL共有カード＝タイトル＋QR（白地×黒固定・読み取り性優先）＋URLテキスト（selectable）＋コピーボタン（`expo-clipboard`・押下で✓「コピーしました」2秒表示）＋ヒント。§3-B（公開URL）と§24（PCで作業）の共用
+- **`src/components/PcWorkModal.tsx`**（新規）：設定「PCで作業」モーダル（FormModalShell＝MODAL-SAFE）。管理Web URL `https://rurifukuro.github.io/kyasuho/#/admin` をQR・コピー付きで提示＋「アプリと同じメール＋パスワードでログイン／データは自動同期」案内
+- **`src/screens/SettingsScreen.tsx`**：店舗プロフィールの直後に「連携」セクション追加（monitorアイコン行→PcWorkModal起動）
+- **`src/screens/ScheduleScreen.tsx`**：公開URLカード（Rev8以来URL表示のみ）を`QrLinkCard`へ置換＝**§3-B「公開URL発行・QR」のQR・コピー残債を解消**（客へのQR提示が可能に）
+- **`src/i18n/strings.json`**：10キー追加（`common.copyUrl`/`common.copied`・`settings.sectionLink`/`pcWork`/`pcWorkSub`・`pcWork.title`/`desc`/`urlTitle`/`qrHint`/`loginHint`）
+- **依存追加**：`react-native-svg` 15.12.1（`npx expo install`＝SDK54互換）／`expo-clipboard` ~8.0.8（同）／`react-native-qrcode-svg` ^6.3.21（純JS・svg依存）
+
+### Web側（§24 リアルタイム＋Web→アプリ導線）
+- **`web/src/admin/AdminReservations.tsx`**：**Supabase Realtime購読**＝`postgres_changes`（`ky_reservations`・`tenant_id=eq.<id>`フィルタ・event '*'＝アプリ/客Web/削除の全書き込みを拾い`load()`再取得）。チャンネルは`tenant.id`/`load`（=日付）変更時に張り替え・クリーンアップで`removeChannel`
+- **`web/src/admin/AdminLayout.tsx`**：サイドバーフッターに「アプリで予約通知を受け取る」リンク（App Store製品ページ `apps.apple.com/jp/app/id6787006154`）。**`SHOW_APP_STORE_LINK=false`でOFF出荷**＝アプリ公開後にtrueへ（§24「公開後に有効化」）
+- **`web/src/admin/admin.css`**：`.admin-appstore-link`（primary色・hover下線）
+
+### DB確認
+- `pg_publication_tables`で**`ky_reservations`がsupabase_realtime publicationに登録済み**を確認（migration 0005で追加済み）＝Realtime用の追加migration不要
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0（G1・TKey=keyof＝i18n全キー存在も同時保証=G2）／web `npm run build` EXIT:0（AdminApp 109.96KB・客側チャンク非破壊）
+- Realtimeの実動（別クライアント書き込み→台帳自動反映）・QR読み取り・コピー動作はTask #15スモークで確認

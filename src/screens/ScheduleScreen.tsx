@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
+import { QrLinkCard } from '../components/QrLinkCard';
 import * as scheduleService from '../services/schedule';
 import type { UnlockWindow, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
@@ -194,13 +195,14 @@ export function ScheduleScreen() {
           <Text style={s.addBtnText}>{t('schedule.addWindow')}</Text>
         </TouchableOpacity>
 
-        <View style={[s.urlCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[s.urlLabel, { color: theme.text }]}>{t('schedule.publicUrl')}</Text>
-          <Text style={[s.urlText, { color: theme.primary }]} selectable>
-            {publicUrl}
-          </Text>
-          <Text style={[s.urlHint, { color: theme.subtext }]}>{t('schedule.publicUrlHint')}</Text>
-        </View>
+        <QrLinkCard
+          title={t('schedule.publicUrl')}
+          url={publicUrl}
+          hint={t('schedule.publicUrlHint')}
+          theme={theme}
+          copyLabel={t('common.copyUrl')}
+          copiedLabel={t('common.copied')}
+        />
       </ScrollView>
 
       <AddWindowModal
@@ -359,10 +361,6 @@ const s = StyleSheet.create({
   deleteBtn: { padding: 6 },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingVertical: 14, marginTop: 12, marginBottom: 24 },
   addBtnText: { color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 6 },
-  urlCard: { borderWidth: 1, borderRadius: 12, padding: 16 },
-  urlLabel: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
-  urlText: { fontSize: 13, marginBottom: 8 },
-  urlHint: { fontSize: 12 },
 });
 
 const ms = StyleSheet.create({

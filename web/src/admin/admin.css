@@ -65,6 +65,18 @@
   color: var(--text-secondary);
 }
 
+.admin-appstore-link {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.admin-appstore-link:hover {
+  text-decoration: underline;
+}
+
 /* ---- メイン ---- */
 
 .admin-main {

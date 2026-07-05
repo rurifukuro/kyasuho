@@ -20,6 +20,7 @@ import TermsOfUseModal from '../components/TermsOfUseModal';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import DeleteAccountModal from '../components/DeleteAccountModal';
 import StoreProfileModal from '../components/StoreProfileModal';
+import PcWorkModal from '../components/PcWorkModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -33,6 +34,7 @@ export function SettingsScreen() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showPcWork, setShowPcWork] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -67,6 +69,21 @@ export function SettingsScreen() {
               <Text style={[s.rowSub, { color: theme.subtext }]}>
                 {tenant?.genre || t('settings.storeGenrePlaceholder')}
               </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 連携（PCで作業＝§24） */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionLink')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowPcWork(true)}>
+            <MaterialCommunityIcons name="monitor" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('settings.pcWork')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.pcWorkSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -166,6 +183,7 @@ export function SettingsScreen() {
       <PrivacyPolicyModal visible={showPrivacy} onClose={() => setShowPrivacy(false)} />
       <DeleteAccountModal visible={showDelete} onClose={() => setShowDelete(false)} />
       <StoreProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
+      <PcWorkModal visible={showPcWork} onClose={() => setShowPcWork(false)} />
     </View>
   );
 }
