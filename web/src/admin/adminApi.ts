@@ -7,6 +7,7 @@ import type {
   KyReservationFull,
   KySales,
   KyShift,
+  KyShiftTemplate,
   KyTenant,
   KyUnlockWindow,
   MakeReservationResult,
@@ -491,4 +492,53 @@ export async function generatePayrollFromAttendance(
     .upsert(rows, { onConflict: 'cast_id,date', ignoreDuplicates: true });
   if (error) throw error;
   return rows.length;
+}
+
+// ── シフト表画像生成（§22・AdminShiftImage用） ──
+
+/** 対象月の出勤枠を全件取得（シフト表描画用）。 */
+export async function fetchShiftsByMonth(tenantId: string, yearMonth: string): Promise<KyShift[]> {
+  const { from, toExclusive } = monthRange(yearMonth);
+  const { data, error } = await supabase
+    .from('ky_shifts')
+    .select('id, cast_id, date, start_at, end_at')
+    .eq('tenant_id', tenantId)
+    .gte('date', from)
+    .lt('date', toExclusive)
+    .order('date')
+    .order('start_at');
+  if (error) throw error;
+  return (data ?? []) as KyShift[];
+}
+
+/** シフト表テンプレのお気に入り一覧（新しい順）。 */
+export async function fetchShiftTemplateList(tenantId: string): Promise<KyShiftTemplate[]> {
+  const { data, error } = await supabase
+    .from('ky_shift_templates')
+    .select('id, tenant_id, name, template_key, custom_settings, logo_url, created_at')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyShiftTemplate[];
+}
+
+/** シフト表テンプレのお気に入り保存（custom_settings＝palette/motif等の上書き差分・§22）。 */
+export async function addShiftTemplate(input: {
+  tenantId: string;
+  name: string;
+  templateKey: string;
+  customSettings: Record<string, unknown>;
+}): Promise<void> {
+  const { error } = await supabase.from('ky_shift_templates').insert({
+    tenant_id: input.tenantId,
+    name: input.name,
+    template_key: input.templateKey,
+    custom_settings: input.customSettings,
+  });
+  if (error) throw error;
+}
+
+export async function removeShiftTemplate(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_shift_templates').delete().eq('id', id);
+  if (error) throw error;
 }

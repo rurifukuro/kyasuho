@@ -12,7 +12,7 @@ import { AdminCasts } from './AdminCasts';
 import { AdminSales } from './AdminSales';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminAttendance } from './AdminAttendance';
-import { AdminPlaceholder } from './AdminPlaceholder';
+import { AdminShiftImage } from './AdminShiftImage';
 import './admin.css';
 
 export default function AdminApp() {
@@ -105,7 +105,7 @@ export default function AdminApp() {
         <Route path="sales" element={<AdminSales tenant={tenant} />} />
         <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
         <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
-        <Route path="shift-image" element={<AdminPlaceholder title="シフト表作成" />} />
+        <Route path="shift-image" element={<AdminShiftImage tenant={tenant} />} />
         <Route path="*" element={<Navigate to="reservations" replace />} />
       </Route>
     </Routes>

@@ -373,3 +373,33 @@ SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差
 - **`monthRange`のnoUncheckedIndexedAccess対応**：web側tsconfigで `const [y, m]` 分割代入がTS18048になるため `const [y = 0, m = 0]` へ（動作不変）。**アプリ側原本 `src/utils/payrollCalc.ts` も同表記に統一**（§24「同式を保つ」・アプリ側tsc EXIT:0のまま）
 - **検証**：web `npx tsc -b` EXIT:0＋`npm run build`成功（AdminAppチャンク JS 65.20KB/CSS 5.37KBに成長・分離維持）・アプリ側 `npx tsc --noEmit` EXIT:0
 - **Rev15残確認の解消**：dev server上で `form.requestSubmit()`→`auth/v1/token` POST発行（ダミー資格情報に400）→「メールアドレスまたはパスワードが違います。」表示まで確認＝**ログインフォーム配線は正常**。前回の未発火はpreview_clickの合成イベントがReactのonSubmitを起こさないツール側事象と確定。ログイン後3画面の実操作はTask #15（テストアカウント）で実施
+
+---
+
+## Rev17（2026-07-06）シフト表エンジン（§3-I・§22＝SPEC順序15）
+
+テンプレート＝純データ・描画＝共通レンダラーの§22アーキテクチャを Web（正準）→アプリ（コピー同期）で実装。管理Web「シフト表作成」とアプリ「キャスト→シフト表」の両導線からPNG生成できる。
+
+### Web側（正準）
+- **`web/src/shiftTemplates/definitions.ts`**（**正準**・アプリへコピー同期＝冒頭コメント明記）：`ShiftTemplateDefinition`（size/palette/fonts/layout/deco）＋テンプレ20種（エレガント3・ポップ3・ゴシック2・和風2・シンプル3・ネオン2・パステル3・シーズナル2）＋`MOTIF_CHARS`＋`CATEGORY_LABELS`＋`findTemplate`
+- **`web/src/shiftTemplates/shiftData.ts`**（正準）：`ShiftFlatRow`→`ShiftDay[]` 集計の純関数（`buildShiftDays`/`daysInMonth`/`firstDayOffset`/`weekdayOf`/`WEEKDAY_LABELS`/`yearMonthLabel`）
+- **`web/src/shiftTemplates/ShiftTableRenderer.tsx`**（正準）：DOM+CSSレンダラー。1080×1350（4:5）/1080×1920（9:16）・`month-grid`（カレンダー型）と`week-rows`（日別リスト型）の2レイアウト・グラデ背景/モチーフ文字/ribbon/underlineヘッダー
+- **`web/src/admin/AdminShiftImage.tsx`**：管理Web作成画面。カテゴリ別テンプレギャラリー・月ナビ・4:5/9:16切替・カスタマイズ（palette/motif上書き）・お気に入り保存/読込/削除（`ky_shift_templates.custom_settings`）・PNG出力（`html-to-image` `toPng()`・プレビューはCSS `transform:scale`）
+- **`web/src/admin/adminApi.ts`**：`fetchShiftsByMonth`＋お気に入り3関数（list/add/remove）。`ky_shift_templates`はmigration 0009で適用済み（本Revで実DB存在をRESTプローブ200再確認）
+- **`web/src/admin/AdminApp.tsx`**：shift-imageルートをPlaceholder→実画面へ差し替え／**`admin.css`**：ギャラリー/プレビュー/お気に入りスタイル追加／**`types.ts`**：`KyShiftTemplate`／**`package.json`**：`html-to-image`
+
+### アプリ側（コピー同期＋RN移植）
+- **`src/shiftTemplates/definitions.ts`・`shiftData.ts`**：正準から同一内容コピー
+- **`src/shiftTemplates/ShiftTableRenderer.tsx`**：RN版レンダラー。RNのfontFamily非継承→全Text明示指定（iOS=Hiragino 3書体/Android=sans-serif系フォールバック）・lineHeight px固定・grid→週ごとrow＋セルflex:1・`expo-linear-gradient`で160deg近似（start{0.15,0}→end{0.85,1}）・ribbon=View包み・`numberOfLines`+ellipsis
+- **`src/screens/ShiftImageScreen.tsx`**：月ナビ・4:5/9:16セグメント・テンプレ横スクロールギャラリー（スウォッチ3色＋カテゴリ）・プレビュー（transform scale＝中心基準をtranslate補正で左上合わせ）・**写真に保存**（`expo-media-library` writeOnly権限→`saveToLibraryAsync`）・**共有**（`expo-sharing`）。キャプチャはroot直下のオフスクリーン実寸ノード（`left:-20000`・`collapsable={false}`・ScrollView外）に`captureRef`
+- **`src/screens/CastsScreen.tsx`**：ヘッダー右に「シフト表」pillボタン導線／**`src/services/casts.ts`**：`fetchShiftsByMonth`／**`strings.json`**：`cast.shiftImage`+`shiftImage.*` 11キー／**`app.json`**：`expo-media-library`プラグイン（保存権限文言）
+- **依存追加**：`react-native-view-shot` 4.0.3／`expo-media-library` ~18.2.1／`expo-linear-gradient` ~15.0.8（`npx expo install`＝SDK54互換）
+
+### week-rows 溢れゼロ保証（Web/RN同一式）
+- 初版に**月後半切れバグ**（26出勤日月で13日までしか描画されない）を発見→全面書き換え：WR_ROOMY/WR_COMPACTの2段階サイズ→1カラム高さ見積もり→収まらなければ2カラム（累積チップ行数でバランス分割）→`maxChips`物理上限（超過は「+N人」チップ）＝どの月でもフレーム外に溢れない
+- 視覚検証で4:5・26日月がmaxChips=2（1人+N人）に落ちる境界事象を確認（14/12分割でrowBudget=70px<チップ2行しきい値71px）→**WR_COMPACT微調整（rowPadV 5→4・chipGap 6→5）**で2行確保＝3人日全員・5人日3人+「+2人」。9:16は全員表示のまま
+- **ヘッドレスChrome撮影3枚**（elegant-noir 4:5／pop-sunny 4:5／elegant-noir 9:16・一時ページ`#/shift-test`+ダミー26日データ）で全26日・溢れゼロ・装飾正常を目視確認→一時検証ページは削除済み
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0（G1）／web `npm run build` EXIT:0（`tsc -b`含む・客側チャンク非破壊）
+- 実機系（view-shotキャプチャ・写真保存・共有シート）はTask #15エミュスモークで確認予定

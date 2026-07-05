@@ -114,6 +114,20 @@ export async function fetchShifts(tenantId: string, date: string): Promise<Shift
   return ((data ?? []) as ShiftRow[]).map(rowToShift);
 }
 
+/** 月内の全出勤を取得（シフト表画像生成用・SPEC §22） */
+export async function fetchShiftsByMonth(tenantId: string, yearMonth: string): Promise<Shift[]> {
+  const { data, error } = await supabase
+    .from('ky_shifts')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .gte('date', `${yearMonth}-01`)
+    .lte('date', `${yearMonth}-31`)
+    .order('date')
+    .order('start_at');
+  if (error) throw error;
+  return ((data ?? []) as ShiftRow[]).map(rowToShift);
+}
+
 export async function addShift(
   tenantId: string,
   castId: string,

@@ -40,6 +40,17 @@ export interface KyShift {
   end_at: string;
 }
 
+/** シフト表テンプレのお気に入り保存（ky_shift_templates・§22） */
+export interface KyShiftTemplate {
+  id: string;
+  tenant_id: string;
+  name: string;
+  template_key: string;
+  custom_settings: Record<string, unknown>;
+  logo_url: string | null;
+  created_at: string;
+}
+
 export interface KyReservation {
   id: string;
   tenant_id: string;

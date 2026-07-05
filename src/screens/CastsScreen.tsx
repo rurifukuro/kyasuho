@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
+import { ShiftImageScreen } from './ShiftImageScreen';
 import * as castService from '../services/casts';
 import { guardFields } from '../utils/contentGuard';
 import type { Cast, Shift, ThemeColor } from '../types';
@@ -65,6 +66,7 @@ export function CastsScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [detailCast, setDetailCast] = useState<Cast | null>(null);
+  const [shiftImageVisible, setShiftImageVisible] = useState(false);
 
   const loadCasts = useCallback(async () => {
     if (!tenant) return;
@@ -123,6 +125,19 @@ export function CastsScreen() {
     );
   }
 
+  if (shiftImageVisible) {
+    return (
+      <ShiftImageScreen
+        tenant={tenant}
+        casts={casts}
+        theme={theme}
+        t={t}
+        insets={insets}
+        onBack={() => setShiftImageVisible(false)}
+      />
+    );
+  }
+
   if (detailCast) {
     return (
       <CastDetailView
@@ -145,6 +160,17 @@ export function CastsScreen() {
         <Text style={[s.headerCount, { color: theme.subtext }]}>
           {t('cast.count', { count: String(casts.length) })}
         </Text>
+        <View style={s.headerSpacer} />
+        <TouchableOpacity
+          style={[s.shiftImageBtn, { backgroundColor: theme.primary + '15' }]}
+          onPress={() => setShiftImageVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="calendar-export" size={16} color={theme.primary} />
+          <Text style={[s.shiftImageBtnText, { color: theme.primary }]}>
+            {t('cast.shiftImage')}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -816,6 +842,9 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: 20, fontWeight: '700' },
   headerCount: { fontSize: 13, marginLeft: 8 },
+  headerSpacer: { flex: 1 },
+  shiftImageBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  shiftImageBtnText: { fontSize: 12, fontWeight: '600' },
   spinner: { marginTop: 32 },
   emptyWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   emptyCard: { borderRadius: 12, borderWidth: 1, padding: 32, alignItems: 'center', gap: 12 },
