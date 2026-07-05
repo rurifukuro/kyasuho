@@ -166,3 +166,67 @@ export type Reservation = {
   status: ReservationStatus;
   createdAt: string;
 };
+
+// ── 売上・給与・勤怠ドメイン（SPEC §3-F/H・§23／migration 0009） ──────
+
+/** 勤怠ステータス（出勤/遅刻/早退/欠勤/代打）。 */
+export type AttendanceStatus = 'present' | 'late' | 'early_leave' | 'absent' | 'substitute';
+
+/** 欠勤・遅刻の理由カテゴリ（'' = 未選択）。 */
+export type AttendanceReasonCategory = '' | 'sick' | 'personal' | 'no_show' | 'other';
+
+/** 勤怠記録（キャスト×日付で1行・実績）。ky_shifts（予定）とは別テーブル。 */
+export type Attendance = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  date: string; // YYYY-MM-DD
+  status: AttendanceStatus;
+  reasonCategory: AttendanceReasonCategory;
+  reasonNote: string;
+  substituteCastId: string | null; // status=substitute のとき代打キャスト
+  checkInAt: string | null; // HH:MM（実入店・null=未入力）
+  checkOutAt: string | null; // HH:MM（実退店・null=未入力）
+  note: string;
+};
+
+/** 日別売上（テナント×日付で1行）。金額は円。 */
+export type DailySales = {
+  id: string;
+  tenantId: string;
+  date: string; // YYYY-MM-DD
+  totalRevenue: number;
+  setCount: number;
+  drinkCount: number;
+  nominationCount: number;
+  otherRevenue: number;
+  note: string;
+};
+
+/** キャスト日別給与（キャスト×日付で1行）。金額は円・勤務時間は分単位。 */
+export type CastPayroll = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  date: string; // YYYY-MM-DD
+  minutesWorked: number; // 分単位（§23: 小数回避）
+  basePay: number;
+  nominationCount: number;
+  nominationBack: number;
+  drinkCount: number;
+  drinkBack: number;
+  otherBack: number;
+  deductions: number;
+  totalPay: number;
+  note: string;
+};
+
+/** 給与計算設定（店一律・テナントで1行）。 */
+export type PayrollSettings = {
+  id: string;
+  tenantId: string;
+  baseHourlyRate: number; // 円/時
+  nominationBackRate: number; // 円/件
+  drinkBackRate: number; // 円/杯
+  lateDeduction: number; // 円/回（遅刻控除）
+};

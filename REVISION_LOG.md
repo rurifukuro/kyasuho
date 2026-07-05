@@ -314,3 +314,21 @@ SPEC §3-D / §19-#5「客Web予約」を実装。concafe-yoyaku の CustomerPag
 - **§24新設**：アプリ⇔Web連携7項目（Auth共有/データ共有/相互導線/Realtime/時刻表現/plan共有）
 - **§10**：ky_tenants.plan列追加（三面共通エンティトルメント源泉）／**§14**：価格根拠＋Web課金論点
 - **AGENTS.md**：チェックリストにJ/§24行追加
+
+---
+
+## Rev14（2026-07-05）売上・給与・勤怠（アプリ側＝§3-F/§3-H・§23）＋migration 0009
+
+SPEC §5実装順序11＋12。分析タブを「売上／給与／勤怠」の実機能へ差し替え。
+
+- **`supabase/migrations/0009_ky_sales_payroll_attendance.sql`**（順序11・前回作成→本Revでコミット）：`ky_daily_sales`（unique(tenant_id,date)）／`ky_attendance`（unique(cast_id,date)・status 5値CHECK）／`ky_cast_payroll`（unique(cast_id,date)・金額内訳列）／`ky_payroll_settings`（unique(tenant_id)・default 時給1200/指名300/ドリンク100/遅刻控除0）＋各RLS（authenticated=自テナントのみ）。**実DB適用・REST検証済み（非破壊・新規テーブル追加のみ）**
+- **依存追加**：`expo-file-system`~19.0.23／`expo-sharing`~14.0.8（`npx expo install`＝SDK54互換）
+- **`src/types/index.ts`**：`AttendanceStatus`/`AttendanceReasonCategory`/`Attendance`/`DailySales`/`CastPayroll`/`PayrollSettings` 追加
+- **`src/utils/payrollCalc.ts`**：§23計算式の**純関数**（React/Supabase非依存＝§24で管理Webへ同式コピー共有前提）。`hhmmToMinutes`（0-29時）/`calcMinutesWorked`（日跨ぎ+24h）/`calcPayroll`（basePay=floor(分×時給/60)）/`splitMinutes`/`monthRange`
+- **`src/utils/csv.ts`**：UTF-8 **BOM付き**（`String.fromCharCode(0xfeff)`＝不可視文字直書き回避）・CRLF・RFC4180エスケープ→`expo-file-system` File API（`Paths.cache`）＋`expo-sharing` で共有（§23税金CSV）
+- **サービス3本**：`services/sales.ts`（upsert onConflict='tenant_id,date'）／`services/attendance.ts`（onConflict='cast_id,date'）／`services/payroll.ts`（設定upsert・明細upsert・**指名数自動集計**=ky_reservationsのstatus≠cancelled・**勤怠→給与自動生成**=出勤扱い4値のみ・既存明細スキップ＋ignoreDuplicates=手修正を上書きしない）
+- **`src/screens/AnalyticsScreen.tsx`**：Placeholder→実装。月ナビ（'YYYY-MM'）＋セグメント3切替コンテナ
+- **`src/screens/analytics/`**：`common.ts`（共有props/formatYen/monthDates等）／`NumberField.tsx`／`SalesView.tsx`（月次集計カード＋月の全日リスト入力＋売上CSV）／`PayrollView.tsx`（給与設定4値・勤怠から自動生成・キャスト別集計→日別明細→手修正モーダル＝内訳ライブプレビュー・給与CSV=対象月/キャスト名/出勤日数/総勤務時間h:mm/内訳/支給額）／`AttendanceView.tsx`（日付ストリップ→キャスト別記録・ステータス5値＋理由＋入退店時刻TimeStepper＋代打選択・月次集計＋出勤率・勤怠CSV）
+- **`src/i18n/strings.json`**：`analytics.*`/`sales.*`/`payroll.*`/`attendance.*`/`csv.*`/`common.save` 追加（CSV列名も i18n キー＝§23列仕様と一致）
+- **`tsconfig.json`**：`exclude: ["node_modules", "web"]` 追加（web/はVite独自tsconfig持ち＝アプリ側tscから分離。Rev12以降webがルートtscに巻き込まれていたのを是正）
+- **検証**：`npx tsc --noEmit` EXIT:0（G1・TKeyでi18n網羅検査=G2）。エミュスモーク（G4）は順序12〜17完了後にまとめて実施予定
