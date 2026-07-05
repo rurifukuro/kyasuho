@@ -458,3 +458,17 @@ SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0（G1・TKey=keyof＝i18n全キー存在も同時保証=G2）／web `npm run build` EXIT:0（AdminApp 109.96KB・客側チャンク非破壊）
 - Realtimeの実動（別クライアント書き込み→台帳自動反映）・QR読み取り・コピー動作はTask #15スモークで確認
+
+---
+
+## Rev20（2026-07-06）認証エラー文言＝メール未確認の判別（Task #15スモークで発見）
+
+エミュスモーク（Pixel7_Play_API35・Expo Go・トンネル8086）で、メール確認ON環境の未確認ユーザーがログインすると汎用エラー「エラーが発生しました。時間をおいて再度お試しください。」に落ちる問題を発見・修正。
+
+- **`src/screens/AuthScreen.tsx`**：`errorKey()` に `not confirmed` 分岐を追加 → `auth.error.emailNotConfirmed`
+- **`src/i18n/strings.json`**：`auth.error.emailNotConfirmed`「メールアドレスの確認が完了していません。届いた確認メールのリンクを開いてからログインしてください。」
+
+### 検証
+- `npx tsc --noEmit` EXIT:0（G1・G2）
+- エミュ実機（G4）：未確認アカウントでログイン→新文言表示を確認。サインアップ→「確認メールを送信しました」表示・空欄バリデーション・ログイン/新規登録切替も同スモークで確認済み
+- スモーク時の確認事実：`ensureTenant`は設計どおり「セッション確立後に作成」＝confirm前に`ky_tenants` 0行は正常（tenants.tsコメントに明記済みの挙動）

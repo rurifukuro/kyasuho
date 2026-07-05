@@ -28,6 +28,9 @@ function errorKey(message: string): TKey {
   if (m.includes('already registered') || m.includes('already exists') || m.includes('user already')) {
     return 'auth.error.alreadyRegistered';
   }
+  if (m.includes('not confirmed')) {
+    return 'auth.error.emailNotConfirmed';
+  }
   return 'auth.error.generic';
 }
 

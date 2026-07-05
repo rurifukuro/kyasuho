@@ -128,6 +128,7 @@
   "auth.error.passwordTooShort": { "ja": "パスワードは6文字以上で入力してください。" },
   "auth.error.invalidCredentials": { "ja": "メールアドレスまたはパスワードが違います。" },
   "auth.error.alreadyRegistered": { "ja": "このメールアドレスは登録済みです。ログインしてください。" },
+  "auth.error.emailNotConfirmed": { "ja": "メールアドレスの確認が完了していません。届いた確認メールのリンクを開いてからログインしてください。" },
   "auth.error.generic": { "ja": "エラーが発生しました。時間をおいて再度お試しください。" },
   "auth.emailConfirmSent": { "ja": "確認メールを送信しました。メール内のリンクを開いてからログインしてください。" },
   "auth.notConfigured.title": { "ja": "接続設定が未完了です" },
