@@ -1,7 +1,7 @@
 # きゃすりん 仕様書（SPEC）
 
-- 作成日: 2026-07-03
-- ステータス: **仕様検討中（実装未着手・Phase -1法務ゲート＝条件付きGo通過済み）**
+- 作成日: 2026-07-03 ／ 最終改訂: 2026-07-05（**三面構成へ改訂**＝提供者アプリ＋提供者管理Web(PC)＋客Web。競合価格調査反映）
+- ステータス: **実装進行中（Rev12まで完了＝アプリ基盤/認証/受付設定/予約台帳/キャスト管理/通知/UGC/法務/設定/客Web予約。Phase -1法務ゲート＝条件付きGo通過済み）**
 - ベースアプリ: **concafe-yoyaku**（予約ロジック・客側Web）＋ **とれはんっ！/レジさぽっ！**（UI共有部品・UGC 4要件・i18n・IAP）を流用
 - アプリID（ASC）: 6787006154 ／ Bundle ID: `com.kyasuho.app`（ロック済・R1で変更不可）
 
@@ -14,9 +14,13 @@
 **コンカフェ（コンセプトカフェ）の予約を、店・キャスト・客の三者で1本化する予約管理SaaS。**
 コンカフェ集客は今キャスト個人のX/LINE任せで予約がバラバラ。これを「店が登録するだけで客向けの公開予約ページが自動発行され、席・生誕祭・指名の予約が集約される」形にする。汎用予約SaaS（RESERVA/STORES）は無料巨人と丸かぶりなので、**コンカフェ特化**で回避する（とれはんっ！＝同人イベント特化と同じ勝ち筋）。
 
-- **提供者側（店・キャスト）**＝iOSアプリ（Expo/RN）で予約台帳・受付設定・キャスト管理
-- **客側**＝公開Webページ（GitHub Pages）で空き確認→予約（アプリ不要・URLを配るだけ）
-- 両者は同一Supabaseバックエンドを共有（tenant_idで店ごとに分離）
+**三面構成（2026-07-05確定）**：
+
+1. **提供者iOSアプリ**（Expo/RN）＝店・キャストの手元運用（予約台帳・受付設定・キャスト管理・通知受け）
+2. **提供者管理Web（PC）**＝店のPC作業用サイト。アプリと同じアカウントでログインし、同じデータを大画面で操作（売上入力・給与計算・CSV出力・シフト表画像生成などPC向き作業の主戦場）
+3. **客側公開Web**＝店ごとの公開予約ページ（アプリ不要・URLを配るだけ）
+
+三面すべて同一Supabaseバックエンド（Auth＋DB＋RLS）を共有。tenant_idで店ごとに分離。**アプリ⇔管理Webは同一アカウント・同一データ＝どちらで操作しても即座に他方へ反映**（§22連携仕様）。
 
 ---
 
@@ -27,7 +31,7 @@
 | アプリ名 | **きゃすりん**（キャスト＋りん＝人名風の4文字。覚えやすくマスコットキャラ展開に好適。J-PlatPat未衝突・Web衝突なし。旧名「きゃすほ！」から改名。Bundle IDは旧名 com.kyasuho.app をR1ロック済） |
 | Bundle ID | **`com.kyasuho.app`**（ロック済・以後変更不可） |
 | ベース | concafe-yoyaku（予約ロジック・客Web）＋ とれはんっ！/レジさぽっ！（UI部品・UGC・i18n・IAP） |
-| 構成 | **二面**＝提供者iOSアプリ ＋ 客側公開Web（GitHub Pages）。同一Supabaseを共有 |
+| 構成 | **三面**＝提供者iOSアプリ ＋ **提供者管理Web(PC・2026-07-05追加)** ＋ 客側公開Web（GitHub Pages）。同一Supabase（Auth/DB/RLS）を共有 |
 | テナント | **セルフ登録マルチテナントSaaS**（店/キャストが登録→予約ページ自動発行。tenant_id＋RLS分離・Supabase Authセルフサインアップ） |
 | 対応OS | **iOS主・Android後追い**（MVPはiOSのみ） |
 | 収益 | **フリーミアム。MVPは全機能無料で出荷**（IAPフラグOFF・課金コードは後付けできる構造）。§14で「フリー/有料の境界」を設計 |
@@ -71,10 +75,31 @@
 - ◯ 予約前日/当日に客へリマインダー（メール or 公開ページ再訪促し。※MVPはアプリ内通知＝提供者向けのみ、客向けメールは有料機能候補）
 - ◯ 〆切・満席の通知
 
-### F. 分析・売上補助 ◯
-- ◯ 来店実績・予約数の集計（concafe-yoyaku `SalesSummary`/`TimeAllocationSummary` 相当）
-- ◯ キャスト別指名数ランキング
-- △ CSV/売上エクスポート（有料機能候補）
+### F. 分析・売上管理 ★（詳細設計＝§23）
+- ★ 来店実績・予約数の集計（concafe-yoyaku `SalesSummary`/`TimeAllocationSummary` 相当）
+- ★ キャスト別指名数ランキング
+- ★ **店舗売上管理**（日別/月別の売上入力・集計ダッシュボード・グラフ表示）
+- ★ **キャスト別給与計算**（時給×出勤時間＋指名バック＋ドリンクバック等の歩合→日/月の給与明細自動生成。計算式・設定は§23）
+- ★ **税金関連CSV出力**（売上明細/給与明細を確定申告・会計ソフト取込用にエクスポート。形式は§23＝MVPは汎用CSV＋日付/科目/金額列）
+- ◯ 売上目標設定・達成率表示
+- ◯ 経費入力（仕入れ/備品等の簡易経費管理）
+
+### H. 勤怠管理 ★
+- ★ **欠勤・遅刻・早退の記録**（キャスト×日付で出勤ステータス管理：出勤/遅刻/早退/欠勤/代打）
+- ★ 欠勤理由メモ（体調不良/私用/無断等のカテゴリ＋自由入力）
+- ★ 勤怠一覧（月次カレンダー表示＋集計：出勤率/遅刻率）
+- ◯ 遅刻/欠勤のプッシュ通知（他キャストへの連絡）
+- ◯ 代打リクエスト機能（欠勤時に空きキャストへ通知）
+
+### I. シフト表生成（画像出力）★（エンジン詳細設計＝§22）
+- ★ **全キャストの月間シフト一覧表を画像として自動生成**（提供者が添付画像のようなデザインの出勤表をSNS等で告知する用途）
+- ★ **デザインテンプレート20種以上**（エレガント/ポップ/ゴシック/和風/シンプル/ネオン/パステル等・店の雰囲気に合わせて選択。**テンプレート＝パラメータ定義＋共通レンダラー方式**＝§22）
+- ★ テンプレートのカスタマイズ（店ロゴ挿入・カラー変更・フォント選択・背景画像）
+- ★ **AI独自デザイン生成**（Claude APIがテンプレート定義パラメータを生成→共通レンダラーが描画＝出力一貫性と文字品質を担保。APIキーはEdge Function側＝R13準拠。§22）
+- ★ 生成画像の保存・共有（アプリ=カメラロール保存/シェアシート、管理Web=PNGダウンロード）
+- ★ **主戦場は管理Web（PC・大画面プレビュー）**。アプリでも生成可（同一テンプレート定義を共有）
+- ◯ 週間/2週間表示バリエーション
+- ◯ テンプレートのお気に入り保存
 
 ### G. 設定・アカウント ★
 - ★ アカウント作成/ログイン（Supabase Auth・メール＋パスワード）
@@ -82,10 +107,24 @@
 - ★ 店舗プロフィール（店名・ジャンル・場所・営業情報）
 - ★ 利用規約・プライバシーポリシー（§16の表明保証条項を含む）
 - ★ 通報/ブロック導線（UGC 4要件＝§15）
+- ★ **「PCで作業」導線**（管理WebのURL表示・コピー・QR＝§3-J/§22）
 - IAP（サブスク・§14）※MVPはフラグOFF
 - 言語切替（i18n）
 - バージョン表示（app.json直読み＝ルールVER）
 - ダークモード（とれはん流用で標準装備）
+
+### J. 提供者管理Web（PC作業サイト）★【2026-07-05追加】
+**店のPCブラウザから、アプリと同じアカウント・同じデータで業務ができるサイト。** 忙しい営業前後にスマホで完結する作業（予約確認・チェックイン）はアプリ、腰を据えたPC作業（経理・シフト表作成・一括編集）は管理Web、と使い分ける。
+
+- ★ **ログイン**（Supabase Auth＝アプリと同一のメール＋パスワード。アカウントは1つ）
+- ★ **予約台帳**（日別一覧＋PC優位の週/月ビュー・受付/変更/キャンセル/チェックイン・手動追加＝アプリ§3-Aと同権限）
+- ★ **受付設定**（営業日・席数・解禁/〆切・公開URL表示＝§3-B同等）
+- ★ **キャスト管理**（CRUD・出勤スケジュール一括編集＝表形式でまとめて入力できるのがPC優位）
+- ★ **売上・給与・勤怠**（§3-F/Hの全機能。CSV出力はブラウザダウンロード＝PCが主戦場）
+- ★ **シフト表画像生成**（§3-I の主戦場。大画面プレビュー・テンプレート選択・AIデザイン・PNG保存）
+- ★ 設定（店プロフィール・規約/PP閲覧・アカウント削除）
+- ◯ 通報管理（ReportInbox相当）
+- **やらないこと**：管理Webは提供者専用（客は§3-Dの公開ページのみ）。プッシュ通知はアプリ側の責務（Webはリアルタイム画面反映のみ）
 
 ---
 
@@ -109,11 +148,12 @@
 
 ## 5. スコープ（MVP＝最小で「予約が回る」まで）
 
-**MVPの完成定義＝「店が登録→公開ページ発行→客がWebで席予約→店アプリで台帳確認」の1周が回る。**
+**MVPの完成定義＝「店が登録→公開ページ発行→客がWebで席予約→店がアプリでもPCでも台帳確認・業務処理できる」の1周が回る。**
 
-- **MVP第1弾に含める（★）**：A（予約台帳）／B（受付設定・席・解禁/〆切・URL発行）／C（キャスト登録・出勤・指名ON/OFF）／D（客Web予約・PIN編集）／E-★（提供者への予約プッシュ）／G（Auth・アカウント削除・店プロフィール・規約/PP・通報/ブロック）
-- **後フェーズ（◯）**：F（分析・売上）／E-◯（客向けメールリマインダー）／C-◯（キャスト個人ページ）／生誕祭特設枠
-- **将来・任意（△）**：CSVエクスポート／多言語拡張／Android版
+- **MVP第1弾に含める（★）**：A（予約台帳）／B（受付設定・席・解禁/〆切・URL発行）／C（キャスト登録・出勤・指名ON/OFF）／D（客Web予約・PIN編集）／E-★（提供者への予約プッシュ）／F（売上管理・給与計算・税金CSV）／G（Auth・アカウント削除・店プロフィール・規約/PP・通報/ブロック）／H（勤怠管理）／I（シフト表画像生成）／**J（提供者管理Web＝PC作業サイト・2026-07-05ユーザー指示で必須化）**
+- **実装順序（Rev12時点の残り）**：①F/H新機能のDB＋アプリ実装 → ②管理Web J（客Webと同一リポで基盤共有＝§21）→ ③シフト表エンジン I（管理Web先行→アプリ移植）→ ④連携仕上げ（§24）
+- **後フェーズ（◯）**：E-◯（客向けメールリマインダー）／C-◯（キャスト個人ページ）／生誕祭特設枠／経費管理／売上目標
+- **将来・任意（△）**：多言語拡張／Android版
 - **課金**：MVPはIAPフラグOFF（全無料）。§14の境界設計に沿って後付け
 
 ---
@@ -122,7 +162,7 @@
 
 - [ ] **フリー/有料の具体ライン**（§14に設計案。無料=規模制限＋基本予約／有料=規模無制限＋プロ機能。**どの機能を有料の壁の向こうに置くかの最終決定**）
 - [ ] **月額サブスク価格**（§14に推奨レンジ。店舗向けSaaS＝個人向けより高め。競合コンカフェGoスタンダード¥4,800/月が参考。実額は課金前にユーザー承認＝価格判断ゲート）
-- [ ] **MVPスコープの最終確定**（§5の★で回るか、Cのキャスト管理を後フェーズに回すか）
+- [x] **MVPスコープの骨格**（2026-07-05ユーザー指示＝「アプリ＋PC作業サイト＋連携」の三面が必須。§5の★一式で確定。新機能F/H/I込み）
 - [ ] **i18n範囲**（MVP日本語のみ確定でよいか／訪日客向けに最初からen入れるか）
 - [ ] **弁護士確認**（❶個人情報の委託契約/規約の表明保証条項 ❷将来決済時の資金決済法＝§16）
 - [x] アプリ名クリア（J-PlatPat称呼0件＋ASC作成成功＋Web衝突なし）
@@ -147,6 +187,24 @@
 - **コンカフェGo**（株式会社Code and DESIGN・2026-07-02）＝コンカフェ専門の**店舗向けCRM/MA**（出勤プッシュ・チェックインQR・ステップ配信・スタンプカード・分析）。店舗フリー0円/スタンダード月4,800円。**予約機能は無し**（再来店促進が軸）。**無料で店舗接点を持つ＝将来予約機能追加の可能性で要警戒**
 - 汎用予約SaaS（RESERVA/STORES予約/tol等）＝無料でも高機能だが**コンカフェ特化ではない**（席×キャスト指名×生誕祭という業界固有の予約軸を持たない）
 - **結論＝「客側の公開予約受付ページを自動発行するコンカフェ特化SaaS」は依然空白＝差別化成立**。チェキチェキ=手元記録／コンカフェGo=CRM／汎用SaaS=非特化。きゃすりんの軸＝**予約受付導線 × コンカフェ特化（席・指名・生誕祭）× 客はWebだけ**
+
+### 8-2. ナイトレジャー業界 管理システム価格調査（2026-07-05・売上/給与/勤怠機能の価格設計根拠）
+
+きゃすりんの新機能群（売上・給与・勤怠）はナイトレジャーPOS/管理システムの領分と重なるため、同業界10サービスの価格帯を調査：
+
+| サービス | 月額 | 初期費用 | 特徴 |
+|---|---|---|---|
+| NIGHTCORE | **¥9,800**（全機能込み） | 0円 | 最安帯。給与計算・指名管理・監査ログ |
+| GROW | **¥10,000〜** | 0円 | クラウド型・デバイス不問・バック計算自動化 |
+| 夜レジ | **¥29,800** | 0円 | コンカフェ対応明記。給与計算が源泉徴収まで対応 |
+| YONAREZI | **¥50,000〜** | — | 最高価格帯・経営分析 |
+| VENUS | 月額0円 | **¥95,000買い切り** | 唯一の買い切り型。無料版VENUS 5あり |
+| Dシステム | 非公開 | ¥55,000 | 累計5,000店舗・コンカフェ対応明記 |
+| TRUST | 非公開（3プラン） | — | 1,000店舗以上・コンカフェ導入事例あり |
+| CLUB NAVI / ボードマネージャー / イロハ | 非公開〜¥35,000 | — | カスタム開発系 |
+
+- キャスト個人向けアプリ：Melty（顧客10人まで無料→月¥980）等＝店舗向けとは別レイヤー
+- **示唆**：①業界POSのボリュームゾーンは**月1〜3万円**＝きゃすりんの想定価格帯（¥1,980〜2,980）はその1/10で「個人経営コンカフェが手を出せる価格」として明確に下を取れる ②既存サービスはすべて**POS/会計が主軸で予約管理は空白**＝§8の差別化結論を補強 ③フリーミアムはほぼ存在しない（VENUS 5のみ）＝**無料プランから入れるSaaSはこの業界でそれ自体が差別化** ④給与計算（時給＋各種バック＋日払い）は業界標準機能＝きゃすりん§3-Fの給与計算はバック計算対応が必須ライン
 
 ---
 ---
@@ -182,7 +240,9 @@ BottomTabNavigator
 | **ReservationsScreen** | 日付別予約タイムライン・受付/変更/キャンセル・チェックイン・手動追加 | 予約詳細/編集（FormModalShell）、手動追加 |
 | **ScheduleScreen** | 営業日/時間/席数/1セット時間・解禁/〆切・公開URL発行/QR | 営業設定、URL/QR表示 |
 | **CastsScreen** | キャストCRUD・出勤登録・指名ON/OFF | キャスト編集（FormModalShell）、出勤カレンダー |
-| **AnalyticsScreen** | 来店/予約集計・指名ランキング（後フェーズは簡易/プレースホルダ） | なし |
+| **AnalyticsScreen** | 売上入力・日/月別集計・グラフ・キャスト別給与計算・指名ランキング・CSV出力 | 売上入力モーダル、給与明細モーダル、CSV出力設定 |
+| **AttendanceScreen**（Analyticsサブ or タブ長押し） | 勤怠管理・欠勤/遅刻/早退記録・月次カレンダー・出勤率集計 | 勤怠記録モーダル |
+| **ShiftImageScreen**（Castsサブ or 長押し） | シフト表画像生成・テンプレート選択・AIデザイン・プレビュー・共有 | テンプレートギャラリー、AIプロンプト入力 |
 | **SettingsScreen** | 店プロフィール・アカウント削除・規約/PP・通報管理・IAP・言語・テーマ・バージョン | 各種モーダル |
 
 ### 9-2. 客側公開Web（concafe-yoyaku流用・React+Vite+HashRouter）
@@ -199,6 +259,26 @@ BottomTabNavigator
 - concafe-yoyaku の `CustomerPage`/`Calendar`/`ReservationModal`/PIN編集をマルチテナント化（URLの `<店slug>` から tenant を解決）
 - **アプリ不要**（客はWebのみ）。GitHub Pages（HashRouter・VITE_BASE_PATH）＝レジさぽっ！買い手Web/concafe-yoyakuと同じデプロイ形
 
+### 9-3. 提供者管理Web（PC・§3-J）【2026-07-05追加】
+
+```
+管理Web  kyasuho.pages/#/admin  （客Webと同一Viteアプリ・React.lazyで遅延ロード＝§21）
+├─ ログイン（Supabase Auth・アプリと同一アカウント）
+├─ サイドバーレイアウト（PC向け・左ナビ＋右コンテンツ）
+│   ├─ 📋 予約台帳    （日別一覧＋週ビュー・受付/変更/キャンセル/チェックイン/手動追加）
+│   ├─ 🗓️ 受付設定    （営業日・席数・解禁/〆切・公開URL/QR）
+│   ├─ 👤 キャスト     （CRUD・出勤スケジュール表形式一括編集）
+│   ├─ 📊 売上・給与   （売上入力・集計グラフ・給与計算・給与設定・CSV出力）
+│   ├─ 🕐 勤怠        （月次カレンダー・欠勤/遅刻/早退/代打記録・出勤率）
+│   ├─ 🎨 シフト表作成 （テンプレ選択→プレビュー→カスタマイズ→AI生成→PNG DL）
+│   └─ ⚙️ 設定        （店プロフィール・規約/PP・アカウント削除）
+└─ 未ログイン時は /#/admin → ログインフォームへ
+```
+
+- **slug衝突回避**：`admin` は店slugの予約語（テナント登録時にバリデーションで拒否）
+- レスポンシブは「PC優先・タブレット可」（スマホ最適化はアプリの責務＝重複投資しない）
+- 客Web（`#/<slug>`）とはルートで分岐。管理画面チャンクは React.lazy で客側バンドルに影響させない
+
 ---
 
 ## 10. データモデル（マルチテナント・Supabase/Postgres）
@@ -209,12 +289,17 @@ BottomTabNavigator
 
 | テーブル | 主なカラム | 備考 |
 |---|---|---|
-| `ky_tenants` | id, slug(公開URL用), name, genre, owner_user_id, business_info(jsonb), is_suspended | 店舗＝テナント。slugが公開ページのキー |
+| `ky_tenants` | id, slug(公開URL用), name, genre, owner_user_id, business_info(jsonb), is_suspended, plan('free'/'pro'・default 'free') | 店舗＝テナント。slugが公開ページのキー。**planはアプリ/管理Web共通のエンティトルメント源泉**（§14・IAP購入→レシート検証→この列更新→三面が参照） |
 | `ky_casts` | id, tenant_id, name, photo_url, sns_links(jsonb), bio, accepts_nomination(bool), sort_order | キャスト |
 | `ky_shifts` | id, tenant_id, cast_id, date, start_at, end_at | 出勤枠 |
 | `ky_unlock_windows` | id, tenant_id, date, open_from, close_at, seats, set_minutes | 受付解禁ウィンドウ＋自動〆切（concafe＋レジさぽ流用） |
 | `ky_reservations` | id, tenant_id, date, slot, seat_no, customer_name, contact, party_size, cast_id(指名), note, status, created_at | 予約本体 |
 | `ky_reservation_pins` | reservation_id, pin_hash | 4桁PIN（客の予約編集・concafe流用） |
+| `ky_attendance` | id, tenant_id, cast_id, date, status(present/late/early_leave/absent/substitute), reason, substitute_cast_id, check_in_at, check_out_at, note, created_at, updated_at | **勤怠記録**（§3-H） |
+| `ky_sales` | id, tenant_id, date, total_revenue, set_count, drink_count, nomination_count, other_revenue, note, created_at, updated_at | **日別売上**（§3-F） |
+| `ky_cast_payroll` | id, tenant_id, cast_id, date, hours_worked, base_pay, nomination_back, drink_back, other_back, deductions, total_pay, created_at, updated_at | **キャスト日別給与**（§3-F） |
+| `ky_payroll_settings` | id, tenant_id, base_hourly_rate, nomination_back_rate, drink_back_rate, late_deduction, created_at, updated_at | **給与計算設定**（時給/バック率/遅刻控除等） |
+| `ky_shift_templates` | id, tenant_id, name, template_key, custom_settings(jsonb), logo_url, created_at | **シフト表テンプレート設定**（§3-I） |
 | `ky_reports` | id, tenant_id, target_type, target_id, reporter, reason, status, created_at, resolved_at | **UGC通報**（§15） |
 | `ky_blocks` | id, tenant_id, blocker_user_id, blocked_key | **ブロック**（§15） |
 
@@ -280,6 +365,22 @@ type Reservation = {
 | ReservationModal | concafe-yoyaku `ReservationModal.tsx` | 指名キャスト選択を追加 |
 | PIN編集 | concafe-yoyaku `reservation_pins` フロー | そのまま |
 | make_reservation RPC | concafe-yoyaku `supabase/migrations/` | tenant_id 引数追加・advisory lockキーに tenant を含める |
+
+### 管理Web｜新規（客Webの基盤＝supabaseクライアント/型/timeUtils/hooksを共有）【2026-07-05追加】
+
+| コンポーネント | 責務 |
+|---|---|
+| AdminApp / AdminLayout | `#/admin` 配下のルーティング＋サイドバーレイアウト（React.lazy遅延ロード） |
+| AdminLogin | Supabase Authログイン（signInWithPassword・アプリと同一アカウント） |
+| AdminReservations | 予約台帳（日別一覧＋週ビュー・状態変更・手動追加） |
+| AdminSchedule | 受付設定（unlock_windows CRUD・席数・close_at・公開URL/QR） |
+| AdminCasts | キャストCRUD＋出勤スケジュール表形式一括編集 |
+| AdminSales | 売上入力・月次集計・グラフ（軽量SVG自前描画＝外部chartライブラリ不要） |
+| AdminPayroll | 給与計算・給与設定（ky_payroll_settings）・明細表示 |
+| AdminAttendance | 勤怠月次カレンダー・記録編集・出勤率集計 |
+| AdminCsvExport | 売上/給与CSV生成→ブラウザダウンロード（§23の列仕様） |
+| AdminShiftImage | シフト表画像生成（テンプレギャラリー→プレビュー→カスタマイズ→AI→PNG DL＝§22） |
+| AdminSettings | 店プロフィール編集・規約/PP・アカウント削除 |
 
 ### 新規コンポーネント（提供者アプリ）
 
@@ -348,10 +449,15 @@ create policy public_read_casts on ky_casts
 | 基本予約（席・日時・PIN編集） | ◯ | ◯ |
 | 公開予約ページ | ◯（「きゃすりん」バッジ付き） | ◯（バッジ非表示・独自ブランディング） |
 | キャスト指名予約 | △（1キャストのみ or なし） | ◯ |
+| **勤怠管理（欠勤/遅刻/早退/代打）** | ◯（基本記録のみ） | ◯（集計・CSV・代打通知） |
+| **売上管理（日別/月別入力・集計）** | △（当月のみ・グラフなし） | ◯（全期間・グラフ・比較分析） |
+| **キャスト給与計算（時給×勤務＋歩合）** | ✗ | ◯ |
+| **税金関連CSV出力（売上/給与/経費）** | ✗ | ◯（弥生/freee/MFクラウド互換） |
+| **シフト表画像生成（テンプレート20種）** | ◯（透かし付き・月3回） | ◯（透かしなし・無制限） |
+| **AIシフト表デザイン生成** | ✗ | ◯ |
 | 生誕祭/周年イベント枠 | ✗ | ◯ |
 | 客向けメール/リマインダー | ✗ | ◯ |
 | 分析ダッシュボード | ✗（当日集計のみ） | ◯（期間集計・指名ランキング） |
-| CSV/売上エクスポート | ✗ | ◯ |
 
 - **フラグ設計**：`config/features.ts` で `IAP_ENABLED=false`（MVP）。有料判定は `EntitlementContext.plan` を全ゲートが通す共通関数（ルールGATE-1＝上限は1関数に集約）
 - **上限ゲート**：キャスト追加/予約受付は `canAddCast()` / `canAcceptReservation()` の共通ゲートを全経路（アプリ手動追加・客Web予約）が通す（散在禁止＝ルールGATE-1）
@@ -360,8 +466,15 @@ create policy public_read_casts on ky_casts
 
 | 商品ID | 種別 | 価格（案・要ユーザー承認） | 内容 |
 |---|---|---|---|
-| `kyasuho_pro_monthly` | 自動更新サブスク | **¥1,980〜¥2,980/月**（店舗SaaS・競合コンカフェGoは¥4,800/月） | プロ全機能 |
+| `kyasuho_pro_monthly` | 自動更新サブスク | **¥1,980〜¥2,980/月** | プロ全機能 |
 | `kyasuho_pro_yearly` | 自動更新サブスク | 月額×10ヶ月相当（2ヶ月分割引） | 年払い |
+
+**価格根拠（§8-2の2026-07-05調査）**：ナイトレジャーPOSのボリュームゾーンは月1〜3万円（NIGHTCORE¥9,800／夜レジ¥29,800／YONAREZI¥50,000）、コンカフェ特化CRMのコンカフェGoが¥4,800。きゃすりん¥1,980〜2,980は**POSの1/10・コンカフェGoの半額前後**＝「個人経営コンカフェが月のドリンク数杯分で導入できる」ポジション。売上/給与/勤怠/シフト表というPOS領分の機能を持ちながらこの価格帯で下を取る。かつ**無料プランから始められる**のは業界でほぼ唯一（§8-2③）＝店舗獲得の入口。
+
+### エンティトルメントの三面共有（アプリ⇔管理Web）【2026-07-05追加】
+
+- 権利の源泉は **`ky_tenants.plan`**（DB1箇所）。IAP購入→レシート検証→plan更新→アプリ/管理Web/客Web(バッジ表示)の三面が同じ列を参照
+- 管理Webの有料機能ゲートもアプリと同一境界（プラットフォームで差をつけない）。**購入導線はMVP後の設計論点**：Apple IAPで買った権利をWebで使うのは規約上問題なし。Web側にStripe等の独自決済を置くか（Appleアプリ内からWeb決済への誘導はNGなので、置く場合もアプリ内からはリンクしない）は課金ON化時に決定＝§6 TODOに含める
 
 ### PRICE/R35準拠
 - 価格表示は `productsById[sku].localizedPrice`（配列順依存禁止＝ルールPRICE）
@@ -403,13 +516,13 @@ create policy public_read_casts on ky_casts
 
 ---
 
-## 17. 客側公開Web設計（concafe-yoyaku流用・詳細）
+## 17. Web設計（客側公開Web＋提供者管理Web＝1つのViteアプリ）
 
-- **スタック**：React+Vite+TS strict+Supabase+GitHub Pages（HashRouter・VITE_BASE_PATH）＝concafe-yoyaku/レジさぽ買い手Webと同一
-- **マルチテナント化の要点**：ルート `#/<店slug>` から `ky_tenants.slug` でテナント解決→そのテナントの公開データのみ表示
-- **anonキー**：公開OK（WEB4＝anonは公開安全・service_roleは出荷禁止）。RLSで客は公開SELECT＋予約INSERT（RPC）のみ
-- **デプロイ**：GitHub Actions（deploy.yml で `.env` をCI生成＝WEB2/WEB1）。公開は実HTTP実証（WEB5）＋**公開操作はユーザー承認（WEB9）**
-- **配布**：提供者アプリの `PublicUrlCard` が `https://rurifukuro.github.io/kyasuho/#/<店slug>` を発行・QR化して客へ
+- **スタック**：React+Vite+TS strict+Supabase+GitHub Pages（HashRouter・VITE_BASE_PATH）＝concafe-yoyaku/レジさぽ買い手Webと同一。**客Webと管理Webは同一リポ・同一Viteアプリ**（`kyasuho/web/`）でルート分岐（§21）
+- **マルチテナント化の要点**：ルート `#/<店slug>` から `ky_tenants.slug` でテナント解決→そのテナントの公開データのみ表示。`#/admin` は管理Web（slug予約語）
+- **anonキー**：公開OK（WEB4＝anonは公開安全・service_roleは出荷禁止）。客＝公開SELECT＋予約INSERT（RPC）のみ。**提供者＝anonキー＋Authセッションで、既存RLS（owner_user_id=auth.uid()）がアプリと同一の権限を管理Webにも自動適用**＝バックエンド追加実装ほぼ不要が三面構成の利点
+- **デプロイ**：GitHub Actions（deploy.yml で `.env` をCI生成＝WEB2/WEB1）。公開は実HTTP実証（WEB5）＋**公開操作はユーザー承認（WEB9・2026-07-05セッションで承認済み）**
+- **配布**：提供者アプリの `PublicUrlCard` が `https://rurifukuro.github.io/kyasuho/#/<店slug>` を発行・QR化して客へ。設定画面の「PCで作業」導線が `#/admin` URLを提示（§24）
 
 ---
 
@@ -460,7 +573,15 @@ src/
 ├── types/ index.ts（§10）
 └── App.tsx
 ```
-（客Webは別リポ or `web/` サブディレクトリでconcafe-yoyakuを流用）
+（Webは `web/` サブディレクトリ＝客Web＋管理Webの1 Viteアプリ。構成は§21）
+```
+web/src/
+├── components/   … 客Web（TenantPage/Calendar/TimeSlotList/ReservationModal 等・Rev12実装済）
+├── admin/        … 管理Web（AdminApp/AdminLayout/pages/ … React.lazyで遅延ロード）
+├── shiftTemplates/ … シフト表テンプレート定義＋レンダラー（正準＝§22。アプリへ定義を同期）
+├── hooks/ lib/   … supabase.ts/types.ts/timeUtils.ts（客・管理で共有）
+└── App.tsx       … HashRouter（#/admin → AdminApp ／ #/<slug> → TenantPage）
+```
 ### 6. app.json
 ```json
 { "expo": {
@@ -476,17 +597,22 @@ src/
 - MVP：concafe-yoyaku（ref=rhmuitgbvilqwdevxxox）に `ky_*` テーブルを migration で追加
 - 本番：専用プロジェクト作成→同じmigration→pg_dumpで `ky_*` のみ移行（kashikari/daiposの分離手順に倣う）
 
-### 9. 実装順序（推奨）
-1. 基盤（scaffold・git Rev1・型定義・ThemeContext/LanguageContext/i18n流用・supabaseクライアント・AuthContext）
-2. 認証（AuthScreen・サインアップ→テナント自動作成・RLS）
-3. 受付設定（ScheduleScreen・席/解禁/〆切・公開URL発行）※予約の前提
-4. 予約台帳（ReservationsScreen・タイムライン・手動追加・make_reservation RPC）
-5. 客Web（concafe-yoyaku流用・マルチテナント化・予約INSERT→提供者へ反映）
-6. キャスト管理（CastsScreen・指名）
-7. 通知（提供者への予約プッシュ）
-8. UGC 4要件（通報/ブロック/フィルタ/連絡先）
-9. 法務（アカウント削除・規約/PP・表明保証条項）
-10. 設定・IAP骨組み（フラグOFF）・仕上げ
+### 9. 実装順序（1〜10は Rev12 までに完了。以下は残フェーズ＝2026-07-05改訂）
+1. ✅ 基盤（scaffold・git Rev1・型定義・Theme/Language/i18n・supabase・AuthContext）
+2. ✅ 認証（AuthScreen・サインアップ→テナント自動作成・RLS）
+3. ✅ 受付設定（ScheduleScreen・席/解禁/〆切・公開URL発行）
+4. ✅ 予約台帳（ReservationsScreen・タイムライン・手動追加・make_reservation RPC）
+5. ✅ 客Web（Rev12・マルチテナント化・PIN編集）
+6. ✅ キャスト管理（CastsScreen・指名）
+7. ✅ 通知基盤（提供者への予約プッシュ）
+8. ✅ UGC 4要件 ／ 9. ✅ 法務（アカウント削除・規約/PP） ／ 10. ✅ 設定
+11. **新機能DB**（migration: ky_attendance/ky_sales/ky_cast_payroll/ky_payroll_settings/ky_shift_templates＋tenants.plan）
+12. **アプリ：売上・給与・勤怠**（AnalyticsScreen拡張＋AttendanceScreen＝§23）
+13. **管理Web基盤**（`#/admin` ルート・AdminLayout・ログイン・予約台帳/受付設定/キャスト＝既存hooksの管理版）
+14. **管理Web：売上・給与・勤怠・CSV**（PC主戦場機能＝§23）
+15. **シフト表エンジン**（テンプレ定義20種＋Webレンダラー＋PNG出力→アプリ移植＝§22）
+16. **AIデザイン生成**（Edge Function `ky-shift-design`＝§22）
+17. **連携仕上げ**（アプリ「PCで作業」導線・リアルタイム反映＝§24）・公開・スモーク
 
 ---
 
@@ -505,6 +631,117 @@ src/
 - [ ] **5.1.1(v)**：アプリ内アカウント削除
 - [ ] **WEB系**（客Web）：anon公開/service_role出荷禁止・実HTTP実証・公開はユーザー承認
 - [ ] **W1**：チャプター・コミットメッセージは日本語
+
+---
+
+## 21. 提供者管理Web 詳細設計（§3-J／2026-07-05新設）
+
+### アーキテクチャ＝「客Webに同居・別チャンク」
+
+- **同一Viteアプリ**（`kyasuho/web/`）に `#/admin` ルートを追加。理由：supabase.ts/types.ts/timeUtils.ts/hooks を複製せず共有でき、デプロイも1本（GitHub Pages＋deploy.yml）
+- **チャンク分離**：`const AdminApp = React.lazy(() => import('./admin/AdminApp'))` ＝客ページのバンドルサイズに管理コードが乗らない
+- **認証**：`supabase.auth.signInWithPassword`（Web版supabase-jsはlocalStorageにセッション永続）。ログイン後 `ky_tenants where owner_user_id = auth.uid()` で自テナント解決（アプリのAuthContextと同じ流れ）
+- **権限**：既存RLS（owner_user_id = auth.uid()）がそのまま効く＝**管理Web用のポリシー追加は原則不要**。書き込みもアプリと同一テーブル/RPC
+- **UI方針**：PC優先（サイドバー＋テーブル中心・最小幅960px想定）。タブレット可。スマホ最適化はしない（アプリの責務・重複投資回避）。ダーク/ライトはprefers-color-scheme追従
+- **i18n**：MVPは日本語直書きでよい（客Web同様）。アプリのt()体系とは独立（Web側は将来必要になったら導入）
+
+### 画面と既存資産の対応
+
+| 管理Web画面 | 再利用する既存資産（客Web/アプリ） |
+|---|---|
+| AdminReservations | useReservations/useCasts hooks・types.ts・timeUtils |
+| AdminSchedule | useUnlockWindows・（アプリScheduleScreenのロジック参照） |
+| AdminCasts | useCasts/useShifts |
+| AdminSales/Payroll/Attendance | 新規（§23のサービス層をWeb版で書く・計算ロジックはアプリと同式） |
+| AdminShiftImage | §22エンジン（Web側が正準） |
+
+---
+
+## 22. シフト表画像生成エンジン（§3-I／2026-07-05新設）
+
+### 核心設計＝「テンプレート＝純データ、AI＝パラメータ生成器、描画＝共通レンダラー」
+
+AIに画像そのものを描かせない。**AIもテンプレートも `ShiftTemplateDefinition`（純データ）を出すだけ**で、描画は自前レンダラーが行う。→ 日本語文字の品質担保・出力の一貫性・生成コスト極小（テキスト1回分）・オフライン動作（テンプレ20種はAI不要）。
+
+```typescript
+type ShiftTemplateDefinition = {
+  id: string;               // 'elegant-rose' 等（AI生成は 'ai-<uuid>'）
+  name: string;             // 表示名
+  category: 'elegant' | 'pop' | 'gothic' | 'wafu' | 'simple' | 'neon' | 'pastel' | 'seasonal' | 'ai';
+  size: { w: number; h: number };          // 1080x1350（4:5）基準・1080x1920（9:16）派生
+  palette: { bg: string; bgGradient?: [string, string]; headerText: string; dayLabel: string;
+             castName: string; timeText: string; accent: string; cellBg: string; cellBorder: string };
+  fonts: { header: string; body: string }; // 同梱・システムフォントから指定（FONT-JP準拠）
+  layout: 'month-grid' | 'week-rows';      // 月間カレンダー格子 ／ 週別行
+  decorations: { cornerRadius: number; cellGap: number; headerStyle: 'ribbon' | 'plain' | 'underline';
+                 motif?: 'stars' | 'hearts' | 'flowers' | 'sakura' | 'lightning' | 'none' };
+  logoSlot: boolean;        // 店ロゴ挿入枠
+};
+```
+
+- **入力データ**：`ky_shifts`（対象月）＋ `ky_casts` → `{ date, casts: [{name, start, end}] }[]` に集計（両プラットフォーム共通の純関数）
+- **Webレンダラー（正準）**：DOM＋CSSで組んで `html-to-image` の `toPng()` でPNG化。プレビューはCSS `transform: scale()`。フォントはCSS `@font-face`（アプリ同梱と同系の日本語フォント）
+- **アプリレンダラー**：同じ定義を RN View で描画→ `react-native-view-shot` でPNG→ `expo-media-library` 保存＋シェアシート。**定義20種の正準は `web/src/shiftTemplates/definitions.ts`・アプリへは同一内容をコピー同期**（ファイル冒頭コメントで正準明記）
+- **テンプレ20種内訳**：エレガント3・ポップ3・ゴシック2・和風2・シンプル3・ネオン2・パステル3・シーズナル2
+- **カスタマイズ**：選択テンプレの palette/motif/logoSlot をUI上で上書き→ `ky_shift_templates.custom_settings(jsonb)` に保存（お気に入り）
+
+### AI独自デザイン生成（Edge Function `ky-shift-design`）
+
+- **キーの置き場**：ANTHROPIC_API_KEY は Supabase Edge Function Secret（**R13＝クライアント埋め込み禁止**。daipos-generate と同パターン）
+- **フロー**：ユーザーの雰囲気テキスト（例「紫基調のゴシックで薔薇モチーフ」）＋店名 → Edge Function → Claude（JSONスキーマをプロンプト指定）→ `ShiftTemplateDefinition` JSON → クライアントでバリデーション（不正値は既定値マージ）→ 共通レンダラー描画
+- **ガード**：レート制限（テナント毎に日N回・`ky_ai_usage` 相当のカウンタ or 当面クライアント制限）。課金ON後は有料専用（§14）
+- **フォールバック**：AI応答不正/タイムアウト時は「シンプル」テンプレに雰囲気パレットだけ反映して返す（空振りにしない）
+
+---
+
+## 23. 売上・給与・勤怠・税金CSV 詳細設計（§3-F/H／2026-07-05新設）
+
+### 給与計算式（1キャスト×1日＝ky_cast_payroll 1行）
+
+```
+hours_worked   = ky_attendance の check_in/out から自動算出（手修正可・15分丸めなし＝分単位）
+base_pay       = hours_worked × base_hourly_rate（ky_payroll_settings の店既定時給）
+nomination_back = 当日そのキャストの指名数 × nomination_back_rate（円/件）
+drink_back     = ドリンク数 × drink_back_rate（円/杯・ドリンク数は日別手入力）
+deductions     = 遅刻控除（late_deduction 円/回・ky_attendance.status=late と連動）等
+total_pay      = base_pay + nomination_back + drink_back + other_back − deductions
+```
+
+- 指名数は `ky_reservations`（cast_id・当日・status≠cancelled）から自動集計、手修正可
+- MVPは**店一律時給**（ky_payroll_settings）。キャスト個別時給は後フェーズ（ky_castsに列追加で対応できる構造）
+- 月次給与明細＝日別行の集計。画面は「月×キャスト」の明細ビュー（アプリ=AnalyticsScreen内・Web=AdminPayroll）
+
+### 勤怠（ky_attendance）
+
+- ステータス5値：`present / late / early_leave / absent / substitute`（代打は substitute_cast_id 必須）
+- 月次カレンダー表示＋集計（出勤率・遅刻率）。理由はカテゴリ（体調不良/私用/無断/その他）＋自由入力
+- `ky_shifts`（予定）と `ky_attendance`（実績）は別テーブル＝「予定 vs 実績」の突合が集計の基礎
+
+### 税金関連CSV（MVP＝汎用形式・**UTF-8 BOM付き**＝Excel文字化け回避）
+
+| CSV | 列 |
+|---|---|
+| 売上CSV | 日付, 総売上, セット数, ドリンク数, 指名数, その他収入, メモ |
+| 給与CSV | 対象月, キャスト名, 出勤日数, 総勤務時間, 基本給, 指名バック, ドリンクバック, その他, 控除, 支給額 |
+| 勤怠CSV | 日付, キャスト名, 状態, 入店時刻, 退店時刻, 理由 |
+
+- 出力：管理Web＝Blobダウンロード（PC主戦場）／アプリ＝expo-file-system＋シェアシート
+- 弥生/freee/MFの個別仕訳形式は**後フェーズ**（各社で列仕様が異なるため、MVPは汎用CSV＋「会計ソフトへの取込手順」説明で開始。§3-Fの表記もこれに合わせ「会計ソフト取込用汎用CSV」と読む）
+- ⚠️ 税務助言はしない（アプリは記録・集計・出力のみ。税額計算・申告代行機能は入れない＝税理士法リスク回避）
+
+---
+
+## 24. アプリ⇔管理Web 連携仕様（2026-07-05新設）
+
+| 連携面 | 実装 |
+|---|---|
+| **アカウント** | Supabase Auth共有＝同一メール＋パスワードで両方ログイン（アプリ=AsyncStorage/Web=localStorageセッション。アカウントは1つ） |
+| **データ** | 全 `ky_*` テーブル・RPC・RLS共有＝どちらで書いても他方に反映（真実は常にDB1箇所） |
+| **アプリ→Web導線** | 設定画面「PCで作業」＝管理WebのURL表示・コピー・QR（PCブラウザで読み取り用） |
+| **Web→アプリ導線** | 管理Webフッターに「アプリで予約通知を受け取る」（App Storeリンク・公開後に有効化） |
+| **リアルタイム** | 管理Web予約台帳＝Supabase Realtime（postgres_changes・ky_reservations INSERT/UPDATE購読）で自動反映。他画面は画面遷移時再取得で十分。アプリ＝既存プッシュ通知（E-★） |
+| **時刻表現** | 'HH:MM'文字列（深夜0時起点・26:00表記なし）＝両面共通timeUtilsで統一（既にアプリ/客Webで共通） |
+| **エンティトルメント** | `ky_tenants.plan` 1箇所（§14）＝両面のゲートが同じ列を参照 |
 
 ---
 
