@@ -1,0 +1,397 @@
+/* 管理Web（#/admin）— PC優先レイアウト。SPEC §21: 最小幅960px・スマホ最適化はしない。 */
+
+.admin-root {
+  display: flex;
+  min-height: 100vh;
+  min-width: 960px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- サイドバー ---- */
+
+.admin-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.admin-brand {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  padding: 0 10px 4px;
+}
+
+.admin-brand-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 0 10px 16px;
+}
+
+.admin-nav-link {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.admin-nav-link:hover:not(.active) {
+  background: #f3eee9;
+}
+
+.admin-nav-link.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.admin-sidebar-footer {
+  margin-top: auto;
+  padding: 12px 10px 0;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ---- メイン ---- */
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.admin-shop-name {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.admin-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.admin-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 28px 0 12px;
+}
+
+/* ---- カード・テーブル ---- */
+
+.admin-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.admin-table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 10px 12px;
+  background: #f7f3ef;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-empty {
+  padding: 28px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---- バッジ ---- */
+
+.admin-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.st-reserved {
+  background: #fdeef3;
+  color: var(--primary-dark);
+}
+
+.st-checked_in {
+  background: #e8f5e9;
+  color: var(--success);
+}
+
+.st-cancelled {
+  background: #ececec;
+  color: var(--text-secondary);
+}
+
+.st-no_show {
+  background: #fdecea;
+  color: var(--danger);
+}
+
+/* ---- ボタン ---- */
+
+.admin-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.admin-btn:hover:not(:disabled) {
+  background: #f3eee9;
+}
+
+.admin-btn.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.admin-btn.primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.admin-btn.danger {
+  color: var(--danger);
+  border-color: #f0c4c0;
+}
+
+.admin-btn.danger:hover:not(:disabled) {
+  background: #fdecea;
+}
+
+.admin-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-btn-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ---- フォーム ---- */
+
+.admin-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.admin-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.admin-field input,
+.admin-field select,
+.admin-field textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+  box-sizing: border-box;
+}
+
+.admin-field input:focus,
+.admin-field select:focus,
+.admin-field textarea:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.admin-field .w-sm {
+  width: 90px;
+}
+
+.admin-field .w-md {
+  width: 150px;
+}
+
+.admin-field .w-lg {
+  width: 240px;
+}
+
+/* ---- 日付ナビ ---- */
+
+.admin-date-nav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.admin-date-nav input[type='date'] {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+}
+
+/* ---- メッセージ ---- */
+
+.admin-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.admin-note {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+/* ---- ログイン ---- */
+
+.admin-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.admin-login-card {
+  width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
+}
+
+.admin-login-card h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 4px;
+}
+
+.admin-login-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 20px;
+}
+
+.admin-login-card .admin-field {
+  margin-bottom: 14px;
+}
+
+.admin-login-card .admin-field input {
+  width: 100%;
+}
+
+.admin-login-card .admin-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+}
+
+/* ---- 汎用 ---- */
+
+.admin-url-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.admin-url-box code {
+  background: #f7f3ef;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.admin-placeholder {
+  padding: 48px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+}

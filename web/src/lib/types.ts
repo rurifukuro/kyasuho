@@ -51,6 +51,16 @@ export interface KyReservation {
   status: 'reserved' | 'checked_in' | 'cancelled' | 'no_show';
 }
 
+/** 管理Web用＝予約の全列（客Webの KyReservation は公開安全な列だけに絞っている）。 */
+export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
+  seat_no: number | null;
+  contact: string;
+  party_size: number;
+  cast_id: string | null;
+  note: string;
+  created_at: string;
+}
+
 export type DayStatus = 'available' | 'low' | 'full';
 
 export interface MakeReservationResult {
