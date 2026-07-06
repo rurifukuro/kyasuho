@@ -14,6 +14,7 @@ type SalesRow = {
   nomination_count: number;
   other_revenue: number;
   note: string;
+  entry_mode: 'manual' | 'auto';
 };
 
 function rowToSales(row: SalesRow): DailySales {
@@ -27,6 +28,7 @@ function rowToSales(row: SalesRow): DailySales {
     nominationCount: row.nomination_count,
     otherRevenue: row.other_revenue,
     note: row.note,
+    entryMode: row.entry_mode,
   };
 }
 

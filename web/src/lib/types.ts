@@ -94,6 +94,61 @@ export interface KySales {
   nomination_count: number;
   other_revenue: number;
   note: string;
+  entry_mode: 'manual' | 'auto';
+}
+
+/** メニューマスタカテゴリ（§25-2）。 */
+export type KyMenuCategory =
+  | 'set' | 'extension' | 'nomination' | 'cast_drink'
+  | 'drink' | 'food' | 'cheki' | 'other' | 'discount';
+
+/** メニュー項目（ky_menu_items）。 */
+export interface KyMenuItem {
+  id: string;
+  tenant_id: string;
+  category: KyMenuCategory;
+  name: string;
+  price: number;
+  needs_cast: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/** 伝票ステータス（§25-2）。 */
+export type KyOrderStatus = 'open' | 'closed' | 'void';
+
+/** 支払方法（§25-2）。 */
+export type KyPaymentMethod = 'cash' | 'card' | 'qr' | 'other';
+
+/** 伝票（ky_orders）。 */
+export interface KyOrder {
+  id: string;
+  tenant_id: string;
+  biz_date: string;
+  seat_no: number | null;
+  reservation_id: string | null;
+  customer_label: string;
+  status: KyOrderStatus;
+  opened_at: string;
+  closed_at: string | null;
+  subtotal: number;
+  deposit: number;
+  change: number;
+  payment_method: KyPaymentMethod;
+  note: string;
+}
+
+/** オーダー明細（ky_order_items・スナップショット）。 */
+export interface KyOrderItem {
+  id: string;
+  order_id: string;
+  tenant_id: string;
+  menu_item_id: string | null;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  cast_id: string | null;
 }
 
 export type KyAttendanceStatus = 'present' | 'late' | 'early_leave' | 'absent' | 'substitute';

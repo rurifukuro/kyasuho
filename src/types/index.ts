@@ -202,6 +202,63 @@ export type DailySales = {
   nominationCount: number;
   otherRevenue: number;
   note: string;
+  entryMode: 'manual' | 'auto';
+};
+
+// ── オーダー管理ドメイン（SPEC §25・migration 0013） ──────────────────
+
+/** メニューマスタのカテゴリ（§25-2）。discount は定型割引（負のprice）。 */
+export type MenuCategory =
+  | 'set' | 'extension' | 'nomination' | 'cast_drink'
+  | 'drink' | 'food' | 'cheki' | 'other' | 'discount';
+
+/** メニュー項目（ky_menu_items）。 */
+export type MenuItem = {
+  id: string;
+  tenantId: string;
+  category: MenuCategory;
+  name: string;
+  price: number;
+  needsCast: boolean;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+/** 伝票ステータス（§25-2）。 */
+export type OrderStatus = 'open' | 'closed' | 'void';
+
+/** 支払方法（§25-2）。 */
+export type PaymentMethod = 'cash' | 'card' | 'qr' | 'other';
+
+/** 伝票（ky_orders）。 */
+export type Order = {
+  id: string;
+  tenantId: string;
+  bizDate: string; // YYYY-MM-DD
+  seatNo: number | null;
+  reservationId: string | null;
+  customerLabel: string;
+  status: OrderStatus;
+  openedAt: string;
+  closedAt: string | null;
+  subtotal: number;
+  deposit: number;
+  change: number;
+  paymentMethod: PaymentMethod;
+  note: string;
+};
+
+/** オーダー明細（ky_order_items・スナップショット）。 */
+export type OrderItem = {
+  id: string;
+  orderId: string;
+  tenantId: string;
+  menuItemId: string | null;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  castId: string | null;
 };
 
 /** キャスト日別給与（キャスト×日付で1行）。金額は円・勤務時間は分単位。 */
