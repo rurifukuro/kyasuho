@@ -95,6 +95,7 @@
   "cast.bio": { "ja": "紹介文" },
   "cast.bioPlaceholder": { "ja": "自己紹介・アピールポイント" },
   "cast.acceptsNomination": { "ja": "指名予約を受け付ける" },
+  "cast.changePhoto": { "ja": "お店写真を変更" },
   "cast.snsLinks": { "ja": "SNSリンク" },
   "cast.addSnsLink": { "ja": "SNSリンクを追加" },
   "cast.snsLabel": { "ja": "表示名" },

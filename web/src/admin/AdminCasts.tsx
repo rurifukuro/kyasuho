@@ -13,6 +13,7 @@ import {
   removeCast,
   removeShift,
   updateCast,
+  uploadCastShopPhoto,
 } from './adminApi';
 
 function fmtTime(value: string): string {
@@ -305,6 +306,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           <table className="admin-table">
             <thead>
               <tr>
+                <th>写真</th>
                 <th>名前</th>
                 <th>ふりがな</th>
                 <th>紹介文</th>
@@ -318,6 +320,19 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                 const busy = busyId === cast.id;
                 return (
                   <tr key={cast.id}>
+                    <td>
+                      <CastPhotoCell
+                        cast={cast}
+                        tenantId={tenant.id}
+                        onUploaded={(url) => {
+                          setCasts((prev) =>
+                            prev.map((c) =>
+                              c.id === cast.id ? { ...c, photo_url: url } : c,
+                            ),
+                          );
+                        }}
+                      />
+                    </td>
                     <td>{cast.name}</td>
                     <td>{cast.name_kana || '—'}</td>
                     <td>{cast.bio || '—'}</td>
@@ -671,5 +686,80 @@ function CastInvitePanel({ tenant, casts }: { tenant: KyTenant; casts: KyCast[] 
         </div>
       )}
     </>
+  );
+}
+
+function CastPhotoCell({
+  cast,
+  tenantId,
+  onUploaded,
+}: {
+  cast: KyCast;
+  tenantId: string;
+  onUploaded: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+        const url = await uploadCastShopPhoto(tenantId, cast.id, file);
+        onUploaded(url);
+      } catch (err) {
+        alert(`アップロード失敗: ${String(err)}`);
+      } finally {
+        setUploading(false);
+        e.target.value = '';
+      }
+    },
+    [tenantId, cast.id, onUploaded],
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      {cast.photo_url ? (
+        <img
+          src={cast.photo_url}
+          alt={cast.name}
+          style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: '#e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            color: '#9ca3af',
+          }}
+        >
+          👤
+        </div>
+      )}
+      <label
+        style={{
+          fontSize: 11,
+          color: '#6366f1',
+          cursor: uploading ? 'wait' : 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {uploading ? '…' : '変更'}
+        <input
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => void handleFileChange(e)}
+          disabled={uploading}
+        />
+      </label>
+    </div>
   );
 }

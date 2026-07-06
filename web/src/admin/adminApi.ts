@@ -774,3 +774,27 @@ export async function deleteSeatType(id: string): Promise<void> {
   const { error } = await supabase.from('ky_seat_types').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ---- キャスト写真 ----
+
+const PHOTO_BUCKET = 'ky-cast-photos';
+
+export async function uploadCastShopPhoto(
+  tenantId: string,
+  castId: string,
+  file: File,
+): Promise<string> {
+  const path = `${tenantId}/${castId}/shop.jpg`;
+  const { error: upErr } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) throw upErr;
+  const { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+  const { error: updErr } = await supabase
+    .from('ky_casts')
+    .update({ photo_url: publicUrl })
+    .eq('id', castId);
+  if (updErr) throw updErr;
+  return publicUrl;
+}

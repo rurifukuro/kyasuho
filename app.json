@@ -32,7 +32,13 @@
           "savePhotosPermission": "作成したシフト表画像を写真に保存するために使用します。"
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "キャストのお店写真を選択するために使用します。"
+        }
+      ]
     ]
   }
 }

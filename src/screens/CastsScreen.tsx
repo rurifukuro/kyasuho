@@ -10,6 +10,7 @@ import {
   Switch,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as castService from '../services/casts';
 import * as inviteService from '../services/castInvites';
 import * as profileService from '../services/castProfile';
+import { pickAndUploadShopPhoto } from '../services/castPhotos';
 import { guardFields } from '../utils/contentGuard';
 import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
@@ -253,9 +255,13 @@ function CastCard({
       activeOpacity={0.7}
     >
       <View style={s.castCardRow}>
-        <View style={[s.avatar, { backgroundColor: theme.primaryLight + '30' }]}>
-          <MaterialCommunityIcons name="account" size={28} color={theme.primary} />
-        </View>
+        {cast.photoUrl ? (
+          <Image source={{ uri: cast.photoUrl }} style={s.avatarImg} />
+        ) : (
+          <View style={[s.avatar, { backgroundColor: theme.primaryLight + '30' }]}>
+            <MaterialCommunityIcons name="account" size={28} color={theme.primary} />
+          </View>
+        )}
         <View style={s.castCardBody}>
           <Text style={[s.castName, { color: theme.text }]}>{cast.name}</Text>
           {cast.bio ? (
@@ -396,9 +402,13 @@ function CastDetailView({
 
       {/* プロフィールカード */}
       <View style={[s.profileCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-        <View style={[s.avatarLarge, { backgroundColor: theme.primaryLight + '30' }]}>
-          <MaterialCommunityIcons name="account" size={40} color={theme.primary} />
-        </View>
+        {cast.photoUrl ? (
+          <Image source={{ uri: cast.photoUrl }} style={s.avatarLargeImg} />
+        ) : (
+          <View style={[s.avatarLarge, { backgroundColor: theme.primaryLight + '30' }]}>
+            <MaterialCommunityIcons name="account" size={40} color={theme.primary} />
+          </View>
+        )}
         {cast.bio ? (
           <Text style={[s.detailBio, { color: theme.subtext }]}>{cast.bio}</Text>
         ) : null}
@@ -917,6 +927,21 @@ function CastEditModal({
     cast?.snsLinks ?? [],
   );
   const [saving, setSaving] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState(cast?.photoUrl ?? null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const handlePhotoUpload = useCallback(async () => {
+    if (!cast) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await pickAndUploadShopPhoto(tenantId, cast.id);
+      if (url) setPhotoUrl(url);
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [cast, tenantId, t]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -973,6 +998,35 @@ function CastEditModal({
             <MaterialCommunityIcons name="close" size={24} color={theme.subtext} />
           </TouchableOpacity>
         </View>
+
+        {cast && (
+          <View style={s.photoSection}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={s.photoPreview} />
+            ) : (
+              <View style={[s.photoPlaceholder, { backgroundColor: theme.primaryLight + '30' }]}>
+                <MaterialCommunityIcons name="camera-plus" size={32} color={theme.primary} />
+              </View>
+            )}
+            <TouchableOpacity
+              style={[s.photoButton, { backgroundColor: theme.primary + '15' }]}
+              onPress={handlePhotoUpload}
+              disabled={uploadingPhoto}
+            >
+              {uploadingPhoto ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="camera" size={16} color={theme.primary} />
+                  <Text style={[s.photoButtonText, { color: theme.primary }]}>
+                    {t('cast.changePhoto')}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={[s.label, { color: theme.text }]}>{t('cast.name')}</Text>
         <TextInput
           style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
@@ -1239,7 +1293,14 @@ const s = StyleSheet.create({
   castCard: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 10 },
   castCardRow: { flexDirection: 'row', alignItems: 'flex-start' },
   avatar: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  avatarImg: { width: 48, height: 48, borderRadius: 24 },
   avatarLarge: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', alignSelf: 'center', marginBottom: 8 },
+  avatarLargeImg: { width: 64, height: 64, borderRadius: 32, alignSelf: 'center', marginBottom: 8 },
+  photoSection: { alignItems: 'center', marginBottom: 8, marginTop: 4 },
+  photoPreview: { width: 80, height: 80, borderRadius: 40, marginBottom: 8 },
+  photoPlaceholder: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  photoButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, gap: 6 },
+  photoButtonText: { fontSize: 13, fontWeight: '600' },
   castCardBody: { flex: 1, marginLeft: 12 },
   castName: { fontSize: 16, fontWeight: '600' },
   castBio: { fontSize: 13, marginTop: 4 },
