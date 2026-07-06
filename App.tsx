@@ -17,10 +17,12 @@ import { ReservationsScreen } from './src/screens/ReservationsScreen';
 import { ScheduleScreen } from './src/screens/ScheduleScreen';
 import { CastsScreen } from './src/screens/CastsScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
+import { RegisterScreen } from './src/screens/RegisterScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 
 export type RootTabParamList = {
   Reservations: undefined;
+  Register: undefined;
   Schedule: undefined;
   Casts: undefined;
   Analytics: undefined;
@@ -34,6 +36,7 @@ const TAB_ICONS: Record<
   React.ComponentProps<typeof MaterialCommunityIcons>['name']
 > = {
   Reservations: 'calendar-check',
+  Register: 'cash-register',
   Schedule: 'clock-edit',
   Casts: 'account-star',
   Analytics: 'chart-box',
@@ -60,6 +63,11 @@ function Tabs() {
         name="Reservations"
         component={ReservationsScreen}
         options={{ tabBarLabel: t('tab.reservations') }}
+      />
+      <Tab.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{ tabBarLabel: t('tab.register') }}
       />
       <Tab.Screen
         name="Schedule"
