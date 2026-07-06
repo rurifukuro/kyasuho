@@ -19,8 +19,9 @@ import { FormModalShell } from '../components/common/FormModalShell';
 import { AnchoredDropdown, type DropOption } from '../components/AnchoredDropdown';
 import * as reservationService from '../services/reservations';
 import { fetchCasts } from '../services/casts';
+import { fetchSeatTypes } from '../services/seatTypes';
 import { guardFields } from '../utils/contentGuard';
-import type { Cast, Reservation, ReservationStatus, ThemeColor } from '../types';
+import type { Cast, SeatType, Reservation, ReservationStatus, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 function pad2(n: number): string {
@@ -63,6 +64,7 @@ export function ReservationsScreen() {
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [casts, setCasts] = useState<Cast[]>([]);
+  const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailTarget, setDetailTarget] = useState<Reservation | null>(null);
@@ -87,6 +89,7 @@ export function ReservationsScreen() {
   useEffect(() => {
     if (!tenant) return;
     void fetchCasts(tenant.id).then(setCasts).catch(() => {});
+    void fetchSeatTypes(tenant.id).then((all) => setSeatTypes(all.filter((st) => st.isActive))).catch(() => {});
   }, [tenant]);
 
   const handleStatusChange = useCallback(
@@ -102,11 +105,11 @@ export function ReservationsScreen() {
   );
 
   const handleAdd = useCallback(
-    async (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null) => {
+    async (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null, seatTypeId: string | null) => {
       if (!tenant) return;
       try {
         await reservationService.makeReservation(
-          tenant.id, selectedDate, slot, name, contact, partySize, castId, note, null,
+          tenant.id, selectedDate, slot, name, contact, partySize, castId, note, null, seatTypeId,
         );
         setModalVisible(false);
         await loadReservations();
@@ -240,6 +243,7 @@ export function ReservationsScreen() {
         onClose={() => setModalVisible(false)}
         onAdd={handleAdd}
         casts={casts}
+        seatTypes={seatTypes}
         theme={theme}
         t={t}
       />
@@ -328,19 +332,21 @@ function InfoRow({ icon, label, value, theme }: { icon: string; label: string; v
 type AddProps = {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null) => Promise<void>;
+  onAdd: (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null, seatTypeId: string | null) => Promise<void>;
   casts: Cast[];
+  seatTypes: SeatType[];
   theme: ThemeColor;
   t: TFunc;
 };
 
-function AddReservationModal({ visible, onClose, onAdd, casts, theme, t }: AddProps) {
+function AddReservationModal({ visible, onClose, onAdd, casts, seatTypes, theme, t }: AddProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [hour, setHour] = useState(18);
   const [minute, setMinute] = useState(0);
   const [partySize, setPartySize] = useState(1);
   const [castId, setCastId] = useState('');
+  const [seatTypeId, setSeatTypeId] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -356,7 +362,7 @@ function AddReservationModal({ visible, onClose, onAdd, casts, theme, t }: AddPr
     }
     if (!guardFields({ name, note }, t)) return;
     setSaving(true);
-    await onAdd(name.trim(), contact.trim(), slot, partySize, note.trim(), castId || null);
+    await onAdd(name.trim(), contact.trim(), slot, partySize, note.trim(), castId || null, seatTypeId || null);
     setSaving(false);
   };
 
@@ -402,6 +408,31 @@ function AddReservationModal({ visible, onClose, onAdd, casts, theme, t }: AddPr
               { key: '__none__', label: t('reservation.noNomination'), active: !castId, onPress: () => setCastId('') },
               ...nominatableCasts.map((c): DropOption => ({
                 key: c.id, label: c.name, active: c.id === castId, onPress: () => setCastId(c.id),
+              })),
+            ]}
+            theme={theme}
+          />
+        )}
+
+        {seatTypes.length > 0 && (
+          <AnchoredDropdown
+            label={t('seatType.label')}
+            valueLabel={
+              seatTypes.find((st) => st.id === seatTypeId)
+                ? (() => {
+                    const st = seatTypes.find((s) => s.id === seatTypeId)!;
+                    return st.seatFee > 0 ? `${st.name}（¥${st.seatFee.toLocaleString()}）` : st.name;
+                  })()
+                : t('seatType.noPreference')
+            }
+            isPlaceholder={!seatTypeId}
+            options={[
+              { key: '__none__', label: t('seatType.noPreference'), active: !seatTypeId, onPress: () => setSeatTypeId('') },
+              ...seatTypes.map((st): DropOption => ({
+                key: st.id,
+                label: st.seatFee > 0 ? `${st.name}（¥${st.seatFee.toLocaleString()}）` : st.name,
+                active: st.id === seatTypeId,
+                onPress: () => setSeatTypeId(st.id),
               })),
             ]}
             theme={theme}

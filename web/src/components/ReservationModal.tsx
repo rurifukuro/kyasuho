@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { KyCast, KyShift, MakeReservationResult } from '../lib/types';
+import type { KyCast, KySeatType, KyShift, MakeReservationResult } from '../lib/types';
 import { slotToMinutes } from '../lib/timeUtils';
 
 interface ReservationModalProps {
@@ -10,17 +10,19 @@ interface ReservationModalProps {
   setMinutes: number;
   casts: KyCast[];
   shifts: KyShift[];
+  seatTypes: KySeatType[];
   onClose: () => void;
   onReserved: () => void;
 }
 
 export function ReservationModal({
-  tenantId, date, slot, setMinutes, casts, shifts, onClose, onReserved,
+  tenantId, date, slot, setMinutes, casts, shifts, seatTypes, onClose, onReserved,
 }: ReservationModalProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [partySize, setPartySize] = useState(1);
   const [castId, setCastId] = useState<string>('');
+  const [seatTypeId, setSeatTypeId] = useState<string>('');
   const [note, setNote] = useState('');
   const [pin, setPin] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -53,6 +55,7 @@ export function ReservationModal({
       p_cast_id: castId || null,
       p_note: note.trim(),
       p_pin: pin.length === 4 ? pin : null,
+      p_seat_type_id: seatTypeId || null,
     });
 
     setSubmitting(false);
@@ -132,6 +135,20 @@ export function ReservationModal({
                 <option value="">指名なし</option>
                 {availableCasts.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {seatTypes.length > 0 && (
+            <label>
+              席種
+              <select value={seatTypeId} onChange={(e) => setSeatTypeId(e.target.value)}>
+                <option value="">指定なし</option>
+                {seatTypes.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.seat_fee > 0 ? `${st.name}（¥${st.seat_fee.toLocaleString()}）` : st.name}
+                  </option>
                 ))}
               </select>
             </label>

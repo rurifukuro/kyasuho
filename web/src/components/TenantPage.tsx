@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useTenant } from '../hooks/useTenant';
 import { useUnlockWindows, useNextOpenDate } from '../hooks/useUnlockWindows';
 import { useReservations } from '../hooks/useReservations';
-import { useCasts, useShifts } from '../hooks/useCasts';
+import { useCasts, useSeatTypes, useShifts } from '../hooks/useCasts';
 import { formatDate } from '../lib/timeUtils';
 import { Calendar } from './Calendar';
 import { TimeSlotList } from './TimeSlotList';
@@ -25,6 +25,7 @@ export function TenantPage() {
   const { reservations, refresh: refreshReservations } = useReservations(tenant?.id, selectedDate);
   const { nextDate, loading: nextLoading } = useNextOpenDate(tenant?.id);
   const { casts } = useCasts(tenant?.id);
+  const { seatTypes } = useSeatTypes(tenant?.id);
   const { shifts } = useShifts(tenant?.id, selectedDate);
 
   useEffect(() => {
@@ -134,6 +135,7 @@ export function TenantPage() {
           setMinutes={selectedSlot.setMinutes}
           casts={casts}
           shifts={shifts}
+          seatTypes={seatTypes}
           onClose={() => setSelectedSlot(null)}
           onReserved={handleReserved}
         />

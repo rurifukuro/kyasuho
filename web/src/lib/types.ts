@@ -34,6 +34,16 @@ export interface KyCast {
   user_id: string | null;
 }
 
+/** 席種・席料（§29）。 */
+export interface KySeatType {
+  id: string;
+  tenant_id: string;
+  name: string;
+  seat_fee: number;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface KyCastInvite {
   id: string;
   tenant_id: string;
@@ -80,6 +90,7 @@ export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   contact: string;
   party_size: number;
   cast_id: string | null;
+  seat_type_id: string | null;
   note: string;
   created_at: string;
 }

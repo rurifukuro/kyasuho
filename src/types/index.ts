@@ -153,6 +153,16 @@ export type UnlockWindow = {
   setMinutes: number;
 };
 
+/** 席種・席料（§29）。 */
+export type SeatType = {
+  id: string;
+  tenantId: string;
+  name: string;
+  seatFee: number;
+  sortOrder: number;
+  isActive: boolean;
+};
+
 /** 予約本体。 */
 export type Reservation = {
   id: string;
@@ -164,6 +174,7 @@ export type Reservation = {
   contact: string;
   partySize: number;
   castId: string | null; // 指名キャスト
+  seatTypeId: string | null; // 席種（§29・null=未指定）
   note: string;
   status: ReservationStatus;
   createdAt: string;

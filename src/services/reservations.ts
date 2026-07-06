@@ -12,6 +12,7 @@ type ReservationRow = {
   contact: string;
   party_size: number;
   cast_id: string | null;
+  seat_type_id: string | null;
   note: string;
   status: ReservationStatus;
   created_at: string;
@@ -28,6 +29,7 @@ function rowToReservation(row: ReservationRow): Reservation {
     contact: row.contact,
     partySize: row.party_size,
     castId: row.cast_id,
+    seatTypeId: row.seat_type_id,
     note: row.note,
     status: row.status,
     createdAt: row.created_at,
@@ -63,6 +65,7 @@ export async function makeReservation(
   castId: string | null,
   note: string,
   pin: string | null,
+  seatTypeId?: string | null,
 ): Promise<{ id: string; seatNo: number }> {
   const { data, error } = await supabase.rpc('ky_make_reservation', {
     p_tenant_id: tenantId,
@@ -74,6 +77,7 @@ export async function makeReservation(
     p_cast_id: castId,
     p_note: note,
     p_pin: pin,
+    p_seat_type_id: seatTypeId ?? null,
   });
   if (error) throw error;
   const result = data as { id?: string; seat_no?: number; error?: string };

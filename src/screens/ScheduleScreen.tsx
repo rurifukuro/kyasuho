@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,7 +18,8 @@ import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
 import { QrLinkCard } from '../components/QrLinkCard';
 import * as scheduleService from '../services/schedule';
-import type { UnlockWindow, ThemeColor } from '../types';
+import * as seatTypeService from '../services/seatTypes';
+import type { UnlockWindow, SeatType, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 function pad2(n: number): string {
@@ -55,8 +57,11 @@ export function ScheduleScreen() {
 
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [windows, setWindows] = useState<UnlockWindow[]>([]);
+  const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [seatTypeModalVisible, setSeatTypeModalVisible] = useState(false);
+  const [editingSeatType, setEditingSeatType] = useState<SeatType | null>(null);
 
   const loadWindows = useCallback(async () => {
     if (!tenant) return;
@@ -74,6 +79,63 @@ export function ScheduleScreen() {
   useEffect(() => {
     void loadWindows();
   }, [loadWindows]);
+
+  const loadSeatTypes = useCallback(async () => {
+    if (!tenant) return;
+    try {
+      const data = await seatTypeService.fetchSeatTypes(tenant.id);
+      setSeatTypes(data);
+    } catch (e: unknown) {
+      console.warn('[kyasuho] fetchSeatTypes:', e);
+    }
+  }, [tenant]);
+
+  useEffect(() => {
+    void loadSeatTypes();
+  }, [loadSeatTypes]);
+
+  const handleSeatTypeSave = useCallback(
+    async (name: string, seatFee: number, id?: string) => {
+      if (!tenant) return;
+      try {
+        if (id) {
+          await seatTypeService.updateSeatType(id, { name, seatFee });
+        } else {
+          await seatTypeService.addSeatType(tenant.id, name, seatFee);
+        }
+        setSeatTypeModalVisible(false);
+        setEditingSeatType(null);
+        await loadSeatTypes();
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), String(e));
+      }
+    },
+    [tenant, loadSeatTypes, t],
+  );
+
+  const handleSeatTypeDelete = useCallback(
+    async (id: string) => {
+      try {
+        await seatTypeService.deleteSeatType(id);
+        await loadSeatTypes();
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), String(e));
+      }
+    },
+    [loadSeatTypes, t],
+  );
+
+  const handleSeatTypeToggle = useCallback(
+    async (st: SeatType) => {
+      try {
+        await seatTypeService.updateSeatType(st.id, { isActive: !st.isActive });
+        await loadSeatTypes();
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), String(e));
+      }
+    },
+    [loadSeatTypes, t],
+  );
 
   const handleRemove = useCallback(
     async (id: string) => {
@@ -203,12 +265,79 @@ export function ScheduleScreen() {
           copyLabel={t('common.copyUrl')}
           copiedLabel={t('common.copied')}
         />
+
+        {/* ── 席種管理セクション（§29） ── */}
+        <Text style={[s.sectionTitle, { color: theme.text, marginTop: 24 }]}>
+          {t('seatType.sectionTitle')}
+        </Text>
+
+        {seatTypes.length === 0 ? (
+          <View style={[s.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <MaterialCommunityIcons name="sofa-outline" size={28} color={theme.subtext} />
+            <Text style={[s.emptyText, { color: theme.subtext }]}>{t('seatType.empty')}</Text>
+          </View>
+        ) : (
+          seatTypes.map((st) => (
+            <View key={st.id} style={[s.windowCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={s.windowMain}>
+                <MaterialCommunityIcons name="sofa-outline" size={20} color={st.isActive ? theme.primary : theme.subtext} />
+                <Text style={[s.windowTime, { color: st.isActive ? theme.text : theme.subtext }]}>
+                  {st.name}
+                </Text>
+                {st.seatFee > 0 && (
+                  <Text style={[s.windowMetaText, { color: theme.subtext, marginLeft: 8 }]}>
+                    ¥{st.seatFee.toLocaleString()}
+                  </Text>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity onPress={() => void handleSeatTypeToggle(st)}>
+                  <Text style={{ color: st.isActive ? '#22C55E' : theme.subtext, fontSize: 12, fontWeight: '600' }}>
+                    {st.isActive ? t('seatType.active') : t('seatType.inactive')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setEditingSeatType(st); setSeatTypeModalVisible(true); }}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={20} color={theme.subtext} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() =>
+                    Alert.alert(t('seatType.deleteConfirm'), '', [
+                      { text: t('common.cancel'), style: 'cancel' },
+                      { text: t('common.delete'), style: 'destructive', onPress: () => void handleSeatTypeDelete(st.id) },
+                    ])
+                  }
+                >
+                  <MaterialCommunityIcons name="delete-outline" size={20} color="#D7263D" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+
+        <TouchableOpacity
+          style={[s.addBtn, { backgroundColor: theme.primary }]}
+          onPress={() => { setEditingSeatType(null); setSeatTypeModalVisible(true); }}
+        >
+          <MaterialCommunityIcons name="plus" size={20} color="#fff" />
+          <Text style={s.addBtnText}>{t('seatType.add')}</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <AddWindowModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAdd={handleAdd}
+        theme={theme}
+        t={t}
+      />
+
+      <SeatTypeModal
+        visible={seatTypeModalVisible}
+        seatType={editingSeatType}
+        onClose={() => { setSeatTypeModalVisible(false); setEditingSeatType(null); }}
+        onSave={handleSeatTypeSave}
         theme={theme}
         t={t}
       />
@@ -363,6 +492,89 @@ const s = StyleSheet.create({
   addBtnText: { color: '#fff', fontWeight: '800', fontSize: 15, marginLeft: 6 },
 });
 
+type SeatTypeModalProps = {
+  visible: boolean;
+  seatType: SeatType | null;
+  onClose: () => void;
+  onSave: (name: string, seatFee: number, id?: string) => Promise<void>;
+  theme: ThemeColor;
+  t: TFunc;
+};
+
+function SeatTypeModal({ visible, seatType, onClose, onSave, theme, t }: SeatTypeModalProps) {
+  const [name, setName] = useState('');
+  const [feeText, setFeeText] = useState('0');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setName(seatType?.name ?? '');
+      setFeeText(String(seatType?.seatFee ?? 0));
+    }
+  }, [visible, seatType]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      Alert.alert(t('common.error'), t('seatType.nameRequired'));
+      return;
+    }
+    const fee = parseInt(feeText, 10);
+    if (isNaN(fee) || fee < 0) {
+      Alert.alert(t('common.error'), t('seatType.feeInvalid'));
+      return;
+    }
+    setSaving(true);
+    await onSave(name.trim(), fee, seatType?.id);
+    setSaving(false);
+  };
+
+  return (
+    <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
+      <ScrollView contentContainerStyle={ms.content} keyboardShouldPersistTaps="handled">
+        <Text style={[ms.title, { color: theme.text }]}>
+          {seatType ? t('seatType.edit') : t('seatType.add')}
+        </Text>
+
+        <Text style={[ms.label, { color: theme.subtext }]}>{t('seatType.name')}</Text>
+        <TextInput
+          style={[stms.input, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
+          value={name}
+          onChangeText={setName}
+          placeholder={t('seatType.namePlaceholder')}
+          placeholderTextColor={theme.subtext}
+        />
+
+        <Text style={[ms.label, { color: theme.subtext }]}>{t('seatType.fee')}</Text>
+        <TextInput
+          style={[stms.input, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
+          value={feeText}
+          onChangeText={setFeeText}
+          keyboardType="number-pad"
+          placeholder="0"
+          placeholderTextColor={theme.subtext}
+        />
+
+        <View style={ms.btnRow}>
+          <TouchableOpacity style={[ms.btn, { backgroundColor: theme.border }]} onPress={onClose}>
+            <Text style={[ms.btnText, { color: theme.text }]}>{t('common.cancel')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[ms.btn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}
+            onPress={() => void handleSubmit()}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={[ms.btnText, { color: '#fff' }]}>{t('common.save')}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </FormModalShell>
+  );
+}
+
 const ms = StyleSheet.create({
   content: { padding: 20 },
   title: { fontSize: 20, fontWeight: '800', marginBottom: 20 },
@@ -378,4 +590,8 @@ const ms = StyleSheet.create({
   btnRow: { flexDirection: 'row', marginTop: 28, gap: 12 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   btnText: { fontWeight: '800', fontSize: 15 },
+});
+
+const stms = StyleSheet.create({
+  input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
 });

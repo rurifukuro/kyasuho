@@ -10,6 +10,7 @@ import type {
   KyPayrollSettings,
   KyReservationFull,
   KySales,
+  KySeatType,
   KyShift,
   KyShiftTemplate,
   KyTenant,
@@ -723,4 +724,53 @@ export async function countCastDrinksByMonth(
     counts.set(key, (counts.get(key) ?? 0) + row.qty);
   }
   return counts;
+}
+
+// ── 席種・席料（§29） ──────────────────────────────────────────
+
+export async function fetchSeatTypes(tenantId: string): Promise<KySeatType[]> {
+  const { data, error } = await supabase
+    .from('ky_seat_types')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KySeatType[];
+}
+
+export async function addSeatType(
+  tenantId: string,
+  name: string,
+  seatFee: number,
+): Promise<KySeatType> {
+  const { data: maxRow } = await supabase
+    .from('ky_seat_types')
+    .select('sort_order')
+    .eq('tenant_id', tenantId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single();
+  const nextOrder = ((maxRow as { sort_order: number } | null)?.sort_order ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from('ky_seat_types')
+    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, sort_order: nextOrder })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as KySeatType;
+}
+
+export async function updateSeatType(
+  id: string,
+  fields: Partial<{ name: string; seat_fee: number; sort_order: number; is_active: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_seat_types').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteSeatType(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_seat_types').delete().eq('id', id);
+  if (error) throw error;
 }
