@@ -42,6 +42,7 @@
 - [ ] §29 席種・席料: ky_seat_types CRUD＋席料入力/客Web席種ドロップダウン/伝票へ席料自動明細 ★
 - [ ] §30 キャスト写真: 証明写真＋お店写真/Storage ky-cast-photos/管理側差替え/離脱時自動削除(ky-cast-leave)/PP改訂 ★
 - [ ] §31 シフト表SNS投稿: ky_tenants.sns_links/X intent・Instagram起動/投稿文テンプレ＋予約URL差し込み ★
+- [ ] §22-2〜22-4 シフト表拡張: デイリー出勤表(daily-lineup・写真入り・可変グリッド)/店舗テンプレ取込(第3の選択肢・見本2枚はローカル検証限定)/プレビューsticky常時固定 ★
 - [ ] §24 連携: アプリ「PCで作業」導線・Web台帳Realtime・plan共有 ★
 - [ ] §3-G 設定: Auth(Supabase)/アカウント削除/店プロフィール/規約・PP/通報・ブロック/IAP(OFF)/言語/バージョン/ダークモード ★
 - [ ] 基盤: マルチテナント(tenant_id+RLS)/TypeScript strict/i18n(t()経由)/FONT-JP
