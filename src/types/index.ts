@@ -108,6 +108,11 @@ export type BusinessInfo = {
 };
 
 /** 店舗＝テナント。slug が客側公開ページのキー。 */
+export type TenantSnsLink = {
+  platform: string;
+  url: string;
+};
+
 export type Tenant = {
   id: string;
   slug: string;
@@ -115,6 +120,7 @@ export type Tenant = {
   genre: string;
   ownerUserId: string;
   businessInfo: BusinessInfo;
+  snsLinks: TenantSnsLink[];
   isSuspended: boolean;
 };
 

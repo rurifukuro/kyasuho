@@ -14,11 +14,13 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHIFT_TEMPLATES, CATEGORY_LABELS } from '../shiftTemplates/definitions';
 import type { ShiftTemplateDefinition } from '../shiftTemplates/definitions';
@@ -72,6 +74,48 @@ export function ShiftImageScreen({
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${tenant.slug}`;
+
+  const buildPostText = useCallback(() => {
+    const castNames = casts.map((c) => c.name).join('・');
+    const lines = [
+      `📅 ${yearMonthLabel(yearMonth)} シフト表`,
+      '',
+      castNames ? `出勤キャスト: ${castNames}` : '',
+      '',
+      `🔗 ご予約はこちら`,
+      reserveUrl,
+    ].filter(Boolean);
+    return lines.join('\n');
+  }, [casts, yearMonth, reserveUrl]);
+
+  const handlePostX = useCallback(async () => {
+    const text = encodeURIComponent(buildPostText());
+    const url = `https://x.com/intent/post?text=${text}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(t('common.error'), 'Xを開けませんでした');
+    }
+  }, [buildPostText, t]);
+
+  const handleOpenInstagram = useCallback(async () => {
+    try {
+      const canOpen = await Linking.canOpenURL('instagram://');
+      if (canOpen) {
+        await Linking.openURL('instagram://');
+      } else {
+        await Linking.openURL('https://www.instagram.com/');
+      }
+    } catch {
+      Alert.alert(t('common.error'), 'Instagramを開けませんでした');
+    }
+  }, [t]);
+
+  const handleCopyPostText = useCallback(async () => {
+    await Clipboard.setStringAsync(buildPostText());
+    Alert.alert(t('shiftImage.title'), t('sns.textCopied'));
+  }, [buildPostText, t]);
 
   // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
@@ -412,6 +456,35 @@ export function ShiftImageScreen({
             )}
           </TouchableOpacity>
         </View>
+
+        {/* SNS投稿ボタン（§31） */}
+        <View style={s.snsSection}>
+          <Text style={[s.snsTitle, { color: theme.text }]}>{t('sns.title')}</Text>
+          <View style={s.snsRow}>
+            <TouchableOpacity
+              style={[s.snsBtn, { backgroundColor: '#000' }]}
+              onPress={handlePostX}
+            >
+              <MaterialCommunityIcons name="twitter" size={18} color="#fff" />
+              <Text style={s.snsBtnText}>{t('sns.postX')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.snsBtn, { backgroundColor: '#E1306C' }]}
+              onPress={handleOpenInstagram}
+            >
+              <MaterialCommunityIcons name="instagram" size={18} color="#fff" />
+              <Text style={s.snsBtnText}>{t('sns.openInstagram')}</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[s.copyTextBtn, { backgroundColor: theme.primary + '15' }]}
+            onPress={handleCopyPostText}
+          >
+            <MaterialCommunityIcons name="content-copy" size={16} color={theme.primary} />
+            <Text style={[s.copyTextLabel, { color: theme.primary }]}>{t('sns.copyText')}</Text>
+          </TouchableOpacity>
+          <Text style={[s.snsHint, { color: theme.subtext }]}>{t('sns.instagramHint')}</Text>
+        </View>
       </ScrollView>
 
       {/* キャプチャ用の実寸ノード（画面外・collapsable無効でネイティブビューを保持） */}
@@ -457,4 +530,12 @@ const s = StyleSheet.create({
   aiRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   aiInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   aiBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14, borderRadius: 10 },
+  snsSection: { marginTop: 20, paddingTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#e0e0e0' },
+  snsTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  snsRow: { flexDirection: 'row', gap: 10 },
+  snsBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10 },
+  snsBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  copyTextBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 10 },
+  copyTextLabel: { fontSize: 13, fontWeight: '600' },
+  snsHint: { fontSize: 11, marginTop: 8, textAlign: 'center' },
 });

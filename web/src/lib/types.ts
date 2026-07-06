@@ -9,6 +9,7 @@ export interface KyTenant {
     tel?: string;
     note?: string;
   };
+  sns_links: { platform: string; url: string }[];
   is_suspended: boolean;
 }
 

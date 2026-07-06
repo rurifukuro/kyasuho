@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../config/supabase';
 import { useAuth } from './AuthContext';
-import type { Tenant, BusinessInfo } from '../types';
+import type { Tenant, BusinessInfo, TenantSnsLink } from '../types';
 
 type TenantContextValue = {
   tenant: Tenant | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo'>>) => Promise<void>;
+  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks'>>) => Promise<void>;
 };
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -42,6 +42,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         genre: data.genre as string,
         ownerUserId: data.owner_user_id as string,
         businessInfo: (data.business_info ?? {}) as BusinessInfo,
+        snsLinks: (data.sns_links ?? []) as TenantSnsLink[],
         isSuspended: data.is_suspended as boolean,
       });
     }
@@ -53,12 +54,13 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [load]);
 
   const updateTenant = useCallback(
-    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo'>>) => {
+    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks'>>) => {
       if (!tenant) return;
       const payload: Record<string, unknown> = {};
       if (updates.name !== undefined) payload.name = updates.name;
       if (updates.genre !== undefined) payload.genre = updates.genre;
       if (updates.businessInfo !== undefined) payload.business_info = updates.businessInfo;
+      if (updates.snsLinks !== undefined) payload.sns_links = updates.snsLinks;
       const { error } = await supabase.from('ky_tenants').update(payload).eq('id', tenant.id);
       if (error) throw error;
       await load();

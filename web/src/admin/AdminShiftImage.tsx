@@ -577,6 +577,36 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         </div>
       </div>
 
+      {/* SNS投稿（§31） */}
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <div className="admin-section-title" style={{ margin: '0 0 8px' }}>SNS投稿</div>
+        <p className="admin-note" style={{ marginTop: 0 }}>
+          シフト表画像をダウンロードした後、SNSで共有できます。投稿文をコピーしてご利用ください。
+        </p>
+        <div className="admin-btn-row" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="admin-btn primary"
+            onClick={() => {
+              const text = buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank');
+            }}
+          >
+            Xで投稿
+          </button>
+          <button
+            type="button"
+            className="admin-btn"
+            onClick={() => {
+              const text = buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              void navigator.clipboard.writeText(text).then(() => window.alert('投稿文をコピーしました'));
+            }}
+          >
+            投稿文をコピー
+          </button>
+        </div>
+      </div>
+
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
@@ -585,4 +615,25 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       </div>
     </div>
   );
+}
+
+function buildWebPostText(
+  yearMonth: string,
+  casts: KyCast[],
+  shifts: KyShift[],
+  slug: string,
+): string {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthLabel = `${y}年${m}月`;
+  const castIds = [...new Set(shifts.map(s => s.cast_id))];
+  const names = castIds
+    .map(id => casts.find(c => c.id === id)?.name)
+    .filter(Boolean)
+    .join('・');
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
+  const lines = [`${monthLabel}のシフトが出ました！`];
+  if (names) lines.push(`出勤キャスト: ${names}`);
+  lines.push('');
+  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
+  return lines.join('\n');
 }

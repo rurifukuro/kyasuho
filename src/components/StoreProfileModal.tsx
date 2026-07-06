@@ -14,7 +14,15 @@ import { FormModalShell } from './common/FormModalShell';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { guardFields } from '../utils/contentGuard';
+import type { TenantSnsLink } from '../types';
+
+const SNS_PLATFORMS = [
+  { key: 'x', label: 'X (Twitter)', icon: 'twitter', placeholder: 'https://x.com/...' },
+  { key: 'instagram', label: 'Instagram', icon: 'instagram', placeholder: 'https://instagram.com/...' },
+  { key: 'tiktok', label: 'TikTok', icon: 'music-note', placeholder: 'https://tiktok.com/@...' },
+] as const;
 
 type Props = {
   visible: boolean;
@@ -32,6 +40,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
   const [openHours, setOpenHours] = useState('');
   const [tel, setTel] = useState('');
   const [note, setNote] = useState('');
+  const [snsLinks, setSnsLinks] = useState<TenantSnsLink[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -42,6 +51,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
       setOpenHours(tenant.businessInfo.openHours ?? '');
       setTel(tenant.businessInfo.tel ?? '');
       setNote(tenant.businessInfo.note ?? '');
+      setSnsLinks(tenant.snsLinks.length > 0 ? [...tenant.snsLinks] : []);
     }
   }, [visible, tenant]);
 
@@ -53,6 +63,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
     if (!guardFields({ name, genre, address, note }, t)) return;
     setSaving(true);
     try {
+      const validLinks = snsLinks.filter(l => l.url.trim());
       await updateTenant({
         name: name.trim(),
         genre: genre.trim(),
@@ -62,6 +73,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
           tel: tel.trim() || undefined,
           note: note.trim() || undefined,
         },
+        snsLinks: validLinks.map(l => ({ platform: l.platform, url: l.url.trim() })),
       });
       onClose();
     } catch (e: unknown) {
@@ -69,7 +81,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [name, genre, address, openHours, tel, note, t, updateTenant, onClose]);
+  }, [name, genre, address, openHours, tel, note, snsLinks, t, updateTenant, onClose]);
 
   return (
     <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
@@ -94,6 +106,41 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
         <Field label={t('settings.storeOpenHours')} value={openHours} onChangeText={setOpenHours} theme={theme} placeholder="18:00〜24:00" />
         <Field label={t('settings.storeTel')} value={tel} onChangeText={setTel} theme={theme} keyboardType="phone-pad" />
         <Field label={t('settings.storeNote')} value={note} onChangeText={setNote} theme={theme} multiline />
+
+        <View style={s.snsSection}>
+          <Text style={[s.snsSectionTitle, { color: theme.text }]}>{t('settings.snsLinks')}</Text>
+          {SNS_PLATFORMS.map(p => {
+            const link = snsLinks.find(l => l.platform === p.key);
+            return (
+              <View key={p.key} style={s.snsRow}>
+                <View style={s.snsIconLabel}>
+                  <MaterialCommunityIcons name={p.icon as any} size={20} color={theme.primary} />
+                  <Text style={[s.snsLabel, { color: theme.subtext }]}>{p.label}</Text>
+                </View>
+                <TextInput
+                  style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card, flex: 1 }]}
+                  value={link?.url ?? ''}
+                  onChangeText={v => {
+                    setSnsLinks(prev => {
+                      const idx = prev.findIndex(l => l.platform === p.key);
+                      if (idx >= 0) {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], url: v };
+                        return next;
+                      }
+                      return [...prev, { platform: p.key, url: v }];
+                    });
+                  }}
+                  placeholder={p.placeholder}
+                  placeholderTextColor={theme.subtext}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+            );
+          })}
+        </View>
       </ScrollView>
     </FormModalShell>
   );
@@ -144,4 +191,9 @@ const s = StyleSheet.create({
   field: { marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '600', marginBottom: 6 },
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
+  snsSection: { marginTop: 8, marginBottom: 16 },
+  snsSectionTitle: { fontSize: 15, fontWeight: '700', marginBottom: 12 },
+  snsRow: { marginBottom: 12 },
+  snsIconLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  snsLabel: { fontSize: 13, fontWeight: '600', marginLeft: 6 },
 });
