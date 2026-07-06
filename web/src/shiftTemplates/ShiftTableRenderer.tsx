@@ -36,9 +36,10 @@ type Props = {
   storeName: string;
   logoUrl?: string | null;
   dailyDate?: string; // 'YYYY-MM-DD'（daily-lineup用）
+  bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl }: Props) {
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
@@ -51,10 +52,14 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
     height: def.size.h,
     boxSizing: 'border-box',
     padding: PADDING,
-    backgroundColor: p.bg,
-    backgroundImage: p.bgGradient
-      ? `linear-gradient(160deg, ${p.bgGradient[0]}, ${p.bgGradient[1]})`
-      : undefined,
+    backgroundColor: bgImageUrl ? 'transparent' : p.bg,
+    backgroundImage: bgImageUrl
+      ? `url(${bgImageUrl})`
+      : p.bgGradient
+        ? `linear-gradient(160deg, ${p.bgGradient[0]}, ${p.bgGradient[1]})`
+        : undefined,
+    backgroundSize: bgImageUrl ? 'cover' : undefined,
+    backgroundPosition: bgImageUrl ? 'center' : undefined,
     fontFamily: bodyFont,
     overflow: 'hidden',
     display: 'flex',

@@ -522,6 +522,10 @@
 
 .shift-preview-col {
   flex-shrink: 0;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
 }
 
 .shift-preview-box {

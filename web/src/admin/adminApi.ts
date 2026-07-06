@@ -874,3 +874,21 @@ export async function fetchMonthlyPayrollTotal(
     0,
   );
 }
+
+// ---- 店舗テンプレ背景（§22-3） ----
+
+export async function uploadShiftBackground(
+  tenantId: string,
+  file: File,
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const path = `${tenantId}/bg_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from('ky-shift-backgrounds')
+    .upload(path, file, { cacheControl: '86400', upsert: true });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage
+    .from('ky-shift-backgrounds')
+    .getPublicUrl(path);
+  return urlData.publicUrl;
+}
