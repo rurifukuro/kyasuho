@@ -143,12 +143,14 @@ export async function fetchCastList(tenantId: string): Promise<KyCast[]> {
 export async function addCast(input: {
   tenantId: string;
   name: string;
+  nameKana?: string;
   bio: string;
   acceptsNomination: boolean;
 }): Promise<void> {
   const { error } = await supabase.from('ky_casts').insert({
     tenant_id: input.tenantId,
     name: input.name,
+    name_kana: input.nameKana ?? '',
     bio: input.bio,
     accepts_nomination: input.acceptsNomination,
     sns_links: [],
@@ -158,10 +160,11 @@ export async function addCast(input: {
 
 export async function updateCast(
   id: string,
-  fields: { name?: string; bio?: string; acceptsNomination?: boolean },
+  fields: { name?: string; nameKana?: string; bio?: string; acceptsNomination?: boolean },
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (fields.name !== undefined) update.name = fields.name;
+  if (fields.nameKana !== undefined) update.name_kana = fields.nameKana;
   if (fields.bio !== undefined) update.bio = fields.bio;
   if (fields.acceptsNomination !== undefined) update.accepts_nomination = fields.acceptsNomination;
   const { error } = await supabase.from('ky_casts').update(update).eq('id', id);

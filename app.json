@@ -31,7 +31,8 @@
         {
           "savePhotosPermission": "作成したシフト表画像を写真に保存するために使用します。"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }

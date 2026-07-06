@@ -34,6 +34,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   // 追加・編集フォーム（editingId が null なら新規追加）
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
+  const [formNameKana, setFormNameKana] = useState('');
   const [formBio, setFormBio] = useState('');
   const [formNomination, setFormNomination] = useState(true);
   const [formBusy, setFormBusy] = useState(false);
@@ -95,6 +96,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const startEdit = (cast: KyCast) => {
     setEditingId(cast.id);
     setFormName(cast.name);
+    setFormNameKana(cast.name_kana ?? '');
     setFormBio(cast.bio);
     setFormNomination(cast.accepts_nomination);
     setFormError(null);
@@ -103,6 +105,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const resetForm = () => {
     setEditingId(null);
     setFormName('');
+    setFormNameKana('');
     setFormBio('');
     setFormNomination(true);
     setFormError(null);
@@ -122,6 +125,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
       if (editingId) {
         await updateCast(editingId, {
           name,
+          nameKana: formNameKana.trim(),
           bio: formBio.trim(),
           acceptsNomination: formNomination,
         });
@@ -129,6 +133,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
         await addCast({
           tenantId: tenant.id,
           name,
+          nameKana: formNameKana.trim(),
           bio: formBio.trim(),
           acceptsNomination: formNomination,
         });
@@ -242,6 +247,17 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
             />
           </div>
           <div className="admin-field">
+            <label htmlFor="cast-kana">ふりがな</label>
+            <input
+              id="cast-kana"
+              type="text"
+              className="w-md"
+              value={formNameKana}
+              onChange={(e) => setFormNameKana(e.target.value)}
+              placeholder="ひらがな（ソート用）"
+            />
+          </div>
+          <div className="admin-field">
             <label htmlFor="cast-bio">紹介文（任意）</label>
             <input
               id="cast-bio"
@@ -290,6 +306,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
             <thead>
               <tr>
                 <th>名前</th>
+                <th>ふりがな</th>
                 <th>紹介文</th>
                 <th>指名予約</th>
                 <th>アカウント</th>
@@ -302,6 +319,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                 return (
                   <tr key={cast.id}>
                     <td>{cast.name}</td>
+                    <td>{cast.name_kana || '—'}</td>
                     <td>{cast.bio || '—'}</td>
                     <td>
                       <button

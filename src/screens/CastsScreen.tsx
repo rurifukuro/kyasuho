@@ -910,6 +910,7 @@ function CastEditModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(cast?.name ?? '');
+  const [nameKana, setNameKana] = useState(cast?.nameKana ?? '');
   const [bio, setBio] = useState(cast?.bio ?? '');
   const [acceptsNomination, setAcceptsNomination] = useState(cast?.acceptsNomination ?? true);
   const [snsLinks, setSnsLinks] = useState<{ label: string; url: string }[]>(
@@ -929,12 +930,13 @@ function CastEditModal({
       if (cast) {
         await castService.updateCast(cast.id, {
           name: name.trim(),
+          nameKana: nameKana.trim(),
           bio: bio.trim(),
           acceptsNomination,
           snsLinks: links,
         });
       } else {
-        await castService.addCast(tenantId, name.trim(), bio.trim(), acceptsNomination, links);
+        await castService.addCast(tenantId, name.trim(), bio.trim(), acceptsNomination, links, nameKana.trim());
       }
       onSaved();
     } catch (e: unknown) {
@@ -942,7 +944,7 @@ function CastEditModal({
     } finally {
       setSaving(false);
     }
-  }, [name, bio, acceptsNomination, snsLinks, cast, tenantId, t, onSaved]);
+  }, [name, nameKana, bio, acceptsNomination, snsLinks, cast, tenantId, t, onSaved]);
 
   const addLink = useCallback(() => {
     setSnsLinks((prev) => [...prev, { label: '', url: '' }]);
@@ -977,6 +979,15 @@ function CastEditModal({
           value={name}
           onChangeText={setName}
           placeholder={t('cast.namePlaceholder')}
+          placeholderTextColor={theme.subtext}
+        />
+
+        <Text style={[s.label, { color: theme.text }]}>{t('cast.nameKana')}</Text>
+        <TextInput
+          style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+          value={nameKana}
+          onChangeText={setNameKana}
+          placeholder={t('cast.nameKanaPlaceholder')}
           placeholderTextColor={theme.subtext}
         />
 

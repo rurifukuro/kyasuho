@@ -123,6 +123,7 @@ export type Cast = {
   id: string;
   tenantId: string;
   name: string;
+  nameKana: string;
   photoUrl: string | null;
   snsLinks: { label: string; url: string }[];
   bio: string;

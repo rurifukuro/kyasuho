@@ -26,6 +26,7 @@ export interface KyCast {
   id: string;
   tenant_id: string;
   name: string;
+  name_kana: string;
   photo_url: string | null;
   bio: string;
   accepts_nomination: boolean;

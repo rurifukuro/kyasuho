@@ -35,7 +35,7 @@ export function ReservationModal({
       const sEnd = slotToMinutes(s.end_at);
       return slotMin >= sStart && slotMin + setMinutes <= sEnd;
     }),
-  );
+  ).sort((a, b) => (a.name_kana || '').localeCompare(b.name_kana || '', 'ja'));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

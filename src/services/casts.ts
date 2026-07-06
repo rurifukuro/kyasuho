@@ -5,6 +5,7 @@ type CastRow = {
   id: string;
   tenant_id: string;
   name: string;
+  name_kana: string;
   photo_url: string | null;
   sns_links: { label: string; url: string }[];
   bio: string;
@@ -27,6 +28,7 @@ function rowToCast(row: CastRow): Cast {
     id: row.id,
     tenantId: row.tenant_id,
     name: row.name,
+    nameKana: row.name_kana ?? '',
     photoUrl: row.photo_url,
     snsLinks: row.sns_links ?? [],
     bio: row.bio,
@@ -64,12 +66,14 @@ export async function addCast(
   bio: string,
   acceptsNomination: boolean,
   snsLinks: { label: string; url: string }[],
+  nameKana?: string,
 ): Promise<Cast> {
   const { data, error } = await supabase
     .from('ky_casts')
     .insert({
       tenant_id: tenantId,
       name,
+      name_kana: nameKana ?? '',
       bio,
       accepts_nomination: acceptsNomination,
       sns_links: snsLinks,
@@ -84,6 +88,7 @@ export async function updateCast(
   id: string,
   fields: {
     name?: string;
+    nameKana?: string;
     bio?: string;
     acceptsNomination?: boolean;
     snsLinks?: { label: string; url: string }[];
@@ -92,6 +97,7 @@ export async function updateCast(
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (fields.name !== undefined) update.name = fields.name;
+  if (fields.nameKana !== undefined) update.name_kana = fields.nameKana;
   if (fields.bio !== undefined) update.bio = fields.bio;
   if (fields.acceptsNomination !== undefined) update.accepts_nomination = fields.acceptsNomination;
   if (fields.snsLinks !== undefined) update.sns_links = fields.snsLinks;

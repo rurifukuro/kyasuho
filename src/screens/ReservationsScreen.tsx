@@ -16,9 +16,11 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
+import { AnchoredDropdown, type DropOption } from '../components/AnchoredDropdown';
 import * as reservationService from '../services/reservations';
+import { fetchCasts } from '../services/casts';
 import { guardFields } from '../utils/contentGuard';
-import type { Reservation, ReservationStatus, ThemeColor } from '../types';
+import type { Cast, Reservation, ReservationStatus, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 function pad2(n: number): string {
@@ -60,6 +62,7 @@ export function ReservationsScreen() {
 
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [casts, setCasts] = useState<Cast[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailTarget, setDetailTarget] = useState<Reservation | null>(null);
@@ -81,6 +84,11 @@ export function ReservationsScreen() {
     void loadReservations();
   }, [loadReservations]);
 
+  useEffect(() => {
+    if (!tenant) return;
+    void fetchCasts(tenant.id).then(setCasts).catch(() => {});
+  }, [tenant]);
+
   const handleStatusChange = useCallback(
     async (id: string, status: ReservationStatus) => {
       try {
@@ -94,11 +102,11 @@ export function ReservationsScreen() {
   );
 
   const handleAdd = useCallback(
-    async (name: string, contact: string, slot: string, partySize: number, note: string) => {
+    async (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null) => {
       if (!tenant) return;
       try {
         await reservationService.makeReservation(
-          tenant.id, selectedDate, slot, name, contact, partySize, null, note, null,
+          tenant.id, selectedDate, slot, name, contact, partySize, castId, note, null,
         );
         setModalVisible(false);
         await loadReservations();
@@ -231,6 +239,7 @@ export function ReservationsScreen() {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAdd={handleAdd}
+        casts={casts}
         theme={theme}
         t={t}
       />
@@ -319,21 +328,26 @@ function InfoRow({ icon, label, value, theme }: { icon: string; label: string; v
 type AddProps = {
   visible: boolean;
   onClose: () => void;
-  onAdd: (name: string, contact: string, slot: string, partySize: number, note: string) => Promise<void>;
+  onAdd: (name: string, contact: string, slot: string, partySize: number, note: string, castId: string | null) => Promise<void>;
+  casts: Cast[];
   theme: ThemeColor;
   t: TFunc;
 };
 
-function AddReservationModal({ visible, onClose, onAdd, theme, t }: AddProps) {
+function AddReservationModal({ visible, onClose, onAdd, casts, theme, t }: AddProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [hour, setHour] = useState(18);
   const [minute, setMinute] = useState(0);
   const [partySize, setPartySize] = useState(1);
+  const [castId, setCastId] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
   const slot = `${pad2(hour)}:${pad2(minute)}`;
+  const nominatableCasts = casts
+    .filter((c) => c.acceptsNomination)
+    .sort((a, b) => (a.nameKana || '').localeCompare(b.nameKana || '', 'ja'));
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -342,7 +356,7 @@ function AddReservationModal({ visible, onClose, onAdd, theme, t }: AddProps) {
     }
     if (!guardFields({ name, note }, t)) return;
     setSaving(true);
-    await onAdd(name.trim(), contact.trim(), slot, partySize, note.trim());
+    await onAdd(name.trim(), contact.trim(), slot, partySize, note.trim(), castId || null);
     setSaving(false);
   };
 
@@ -378,6 +392,21 @@ function AddReservationModal({ visible, onClose, onAdd, theme, t }: AddProps) {
 
         <Text style={[ms.label, { color: theme.subtext }]}>{t('reservation.partySize')}</Text>
         <Stepper value={partySize} min={1} max={20} onChange={setPartySize} theme={theme} suffix={t('reservation.people')} />
+
+        {nominatableCasts.length > 0 && (
+          <AnchoredDropdown
+            label={t('reservation.nominationCast')}
+            valueLabel={nominatableCasts.find((c) => c.id === castId)?.name ?? t('reservation.noNomination')}
+            isPlaceholder={!castId}
+            options={[
+              { key: '__none__', label: t('reservation.noNomination'), active: !castId, onPress: () => setCastId('') },
+              ...nominatableCasts.map((c): DropOption => ({
+                key: c.id, label: c.name, active: c.id === castId, onPress: () => setCastId(c.id),
+              })),
+            ]}
+            theme={theme}
+          />
+        )}
 
         <Text style={[ms.label, { color: theme.subtext }]}>{t('reservation.note')}</Text>
         <TextInput
