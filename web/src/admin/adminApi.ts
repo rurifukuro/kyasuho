@@ -4,6 +4,9 @@ import type {
   KyCast,
   KyCastInvite,
   KyCastPayroll,
+  KyMenuItem,
+  KyOrder,
+  KyOrderItem,
   KyPayrollSettings,
   KyReservationFull,
   KySales,
@@ -456,7 +459,10 @@ export async function generatePayrollFromAttendance(
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
   const existingKeys = new Set(existing.map((p) => `${p.cast_id}|${p.date}`));
-  const nominations = await countNominationsByMonth(tenantId, yearMonth);
+  const [nominations, castDrinks] = await Promise.all([
+    countNominationsByMonth(tenantId, yearMonth),
+    countCastDrinksByMonth(tenantId, yearMonth),
+  ]);
 
   const rows = attendance
     .filter((a) => WORKED_STATUSES.has(a.status))
@@ -464,10 +470,11 @@ export async function generatePayrollFromAttendance(
     .map((a) => {
       const minutesWorked = calcMinutesWorked(a.check_in_at, a.check_out_at);
       const nominationCount = nominations.get(`${a.cast_id}|${a.date}`) ?? 0;
+      const drinkCount = castDrinks.get(`${a.cast_id}|${a.date}`) ?? 0;
       const breakdown = calcPayroll(settings, {
         minutesWorked,
         nominationCount,
-        drinkCount: 0, // ドリンク数は日別手入力（§23）＝生成時は0
+        drinkCount,
         otherBack: 0,
         lateCount: a.status === 'late' ? 1 : 0,
       });
@@ -479,7 +486,7 @@ export async function generatePayrollFromAttendance(
         base_pay: breakdown.basePay,
         nomination_count: nominationCount,
         nomination_back: breakdown.nominationBack,
-        drink_count: 0,
+        drink_count: drinkCount,
         drink_back: breakdown.drinkBack,
         other_back: breakdown.otherBack,
         deductions: breakdown.deductions,
@@ -609,4 +616,108 @@ export async function createInvite(tenantId: string, castId: string): Promise<Ky
 export async function deleteInvite(id: string): Promise<void> {
   const { error } = await supabase.from('ky_cast_invites').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ---- オーダー管理（ky_orders/ky_order_items/ky_menu_items・§25） ----
+
+export async function fetchOrdersByDate(tenantId: string, date: string): Promise<KyOrder[]> {
+  const { data, error } = await supabase
+    .from('ky_orders')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('biz_date', date)
+    .order('opened_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyOrder[];
+}
+
+export async function fetchOrderItems(orderId: string): Promise<KyOrderItem[]> {
+  const { data, error } = await supabase
+    .from('ky_order_items')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at');
+  if (error) throw error;
+  return (data ?? []) as KyOrderItem[];
+}
+
+export async function fetchMenuItems(tenantId: string): Promise<KyMenuItem[]> {
+  const { data, error } = await supabase
+    .from('ky_menu_items')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyMenuItem[];
+}
+
+export async function upsertMenuItem(
+  tenantId: string,
+  input: {
+    id?: string;
+    category: string;
+    name: string;
+    price: number;
+    needsCast: boolean;
+    sortOrder: number;
+    isActive: boolean;
+  },
+): Promise<void> {
+  const row = {
+    tenant_id: tenantId,
+    category: input.category,
+    name: input.name,
+    price: input.price,
+    needs_cast: input.needsCast,
+    sort_order: input.sortOrder,
+    is_active: input.isActive,
+    ...(input.id ? { id: input.id } : {}),
+  };
+  const { error } = input.id
+    ? await supabase.from('ky_menu_items').update(row).eq('id', input.id)
+    : await supabase.from('ky_menu_items').insert(row);
+  if (error) throw error;
+}
+
+export async function deleteMenuItem(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_menu_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** §25-5: 指定月のキャストドリンク数を「castId|date」→杯数 のマップで返す */
+export async function countCastDrinksByMonth(
+  tenantId: string,
+  yearMonth: string,
+): Promise<Map<string, number>> {
+  const { from, toExclusive } = monthRange(yearMonth);
+  const { data: orders, error: ordErr } = await supabase
+    .from('ky_orders')
+    .select('id, biz_date')
+    .eq('tenant_id', tenantId)
+    .gte('biz_date', from)
+    .lt('biz_date', toExclusive)
+    .eq('status', 'closed');
+  if (ordErr) throw ordErr;
+  if (!orders || orders.length === 0) return new Map();
+
+  const orderIds = (orders as { id: string; biz_date: string }[]).map((o) => o.id);
+  const dateById = new Map((orders as { id: string; biz_date: string }[]).map((o) => [o.id, o.biz_date]));
+
+  const { data: items, error: itemErr } = await supabase
+    .from('ky_order_items')
+    .select('order_id, cast_id, qty')
+    .in('order_id', orderIds)
+    .eq('category', 'cast_drink')
+    .not('cast_id', 'is', null);
+  if (itemErr) throw itemErr;
+
+  const counts = new Map<string, number>();
+  for (const row of (items ?? []) as { order_id: string; cast_id: string; qty: number }[]) {
+    const bizDate = dateById.get(row.order_id);
+    if (!bizDate) continue;
+    const key = `${row.cast_id}|${bizDate}`;
+    counts.set(key, (counts.get(key) ?? 0) + row.qty);
+  }
+  return counts;
 }

@@ -10,6 +10,8 @@ const NAV_ITEMS: { path: string; label: string }[] = [
   { path: 'reservations', label: '予約台帳' },
   { path: 'schedule', label: '受付設定' },
   { path: 'casts', label: 'キャスト' },
+  { path: 'orders', label: 'オーダー履歴' },
+  { path: 'menu', label: 'メニュー管理' },
   { path: 'sales', label: '売上管理' },
   { path: 'payroll', label: '給与計算' },
   { path: 'attendance', label: '勤怠管理' },

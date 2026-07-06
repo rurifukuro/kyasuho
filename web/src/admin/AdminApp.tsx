@@ -13,6 +13,8 @@ import { AdminSales } from './AdminSales';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminAttendance } from './AdminAttendance';
 import { AdminShiftImage } from './AdminShiftImage';
+import { AdminOrders } from './AdminOrders';
+import { AdminMenu } from './AdminMenu';
 import './admin.css';
 
 export default function AdminApp() {
@@ -104,6 +106,8 @@ export default function AdminApp() {
         <Route path="reservations" element={<AdminReservations tenant={tenant} />} />
         <Route path="schedule" element={<AdminSchedule tenant={tenant} />} />
         <Route path="casts" element={<AdminCasts tenant={tenant} />} />
+        <Route path="orders" element={<AdminOrders tenant={tenant} />} />
+        <Route path="menu" element={<AdminMenu tenant={tenant} />} />
         <Route path="sales" element={<AdminSales tenant={tenant} />} />
         <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
         <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
