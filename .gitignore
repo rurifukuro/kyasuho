@@ -37,6 +37,9 @@ yarn-error.*
 # Supabase CLI
 supabase/.temp/
 
+# 実在店舗・実在人物の見本画像（ローカル参照専用・コミット禁止）
+docs/shop_template_reference/
+
 # typescript
 *.tsbuildinfo
 
