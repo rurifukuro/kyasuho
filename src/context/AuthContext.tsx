@@ -2,14 +2,21 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, hasSupabaseConfig } from '../config/supabase';
 import { ensureTenant } from '../services/tenants';
+import { resolveUserRole } from '../services/roles';
+import type { RoleResult } from '../services/roles';
+import type { UserRole } from '../types';
 
 export type AuthResult = { needsEmailConfirm: boolean };
 
 type AuthContextValue = {
   session: Session | null;
   user: User | null;
-  isReady: boolean; // 初回セッション復元が完了
-  configured: boolean; // .env が設定済み
+  isReady: boolean;
+  configured: boolean;
+  role: UserRole;
+  roleResult: RoleResult | null;
+  roleLoading: boolean;
+  refreshRole: () => Promise<void>;
   signUp: (email: string, password: string) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,10 +27,11 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [roleResult, setRoleResult] = useState<RoleResult | null>(null);
+  const [roleLoading, setRoleLoading] = useState(false);
 
   useEffect(() => {
     if (!hasSupabaseConfig) {
-      // 未設定なら認証を試みず、AuthScreen で案内する。
       setIsReady(true);
       return;
     }
@@ -42,19 +50,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // セッション確立時、テナントを保証（無ければ作成）。失敗は握りつぶさずログ（BE-2）。
   const userId = session?.user?.id;
+
+  const refreshRole = useCallback(async () => {
+    if (!userId) {
+      setRoleResult(null);
+      return;
+    }
+    setRoleLoading(true);
+    try {
+      const result = await resolveUserRole(userId);
+      setRoleResult(result);
+    } catch (e: unknown) {
+      console.warn('[kyasuho] resolveUserRole failed:', e);
+      setRoleResult({ role: 'none' });
+    } finally {
+      setRoleLoading(false);
+    }
+  }, [userId]);
+
   useEffect(() => {
-    if (!userId) return;
-    ensureTenant(userId).catch((e: unknown) => {
-      console.warn('[kyasuho] ensureTenant failed:', e);
-    });
+    if (!userId) {
+      setRoleResult(null);
+      return;
+    }
+    setRoleLoading(true);
+    resolveUserRole(userId)
+      .then((result) => {
+        setRoleResult(result);
+        if (result.role === 'owner') {
+          return ensureTenant(userId);
+        }
+      })
+      .catch((e: unknown) => {
+        console.warn('[kyasuho] role/tenant init failed:', e);
+      })
+      .finally(() => {
+        setRoleLoading(false);
+      });
   }, [userId]);
 
   const signUp = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
-    // session が返ればメール確認OFF（即ログイン）、null ならメール確認待ち。
     return { needsEmailConfirm: !data.session };
   }, []);
 
@@ -66,7 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async (): Promise<void> => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    setRoleResult(null);
   }, []);
+
+  const role: UserRole = roleResult?.role ?? 'none';
 
   return (
     <AuthContext.Provider
@@ -75,6 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: session?.user ?? null,
         isReady,
         configured: hasSupabaseConfig,
+        role,
+        roleResult,
+        roleLoading,
+        refreshRole,
         signUp,
         signIn,
         signOut,

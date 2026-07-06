@@ -230,3 +230,78 @@ export type PayrollSettings = {
   drinkBackRate: number; // 円/杯
   lateDeduction: number; // 円/回（遅刻控除）
 };
+
+// ── ロール判定（T13 キャストアカウント基盤） ──────────────────────────
+
+/** ログインユーザーのロール。owner=店舗オーナー、cast=キャスト個人、none=未紐付け。 */
+export type UserRole = 'owner' | 'cast' | 'none';
+
+/** キャスト招待（ky_cast_invites）。 */
+export type CastInvite = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  code: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedBy: string | null;
+};
+
+// ── キャスト人物像・遍歴・個人情報（T17/T18） ──────────────────────────
+
+/** オーナーが記入するキャスト人物像・評価（ky_cast_evaluations）。 */
+export type CastEvaluation = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  personaNotes: string;
+  strengths: string;
+  areasForImprovement: string;
+  customerFeedbackSummary: string;
+  internalNotes: string;
+};
+
+/** 店舗遍歴（ky_cast_work_history・テナント横断）。 */
+export type CastWorkHistory = {
+  id: string;
+  castUserId: string;
+  tenantName: string;
+  position: string;
+  startDate: string | null;
+  endDate: string | null;
+  notes: string;
+  visibility: 'public' | 'private';
+  createdBy: string | null;
+};
+
+/** 口座種別。 */
+export type AccountType = '' | 'savings' | 'checking';
+
+/** キャスト個人情報（ky_cast_personal_info・面接書類代替）。 */
+export type CastPersonalInfo = {
+  id: string;
+  castUserId: string;
+  fullName: string;
+  furigana: string;
+  dateOfBirth: string | null;
+  gender: string;
+  address: string;
+  phone: string;
+  email: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelation: string;
+  nearestStation: string;
+  commuteMethod: string;
+  commuteMinutes: number | null;
+  bankName: string;
+  bankBranch: string;
+  accountType: AccountType;
+  accountNumber: string;
+  accountHolderName: string;
+  desiredWorkDaysPerWeek: number | null;
+  desiredHours: string;
+  availableFrom: string | null;
+  qualifications: string;
+  specialNotes: string;
+};

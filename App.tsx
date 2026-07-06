@@ -11,13 +11,14 @@ import { TenantProvider } from './src/context/TenantContext';
 import { NotificationProvider } from './src/context/NotificationContext';
 import { LoadingScreen } from './src/components/common/LoadingScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { RoleSelectScreen } from './src/screens/RoleSelectScreen';
+import { CastHomeScreen } from './src/screens/CastHomeScreen';
 import { ReservationsScreen } from './src/screens/ReservationsScreen';
 import { ScheduleScreen } from './src/screens/ScheduleScreen';
 import { CastsScreen } from './src/screens/CastsScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 
-// 提供者アプリの BottomTab（SPEC §9-1）。型付きナビ（ルールINIT）。
 export type RootTabParamList = {
   Reservations: undefined;
   Schedule: undefined;
@@ -28,7 +29,6 @@ export type RootTabParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-// タブアイコンは @expo/vector-icons MaterialCommunityIcons の固定名（絵文字禁止＝ルールTAB-ICON）
 const TAB_ICONS: Record<
   keyof RootTabParamList,
   React.ComponentProps<typeof MaterialCommunityIcons>['name']
@@ -85,12 +85,18 @@ function Tabs() {
   );
 }
 
-// 認証状態でルートを出し分け（初回復元中→ローディング／未ログイン→AuthScreen／ログイン→タブ）。
 function RootGate() {
-  const { isReady, session } = useAuth();
+  const { isReady, session, role, roleLoading } = useAuth();
   const { t } = useLanguage();
+
   if (!isReady) return <LoadingScreen label={t('common.loading')} />;
   if (!session) return <AuthScreen />;
+
+  if (roleLoading) return <LoadingScreen label={t('role.roleLoading')} />;
+
+  if (role === 'cast') return <CastHomeScreen />;
+  if (role === 'none') return <RoleSelectScreen />;
+
   return (
     <TenantProvider>
       <NotificationProvider>

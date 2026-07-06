@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,11 +16,12 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
+import { supabase } from '../config/supabase';
 import type { TKey } from '../i18n';
 
 type Mode = 'signin' | 'signup';
+type AccountType = 'owner' | 'cast';
 
-// Supabase の英語エラーを代表ケースだけ日本語キーへ寄せる（その他は generic）。
 function errorKey(message: string): TKey {
   const m = message.toLowerCase();
   if (m.includes('invalid login') || m.includes('invalid credentials')) {
@@ -40,12 +42,14 @@ export function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { signIn, signUp, configured } = useAuth();
 
-  const [mode, setMode] = useState<Mode>('signup');
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
+  const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [resetMode, setResetMode] = useState(false);
 
   const submit = useCallback(async () => {
     setError(null);
@@ -55,6 +59,22 @@ export function AuthScreen() {
       setError(t('auth.error.emailRequired'));
       return;
     }
+
+    if (resetMode) {
+      setLoading(true);
+      try {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(mail);
+        if (resetError) throw resetError;
+        setInfo(t('auth.resetEmailSent'));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : '';
+        setError(t(errorKey(msg)));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     if (!password) {
       setError(t('auth.error.passwordRequired'));
       return;
@@ -77,9 +97,8 @@ export function AuthScreen() {
     } finally {
       setLoading(false);
     }
-  }, [email, password, mode, signIn, signUp, t]);
+  }, [email, password, mode, resetMode, signIn, signUp, t]);
 
-  // .env 未設定の案内（クラッシュさせない）
   if (!configured) {
     return (
       <View
@@ -96,6 +115,37 @@ export function AuthScreen() {
     );
   }
 
+  if (!accountType) {
+    return (
+      <View style={[s.root, { backgroundColor: theme.background }]}>
+        <View style={[s.scroll, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }]}>
+          <Text style={[s.appName, { color: theme.primary }]}>{t('app.name')}</Text>
+          <Text style={[s.tagline, { color: theme.subtext }]}>{t('app.tagline')}</Text>
+
+          <View style={{ marginTop: 36, gap: 16, paddingHorizontal: 24 }}>
+            <TouchableOpacity
+              style={[s.roleBtn, { backgroundColor: theme.primary }]}
+              onPress={() => setAccountType('owner')}
+              activeOpacity={0.85}
+            >
+              <Text style={s.roleBtnTitle}>{t('auth.role.ownerTitle')}</Text>
+              <Text style={s.roleBtnDesc}>{t('auth.role.ownerDesc')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[s.roleBtn, { backgroundColor: theme.card, borderWidth: 2, borderColor: theme.primary }]}
+              onPress={() => setAccountType('cast')}
+              activeOpacity={0.85}
+            >
+              <Text style={[s.roleBtnTitle, { color: theme.primary }]}>{t('auth.role.castTitle')}</Text>
+              <Text style={[s.roleBtnDesc, { color: theme.subtext }]}>{t('auth.role.castDesc')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[s.root, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -107,7 +157,9 @@ export function AuthScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Text style={[s.appName, { color: theme.primary }]}>{t('app.name')}</Text>
-          <Text style={[s.tagline, { color: theme.subtext }]}>{t('app.tagline')}</Text>
+          <Text style={[s.tagline, { color: theme.subtext }]}>
+            {accountType === 'owner' ? t('auth.role.ownerTitle') : t('auth.role.castTitle')}
+          </Text>
 
           <View style={[s.form, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <Text style={[s.label, { color: theme.subtext }]}>{t('auth.email')}</Text>
@@ -123,17 +175,21 @@ export function AuthScreen() {
               editable={!loading}
             />
 
-            <Text style={[s.label, { color: theme.subtext, marginTop: 14 }]}>{t('auth.password')}</Text>
-            <TextInput
-              style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-              value={password}
-              onChangeText={setPassword}
-              placeholder={t('auth.passwordPlaceholder')}
-              placeholderTextColor={theme.subtext}
-              secureTextEntry
-              autoCapitalize="none"
-              editable={!loading}
-            />
+            {!resetMode && (
+              <>
+                <Text style={[s.label, { color: theme.subtext, marginTop: 14 }]}>{t('auth.password')}</Text>
+                <TextInput
+                  style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder={t('auth.passwordPlaceholder')}
+                  placeholderTextColor={theme.subtext}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  editable={!loading}
+                />
+              </>
+            )}
 
             {error ? <Text style={[s.msg, { color: '#D7263D' }]}>{error}</Text> : null}
             {info ? <Text style={[s.msg, { color: theme.primary }]}>{info}</Text> : null}
@@ -148,28 +204,60 @@ export function AuthScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={s.submitText}>
-                  {mode === 'signup' ? t('auth.submit.signup') : t('auth.submit.signin')}
+                  {resetMode
+                    ? t('auth.resetSubmit')
+                    : mode === 'signup'
+                      ? t('auth.submit.signup')
+                      : t('auth.submit.signin')}
                 </Text>
               )}
             </TouchableOpacity>
 
+            {!resetMode && (
+              <TouchableOpacity
+                style={s.switch}
+                onPress={() => {
+                  setMode(mode === 'signup' ? 'signin' : 'signup');
+                  setError(null);
+                  setInfo(null);
+                }}
+                disabled={loading}
+              >
+                <Text style={[s.switchText, { color: theme.primary }]}>
+                  {mode === 'signup' ? t('auth.switchToSignin') : t('auth.switchToSignup')}
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={s.switch}
               onPress={() => {
-                setMode(mode === 'signup' ? 'signin' : 'signup');
+                setResetMode(!resetMode);
                 setError(null);
                 setInfo(null);
               }}
               disabled={loading}
             >
-              <Text style={[s.switchText, { color: theme.primary }]}>
-                {mode === 'signup' ? t('auth.switchToSignin') : t('auth.switchToSignup')}
+              <Text style={[s.resetText, { color: theme.subtext }]}>
+                {resetMode ? t('auth.backToLogin') : t('auth.forgotPassword')}
               </Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={s.backBtn}
+            onPress={() => {
+              setAccountType(null);
+              setError(null);
+              setInfo(null);
+              setResetMode(false);
+              setMode('signin');
+            }}
+          >
+            <Text style={[s.switchText, { color: theme.subtext }]}>{t('auth.backToRoleSelect')}</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-      {/* KeyboardDoneBar は KAV の外＝兄弟に置く（メモリ鉄則・二重カウント防止） */}
       <KeyboardDoneBar theme={theme} />
     </View>
   );
@@ -190,7 +278,12 @@ const s = StyleSheet.create({
   submitText: { color: '#fff', fontWeight: '800', fontSize: 16 },
   switch: { marginTop: 16, alignItems: 'center' },
   switchText: { fontSize: 14, fontWeight: '600' },
+  resetText: { fontSize: 13, textDecorationLine: 'underline' },
   card: { borderWidth: 1, borderRadius: 16, padding: 24, maxWidth: 420 },
   cardTitle: { fontSize: 18, fontWeight: '800', marginBottom: 10, textAlign: 'center' },
   cardDesc: { fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  roleBtn: { borderRadius: 16, padding: 20, alignItems: 'center' },
+  roleBtnTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  roleBtnDesc: { color: 'rgba(255,255,255,0.85)', fontSize: 13, marginTop: 6, textAlign: 'center' },
+  backBtn: { marginTop: 20, alignItems: 'center' },
 });
