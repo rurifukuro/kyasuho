@@ -242,6 +242,7 @@ export async function upsertSales(
       nomination_count: input.nominationCount,
       other_revenue: input.otherRevenue,
       note: input.note,
+      entry_mode: 'manual',
     },
     { onConflict: 'tenant_id,date' },
   );

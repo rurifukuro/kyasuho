@@ -6,6 +6,7 @@
 import { supabase } from '../config/supabase';
 import type { Attendance, CastPayroll, PayrollSettings } from '../types';
 import { calcMinutesWorked, calcPayroll, monthRange } from '../utils/payrollCalc';
+import { countCastDrinksByMonth } from './orders';
 
 // ── 給与設定（店一律・テナントで1行） ──────────────────────────────
 
@@ -232,7 +233,10 @@ export async function generatePayrollFromAttendance(
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
   const existingKeys = new Set(existing.map((p) => `${p.castId}|${p.date}`));
-  const nominations = await countNominationsByMonth(tenantId, yearMonth);
+  const [nominations, castDrinks] = await Promise.all([
+    countNominationsByMonth(tenantId, yearMonth),
+    countCastDrinksByMonth(tenantId, yearMonth),
+  ]);
 
   const rows = attendance
     .filter((a) => WORKED_STATUSES.has(a.status))
@@ -240,10 +244,11 @@ export async function generatePayrollFromAttendance(
     .map((a) => {
       const minutesWorked = calcMinutesWorked(a.checkInAt, a.checkOutAt);
       const nominationCount = nominations.get(`${a.castId}|${a.date}`) ?? 0;
+      const drinkCount = castDrinks.get(`${a.castId}|${a.date}`) ?? 0;
       const breakdown = calcPayroll(settings, {
         minutesWorked,
         nominationCount,
-        drinkCount: 0, // ドリンク数は日別手入力（§23）＝生成時は0
+        drinkCount,
         otherBack: 0,
         lateCount: a.status === 'late' ? 1 : 0,
       });
@@ -255,7 +260,7 @@ export async function generatePayrollFromAttendance(
         base_pay: breakdown.basePay,
         nomination_count: nominationCount,
         nomination_back: breakdown.nominationBack,
-        drink_count: 0,
+        drink_count: drinkCount,
         drink_back: breakdown.drinkBack,
         other_back: breakdown.otherBack,
         deductions: breakdown.deductions,

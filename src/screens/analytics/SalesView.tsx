@@ -140,6 +140,11 @@ export function SalesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
               <Text style={[v.dayLabel, { color: theme.text }]}>{dayLabel(date)}</Text>
               {sl ? (
                 <View style={v.dayValueWrap}>
+                  {sl.entryMode === 'auto' && (
+                    <View style={[v.entryBadge, { backgroundColor: theme.primary + '22' }]}>
+                      <Text style={[v.entryBadgeText, { color: theme.primary }]}>{t('sales.entryAuto')}</Text>
+                    </View>
+                  )}
                   <Text style={[v.dayValue, { color: theme.text }]}>
                     {formatYen(sl.totalRevenue)}
                   </Text>
@@ -264,6 +269,13 @@ function SalesEditModal({
           </TouchableOpacity>
         </View>
 
+        {existing?.entryMode === 'auto' && (
+          <View style={[v.autoBanner, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '44' }]}>
+            <MaterialCommunityIcons name="lightning-bolt" size={16} color={theme.primary} />
+            <Text style={[v.autoBannerText, { color: theme.primary }]}>{t('sales.autoBanner')}</Text>
+          </View>
+        )}
+
         <NumberField label={t('sales.totalRevenue')} value={totalRevenue} onChange={setTotalRevenue} theme={theme} />
         <NumberField label={t('sales.setCount')} value={setCount} onChange={setSetCount} theme={theme} />
         <NumberField label={t('sales.drinkCount')} value={drinkCount} onChange={setDrinkCount} theme={theme} />
@@ -317,6 +329,10 @@ const v = StyleSheet.create({
   summaryCell: { flex: 1 },
   summaryCellLabel: { fontSize: 11 },
   summaryCellValue: { fontSize: 15, fontWeight: '600', marginTop: 2 },
+  entryBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginRight: 4 },
+  entryBadgeText: { fontSize: 10, fontWeight: '700' },
+  autoBanner: { flexDirection: 'row', alignItems: 'flex-start', borderWidth: 1, borderRadius: 10, padding: 12, gap: 8, marginBottom: 12 },
+  autoBannerText: { fontSize: 12, lineHeight: 18, flex: 1 },
   dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11, marginBottom: 6 },
   dayLabel: { fontSize: 14, fontWeight: '500' },
   dayValueWrap: { flexDirection: 'row', alignItems: 'center', gap: 6 },

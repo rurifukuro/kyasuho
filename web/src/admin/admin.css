@@ -204,6 +204,16 @@
   color: #2563eb;
 }
 
+.admin-badge.badge-auto {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.admin-badge.badge-manual {
+  background: #f0f0f0;
+  color: #777;
+}
+
 .st-reserved {
   background: #fdeef3;
   color: var(--primary-dark);

@@ -58,7 +58,8 @@ export type SalesInput = {
   note: string;
 };
 
-/** 日別売上を upsert（テナント×日付で1行＝unique(tenant_id, date)）。 */
+/** 日別売上を upsert（テナント×日付で1行＝unique(tenant_id, date)）。
+ *  手入力時は entry_mode='manual' を明示的にセット（§25-4: auto行の手修正→以後自動更新停止）。 */
 export async function upsertSales(
   tenantId: string,
   date: string,
@@ -74,6 +75,7 @@ export async function upsertSales(
       nomination_count: input.nominationCount,
       other_revenue: input.otherRevenue,
       note: input.note,
+      entry_mode: 'manual',
     },
     { onConflict: 'tenant_id,date' },
   );

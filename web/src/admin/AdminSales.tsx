@@ -81,6 +81,8 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
     [sales],
   );
 
+  const [editingEntryMode, setEditingEntryMode] = useState<string | null>(null);
+
   const openForm = (row: KySales | null) => {
     if (row) {
       setFormDate(row.date);
@@ -90,6 +92,7 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
       setFormNominations(String(row.nomination_count));
       setFormOther(String(row.other_revenue));
       setFormNote(row.note);
+      setEditingEntryMode(row.entry_mode);
     } else {
       setFormDate(`${yearMonth}-01` <= formatDate(new Date()) ? formatDate(new Date()) : `${yearMonth}-01`);
       setFormRevenue('');
@@ -98,6 +101,7 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
       setFormNominations('');
       setFormOther('');
       setFormNote('');
+      setEditingEntryMode(null);
     }
     setFormError(null);
     setFormOpen(true);
@@ -238,6 +242,11 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
           <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
             売上の入力（同じ日付は上書き保存されます）
           </div>
+          {editingEntryMode === 'auto' && (
+            <div className="admin-info-banner" style={{ marginBottom: 12, padding: '10px 14px', background: '#dbeafe', borderRadius: 8, fontSize: 13, color: '#2563eb' }}>
+              ⚡ レジの会計確定から自動集計されたデータです。手動で変更すると以後は自動更新されません。
+            </div>
+          )}
           <div className="admin-form-row">
             <div className="admin-field">
               <label htmlFor="sales-date">日付</label>
@@ -343,6 +352,7 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
             <thead>
               <tr>
                 <th>日付</th>
+                <th>種別</th>
                 <th className="num">総売上</th>
                 <th className="num">セット</th>
                 <th className="num">ドリンク</th>
@@ -356,6 +366,11 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
               {sales.map((row) => (
                 <tr key={row.id}>
                   <td>{row.date}</td>
+                  <td>
+                    <span className={`admin-badge ${row.entry_mode === 'auto' ? 'badge-auto' : 'badge-manual'}`}>
+                      {row.entry_mode === 'auto' ? '自動' : '手入力'}
+                    </span>
+                  </td>
                   <td className="num">{yen(row.total_revenue)}</td>
                   <td className="num">{row.set_count}</td>
                   <td className="num">{row.drink_count}</td>
