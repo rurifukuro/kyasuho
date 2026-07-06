@@ -4,6 +4,7 @@ import type {
   KyCast,
   KyCastInvite,
   KyCastPayroll,
+  KyExpense,
   KyMenuItem,
   KyOrder,
   KyOrderItem,
@@ -797,4 +798,79 @@ export async function uploadCastShopPhoto(
     .eq('id', castId);
   if (updErr) throw updErr;
   return publicUrl;
+}
+
+// ---- 経費 (§27) ----
+
+export async function fetchExpenses(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<KyExpense[]> {
+  const { data, error } = await supabase
+    .from('ky_expenses')
+    .select('id, tenant_id, date, category, amount, memo')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+  if (error) throw error;
+  return (data as KyExpense[] | null) ?? [];
+}
+
+export async function addExpense(
+  tenantId: string,
+  date: string,
+  category: string,
+  amount: number,
+  memo: string,
+): Promise<KyExpense> {
+  const { data, error } = await supabase
+    .from('ky_expenses')
+    .insert({ tenant_id: tenantId, date, category, amount, memo })
+    .select('id, tenant_id, date, category, amount, memo')
+    .single();
+  if (error) throw error;
+  return data as KyExpense;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchMonthlySalesTotal(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('ky_sales')
+    .select('total_revenue')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+  if (error) throw error;
+  return ((data as { total_revenue: number }[] | null) ?? []).reduce(
+    (sum, r) => sum + r.total_revenue,
+    0,
+  );
+}
+
+export async function fetchMonthlyPayrollTotal(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('ky_cast_payroll')
+    .select('total_pay')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+  if (error) throw error;
+  return ((data as { total_pay: number }[] | null) ?? []).reduce(
+    (sum, r) => sum + r.total_pay,
+    0,
+  );
 }

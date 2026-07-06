@@ -13,15 +13,17 @@ import { useTenant } from '../context/TenantContext';
 import { SalesView } from './analytics/SalesView';
 import { PayrollView } from './analytics/PayrollView';
 import { AttendanceView } from './analytics/AttendanceView';
+import { ExpensesView } from './analytics/ExpensesView';
 import { currentYearMonth, shiftYearMonth } from './analytics/common';
 import type { TKey } from '../i18n';
 
-type Segment = 'sales' | 'payroll' | 'attendance';
+type Segment = 'sales' | 'payroll' | 'attendance' | 'expenses';
 
 const SEGMENT_KEYS: Record<Segment, TKey> = {
   sales: 'analytics.segment.sales',
   payroll: 'analytics.segment.payroll',
   attendance: 'analytics.segment.attendance',
+  expenses: 'analytics.segment.expenses',
 };
 
 const SEGMENT_ICONS: Record<
@@ -31,9 +33,10 @@ const SEGMENT_ICONS: Record<
   sales: 'cash-register',
   payroll: 'account-cash',
   attendance: 'calendar-account',
+  expenses: 'receipt',
 };
 
-const SEGMENTS: Segment[] = ['sales', 'payroll', 'attendance'];
+const SEGMENTS: Segment[] = ['sales', 'payroll', 'attendance', 'expenses'];
 
 export function AnalyticsScreen() {
   const { theme } = useTheme();
@@ -116,6 +119,9 @@ export function AnalyticsScreen() {
       )}
       {segment === 'attendance' && (
         <AttendanceView tenant={tenant} theme={theme} t={t} yearMonth={yearMonth} />
+      )}
+      {segment === 'expenses' && (
+        <ExpensesView tenant={tenant} theme={theme} t={t} yearMonth={yearMonth} />
       )}
     </View>
   );

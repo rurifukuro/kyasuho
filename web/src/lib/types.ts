@@ -34,6 +34,16 @@ export interface KyCast {
   user_id: string | null;
 }
 
+/** 経費（§27）。 */
+export interface KyExpense {
+  id: string;
+  tenant_id: string;
+  date: string;
+  category: string;
+  amount: number;
+  memo: string;
+}
+
 /** 席種・席料（§29）。 */
 export interface KySeatType {
   id: string;

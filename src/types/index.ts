@@ -153,6 +153,28 @@ export type UnlockWindow = {
   setMinutes: number;
 };
 
+/** 経費カテゴリ固定リスト（§27）。 */
+export type ExpenseCategory =
+  | 'purchase'
+  | 'rent'
+  | 'utilities'
+  | 'communication'
+  | 'advertising'
+  | 'costume'
+  | 'supplies'
+  | 'outsourcing'
+  | 'misc';
+
+/** 経費（§27）。 */
+export type Expense = {
+  id: string;
+  tenantId: string;
+  date: string;
+  category: ExpenseCategory;
+  amount: number;
+  memo: string;
+};
+
 /** 席種・席料（§29）。 */
 export type SeatType = {
   id: string;

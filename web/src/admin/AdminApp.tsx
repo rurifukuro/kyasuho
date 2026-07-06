@@ -15,6 +15,7 @@ import { AdminAttendance } from './AdminAttendance';
 import { AdminShiftImage } from './AdminShiftImage';
 import { AdminOrders } from './AdminOrders';
 import { AdminMenu } from './AdminMenu';
+import { AdminExpenses } from './AdminExpenses';
 import './admin.css';
 
 export default function AdminApp() {
@@ -112,6 +113,7 @@ export default function AdminApp() {
         <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
         <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
         <Route path="shift-image" element={<AdminShiftImage tenant={tenant} />} />
+        <Route path="expenses" element={<AdminExpenses tenant={tenant} />} />
         <Route path="*" element={<Navigate to="/admin/reservations" replace />} />
       </Route>
     </Routes>
