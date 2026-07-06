@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyCast, KyShift, KyTenant } from '../lib/types';
+import type { KyCast, KyCastInvite, KyShift, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
 import {
   addCast,
   addShift,
+  createInvite,
+  deleteInvite,
   fetchCastList,
+  fetchInvites,
   fetchShiftList,
   removeCast,
   removeShift,
@@ -289,6 +292,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                 <th>名前</th>
                 <th>紹介文</th>
                 <th>指名予約</th>
+                <th>アカウント</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -308,6 +312,13 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                       >
                         {cast.accepts_nomination ? '受付中' : '停止中'}
                       </button>
+                    </td>
+                    <td>
+                      {cast.user_id ? (
+                        <span className="admin-badge green">連携済み</span>
+                      ) : (
+                        <span className="admin-badge gray">未連携</span>
+                      )}
                     </td>
                     <td>
                       <div className="admin-btn-row">
@@ -458,6 +469,189 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           </table>
         </div>
       )}
+
+      <CastInvitePanel tenant={tenant} casts={casts} />
     </div>
+  );
+}
+
+// ── 招待管理パネル ──
+
+function CastInvitePanel({ tenant, casts }: { tenant: KyTenant; casts: KyCast[] }) {
+  const [invites, setInvites] = useState<KyCastInvite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteCastId, setInviteCastId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const castNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of casts) map.set(c.id, c.name);
+    return map;
+  }, [casts]);
+
+  const unlinkedCasts = useMemo(() => casts.filter((c) => !c.user_id), [casts]);
+
+  const loadInvites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchInvites(tenant.id);
+      setInvites(rows);
+    } catch (e) {
+      console.warn('[kyasuho] fetchInvites failed:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant.id]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!inviteCastId || creating) return;
+    setCreating(true);
+    try {
+      await createInvite(tenant.id, inviteCastId);
+      await loadInvites();
+      setInviteCastId('');
+    } catch (err) {
+      console.warn('[kyasuho] createInvite failed:', err);
+      window.alert('招待コードの作成に失敗しました。');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCopy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      window.alert('コードをコピーしました');
+    } catch {
+      window.prompt('コードをコピーしてください:', code);
+    }
+  };
+
+  const handleDelete = async (inv: KyCastInvite) => {
+    if (!window.confirm(`招待コード「${inv.code}」を削除しますか？`)) return;
+    setBusyId(inv.id);
+    try {
+      await deleteInvite(inv.id);
+      await loadInvites();
+    } catch (e) {
+      console.warn('[kyasuho] deleteInvite failed:', e);
+      window.alert('削除に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const fmtDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('ja-JP');
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <>
+      <h3 className="admin-section-title">キャスト招待管理</h3>
+      <p className="admin-note" style={{ marginBottom: 8 }}>
+        招待コードを作成してキャストに渡すと、キャストが自分のアカウントでアプリにログインし、シフトや給与を確認できるようになります。コードの有効期限は7日間です。
+      </p>
+
+      {unlinkedCasts.length > 0 && (
+        <form className="admin-card" onSubmit={handleCreate}>
+          <div className="admin-form-row">
+            <div className="admin-field">
+              <label htmlFor="invite-cast">招待するキャスト</label>
+              <select
+                id="invite-cast"
+                className="w-md"
+                value={inviteCastId}
+                onChange={(e) => setInviteCastId(e.target.value)}
+              >
+                <option value="">選択してください</option>
+                {unlinkedCasts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" className="admin-btn primary" disabled={creating || !inviteCastId}>
+              {creating ? '作成中…' : '招待コードを作成'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="admin-empty">読み込み中…</div>
+      ) : invites.length === 0 ? (
+        <div className="admin-table-wrap">
+          <div className="admin-empty">招待コードはまだ作成されていません。</div>
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>キャスト</th>
+                <th>招待コード</th>
+                <th>有効期限</th>
+                <th>ステータス</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invites.map((inv) => {
+                const expired = new Date(inv.expires_at) < new Date();
+                const used = !!inv.used_at;
+                return (
+                  <tr key={inv.id}>
+                    <td>{castNameById.get(inv.cast_id) ?? '—'}</td>
+                    <td style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{inv.code}</td>
+                    <td>{fmtDate(inv.expires_at)}</td>
+                    <td>
+                      {used ? (
+                        <span className="admin-badge green">使用済み</span>
+                      ) : expired ? (
+                        <span className="admin-badge red">期限切れ</span>
+                      ) : (
+                        <span className="admin-badge blue">有効</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="admin-btn-row">
+                        {!used && !expired && (
+                          <button
+                            type="button"
+                            className="admin-btn"
+                            onClick={() => void handleCopy(inv.code)}
+                          >
+                            コピー
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="admin-btn danger"
+                          disabled={busyId === inv.id}
+                          onClick={() => void handleDelete(inv)}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }

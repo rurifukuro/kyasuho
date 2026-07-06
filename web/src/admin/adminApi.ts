@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type {
   KyAttendance,
   KyCast,
+  KyCastInvite,
   KyCastPayroll,
   KyPayrollSettings,
   KyReservationFull,
@@ -128,7 +129,7 @@ export async function removeWindow(id: string): Promise<void> {
 export async function fetchCastList(tenantId: string): Promise<KyCast[]> {
   const { data, error } = await supabase
     .from('ky_casts')
-    .select('id, tenant_id, name, photo_url, bio, accepts_nomination, sort_order')
+    .select('id, tenant_id, name, photo_url, bio, accepts_nomination, sort_order, user_id')
     .eq('tenant_id', tenantId)
     .order('sort_order')
     .order('name');
@@ -567,4 +568,44 @@ export async function requestAiShiftDesign(mood: string, storeName: string): Pro
   const design = (data as { design?: unknown } | null)?.design;
   if (design === undefined || design === null) throw new Error('bad_ai_output');
   return design;
+}
+
+// ---- 招待管理（ky_cast_invites・T13） ----
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+export async function fetchInvites(tenantId: string): Promise<KyCastInvite[]> {
+  const { data, error } = await supabase
+    .from('ky_cast_invites')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyCastInvite[];
+}
+
+export async function createInvite(tenantId: string, castId: string): Promise<KyCastInvite> {
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('ky_cast_invites')
+    .insert({
+      tenant_id: tenantId,
+      cast_id: castId,
+      code: generateInviteCode(),
+      expires_at: expiresAt,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as KyCastInvite;
+}
+
+export async function deleteInvite(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_cast_invites').delete().eq('id', id);
+  if (error) throw error;
 }

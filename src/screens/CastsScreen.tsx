@@ -18,9 +18,12 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { FormModalShell } from '../components/common/FormModalShell';
 import { ShiftImageScreen } from './ShiftImageScreen';
+import * as Clipboard from 'expo-clipboard';
 import * as castService from '../services/casts';
+import * as inviteService from '../services/castInvites';
+import * as profileService from '../services/castProfile';
 import { guardFields } from '../utils/contentGuard';
-import type { Cast, Shift, ThemeColor } from '../types';
+import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 type TFunc = (key: TKey, params?: Record<string, string>) => string;
@@ -281,6 +284,12 @@ function CastCard({
                 {t('cast.acceptsNomination')}
               </Text>
             </View>
+            {cast.userId && (
+              <View style={[s.badge, { backgroundColor: '#22C55E20' }]}>
+                <MaterialCommunityIcons name="account-check" size={12} color="#16A34A" />
+                <Text style={[s.badgeText, { color: '#16A34A' }]}>{t('cast.linked')}</Text>
+              </View>
+            )}
           </View>
         </View>
         <View style={s.castActions}>
@@ -325,6 +334,7 @@ function CastDetailView({
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [addShiftVisible, setAddShiftVisible] = useState(false);
+  const [evalModalVisible, setEvalModalVisible] = useState(false);
 
   const loadShifts = useCallback(async () => {
     setLoadingShifts(true);
@@ -426,6 +436,24 @@ function CastDetailView({
         )}
       </View>
 
+      {/* 人物像・評価ボタン */}
+      <TouchableOpacity
+        style={[s.evalButton, { backgroundColor: theme.primary + '15', borderColor: theme.border }]}
+        onPress={() => setEvalModalVisible(true)}
+      >
+        <MaterialCommunityIcons name="account-details" size={20} color={theme.primary} />
+        <Text style={[s.evalButtonText, { color: theme.primary }]}>{t('eval.title')}</Text>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={theme.primary} />
+      </TouchableOpacity>
+
+      {/* 招待・アカウント連携セクション */}
+      <CastInviteSection
+        cast={cast}
+        tenantId={tenant.id}
+        theme={theme}
+        t={t}
+      />
+
       {/* 出勤スケジュール */}
       <View style={[s.sectionHeader, { borderBottomColor: theme.border }]}>
         <Text style={[s.sectionTitle, { color: theme.text }]}>{t('cast.shifts')}</Text>
@@ -510,6 +538,353 @@ function CastDetailView({
             await loadShifts();
           }}
         />
+      )}
+
+      {evalModalVisible && (
+        <CastEvaluationModal
+          visible={evalModalVisible}
+          cast={cast}
+          tenantId={tenant.id}
+          theme={theme}
+          t={t}
+          onClose={() => setEvalModalVisible(false)}
+        />
+      )}
+    </View>
+  );
+}
+
+// ── 人物像・評価モーダル（T17） ──
+
+function CastEvaluationModal({
+  visible,
+  cast,
+  tenantId,
+  theme,
+  t,
+  onClose,
+}: {
+  visible: boolean;
+  cast: Cast;
+  tenantId: string;
+  theme: ThemeColor;
+  t: TFunc;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [personaNotes, setPersonaNotes] = useState('');
+  const [strengths, setStrengths] = useState('');
+  const [areasForImprovement, setAreasForImprovement] = useState('');
+  const [customerFeedback, setCustomerFeedback] = useState('');
+  const [internalNotes, setInternalNotes] = useState('');
+  const [history, setHistory] = useState<CastWorkHistory[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const [evalData, histData] = await Promise.all([
+          profileService.fetchEvaluation(tenantId, cast.id),
+          cast.userId ? profileService.fetchPublicWorkHistory(cast.userId) : Promise.resolve([]),
+        ]);
+        if (!active) return;
+        if (evalData) {
+          setPersonaNotes(evalData.personaNotes);
+          setStrengths(evalData.strengths);
+          setAreasForImprovement(evalData.areasForImprovement);
+          setCustomerFeedback(evalData.customerFeedbackSummary);
+          setInternalNotes(evalData.internalNotes);
+        }
+        setHistory(histData);
+      } catch (e: unknown) {
+        console.warn('[kyasuho] fetchEvaluation:', e);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [tenantId, cast.id, cast.userId]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      await profileService.upsertEvaluation(tenantId, cast.id, {
+        personaNotes,
+        strengths,
+        areasForImprovement,
+        customerFeedbackSummary: customerFeedback,
+        internalNotes,
+      });
+      Alert.alert('', t('eval.saved'));
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, cast.id, personaNotes, strengths, areasForImprovement, customerFeedback, internalNotes, t]);
+
+  return (
+    <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
+      <ScrollView contentContainerStyle={s.modalContent}>
+        <View style={s.modalHeader}>
+          <Text style={[s.modalTitle, { color: theme.text }]}>
+            {cast.name} — {t('eval.title')}
+          </Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <MaterialCommunityIcons name="close" size={24} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator color={theme.primary} style={{ marginVertical: 20 }} />
+        ) : (
+          <>
+            <Text style={[s.label, { color: theme.text }]}>{t('eval.personaNotes')}</Text>
+            <TextInput
+              style={[s.inputMulti, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+              value={personaNotes}
+              onChangeText={setPersonaNotes}
+              placeholder={t('eval.personaNotesPlaceholder')}
+              placeholderTextColor={theme.subtext}
+              multiline
+              numberOfLines={3}
+            />
+            <Text style={[s.label, { color: theme.text }]}>{t('eval.strengths')}</Text>
+            <TextInput
+              style={[s.inputMulti, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+              value={strengths}
+              onChangeText={setStrengths}
+              placeholder={t('eval.strengthsPlaceholder')}
+              placeholderTextColor={theme.subtext}
+              multiline
+              numberOfLines={2}
+            />
+            <Text style={[s.label, { color: theme.text }]}>{t('eval.areasForImprovement')}</Text>
+            <TextInput
+              style={[s.inputMulti, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+              value={areasForImprovement}
+              onChangeText={setAreasForImprovement}
+              placeholder={t('eval.areasForImprovementPlaceholder')}
+              placeholderTextColor={theme.subtext}
+              multiline
+              numberOfLines={2}
+            />
+            <Text style={[s.label, { color: theme.text }]}>{t('eval.customerFeedback')}</Text>
+            <TextInput
+              style={[s.inputMulti, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+              value={customerFeedback}
+              onChangeText={setCustomerFeedback}
+              placeholder={t('eval.customerFeedbackPlaceholder')}
+              placeholderTextColor={theme.subtext}
+              multiline
+              numberOfLines={2}
+            />
+            <Text style={[s.label, { color: theme.text }]}>{t('eval.internalNotes')}</Text>
+            <TextInput
+              style={[s.inputMulti, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card }]}
+              value={internalNotes}
+              onChangeText={setInternalNotes}
+              placeholder={t('eval.internalNotesPlaceholder')}
+              placeholderTextColor={theme.subtext}
+              multiline
+              numberOfLines={2}
+            />
+
+            <TouchableOpacity
+              style={[s.submitButton, { backgroundColor: theme.primary }]}
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.submitText}>{t('common.save')}</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* 遍歴セクション */}
+            <Text style={[s.label, { color: theme.text, marginTop: 24, fontSize: 16 }]}>{t('eval.workHistory')}</Text>
+            {!cast.userId ? (
+              <Text style={[s.emptyText, { color: theme.subtext }]}>{t('eval.notLinked')}</Text>
+            ) : history.length === 0 ? (
+              <Text style={[s.emptyText, { color: theme.subtext }]}>{t('eval.noHistory')}</Text>
+            ) : (
+              history.map((h) => (
+                <View key={h.id} style={[s.historyCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                  <Text style={[s.historyTenant, { color: theme.text }]}>{h.tenantName}</Text>
+                  <Text style={[s.historyPosition, { color: theme.subtext }]}>{h.position}</Text>
+                  <Text style={[s.historyPeriod, { color: theme.subtext }]}>
+                    {h.startDate ?? '?'} 〜 {h.endDate ?? '現在'}
+                  </Text>
+                  {h.notes ? <Text style={[s.historyNotes, { color: theme.subtext }]}>{h.notes}</Text> : null}
+                </View>
+              ))
+            )}
+          </>
+        )}
+      </ScrollView>
+    </FormModalShell>
+  );
+}
+
+// ── 招待管理セクション ──
+
+function CastInviteSection({
+  cast,
+  tenantId,
+  theme,
+  t,
+}: {
+  cast: Cast;
+  tenantId: string;
+  theme: ThemeColor;
+  t: TFunc;
+}) {
+  const [invites, setInvites] = useState<CastInvite[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const loadInvites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const all = await inviteService.listInvites(tenantId);
+      setInvites(all.filter((inv) => inv.castId === cast.id));
+    } catch (e: unknown) {
+      console.warn('[kyasuho] listInvites:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId, cast.id]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
+
+  const handleCreate = useCallback(async () => {
+    setCreating(true);
+    try {
+      await inviteService.createInvite(tenantId, cast.id);
+      await loadInvites();
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    } finally {
+      setCreating(false);
+    }
+  }, [tenantId, cast.id, loadInvites, t]);
+
+  const handleCopy = useCallback(async (code: string) => {
+    await Clipboard.setStringAsync(code);
+    Alert.alert('', t('cast.inviteCopied'));
+  }, [t]);
+
+  const handleDelete = useCallback(
+    (inv: CastInvite) => {
+      Alert.alert(t('common.delete'), t('cast.inviteCode') + ': ' + inv.code, [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await inviteService.deleteInvite(inv.id);
+              await loadInvites();
+            } catch (e: unknown) {
+              Alert.alert(t('common.error'), String(e));
+            }
+          },
+        },
+      ]);
+    },
+    [loadInvites, t],
+  );
+
+  if (cast.userId) {
+    return (
+      <View style={[s.inviteSection, { borderBottomColor: theme.border }]}>
+        <View style={s.inviteLinkedRow}>
+          <MaterialCommunityIcons name="account-check" size={18} color="#16A34A" />
+          <Text style={[s.inviteLinkedText, { color: '#16A34A' }]}>{t('cast.linked')}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[s.inviteSection, { borderBottomColor: theme.border }]}>
+      <View style={s.inviteSectionHeader}>
+        <Text style={[s.sectionTitle, { color: theme.text }]}>{t('cast.inviteTitle')}</Text>
+        <TouchableOpacity
+          style={[s.inviteCreateBtn, { backgroundColor: theme.primary }]}
+          onPress={handleCreate}
+          disabled={creating}
+        >
+          {creating ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="plus" size={14} color="#fff" />
+              <Text style={s.inviteCreateText}>{t('cast.inviteGenerate')}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+      <Text style={[s.inviteDesc, { color: theme.subtext }]}>{t('cast.inviteDesc')}</Text>
+      {loading ? (
+        <ActivityIndicator color={theme.primary} style={{ marginTop: 8 }} />
+      ) : invites.length === 0 ? (
+        <Text style={[s.inviteEmpty, { color: theme.subtext }]}>{t('cast.noInvites')}</Text>
+      ) : (
+        invites.map((inv) => {
+          const expired = new Date(inv.expiresAt) < new Date();
+          const used = !!inv.usedAt;
+          return (
+            <View
+              key={inv.id}
+              style={[s.inviteCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+            >
+              <View style={s.inviteCardBody}>
+                <Text
+                  style={[
+                    s.inviteCodeText,
+                    { color: expired || used ? theme.subtext : theme.text },
+                  ]}
+                >
+                  {inv.code}
+                </Text>
+                {used ? (
+                  <Text style={[s.inviteStatusText, { color: '#16A34A' }]}>
+                    {t('cast.inviteUsed')}
+                  </Text>
+                ) : expired ? (
+                  <Text style={[s.inviteStatusText, { color: '#DC2626' }]}>
+                    {t('cast.inviteExpires', { date: new Date(inv.expiresAt).toLocaleDateString('ja-JP') })}
+                  </Text>
+                ) : (
+                  <Text style={[s.inviteStatusText, { color: theme.subtext }]}>
+                    {t('cast.inviteExpires', { date: new Date(inv.expiresAt).toLocaleDateString('ja-JP') })}
+                  </Text>
+                )}
+              </View>
+              {!used && !expired && (
+                <TouchableOpacity
+                  onPress={() => handleCopy(inv.code)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <MaterialCommunityIcons name="content-copy" size={20} color={theme.primary} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                onPress={() => handleDelete(inv)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ marginLeft: 8 }}
+              >
+                <MaterialCommunityIcons name="delete-outline" size={20} color="#999" />
+              </TouchableOpacity>
+            </View>
+          );
+        })
       )}
     </View>
   );
@@ -898,4 +1273,23 @@ const s = StyleSheet.create({
   stepperBox: { alignItems: 'center' },
   stepperBtn: { padding: 4 },
   stepperValue: { fontSize: 22, fontWeight: '600', minWidth: 36, textAlign: 'center' },
+  inviteSection: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  inviteSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  inviteDesc: { fontSize: 12, marginTop: 4, marginBottom: 8 },
+  inviteCreateBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, gap: 4 },
+  inviteCreateText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  inviteEmpty: { fontSize: 13, textAlign: 'center', paddingVertical: 8 },
+  inviteCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, padding: 12, marginTop: 6 },
+  inviteCardBody: { flex: 1 },
+  inviteCodeText: { fontSize: 18, fontWeight: '700', fontFamily: 'monospace', letterSpacing: 2 },
+  inviteStatusText: { fontSize: 11, marginTop: 2 },
+  inviteLinkedRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  inviteLinkedText: { fontSize: 14, fontWeight: '600' },
+  evalButton: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginTop: 8, padding: 14, borderRadius: 12, borderWidth: 1, gap: 8 },
+  evalButtonText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  historyCard: { borderRadius: 8, borderWidth: 1, padding: 10, marginTop: 6 },
+  historyTenant: { fontSize: 14, fontWeight: '600' },
+  historyPosition: { fontSize: 12, marginTop: 2 },
+  historyPeriod: { fontSize: 11, marginTop: 2 },
+  historyNotes: { fontSize: 12, marginTop: 4 },
 });

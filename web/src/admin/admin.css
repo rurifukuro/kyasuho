@@ -184,6 +184,26 @@
   white-space: nowrap;
 }
 
+.admin-badge.green {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.admin-badge.gray {
+  background: #f0f0f0;
+  color: #777;
+}
+
+.admin-badge.red {
+  background: #fdecea;
+  color: #dc2626;
+}
+
+.admin-badge.blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
 .st-reserved {
   background: #fdeef3;
   color: var(--primary-dark);
@@ -331,6 +351,24 @@
   color: var(--text-secondary);
   font-size: 12px;
   margin: 8px 0 0;
+}
+
+.admin-success {
+  color: #16a34a;
+  font-size: 13px;
+  margin: 8px 0;
+}
+
+.admin-link-btn {
+  display: block;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  margin: 12px auto 0;
+  padding: 4px 0;
+  text-decoration: underline;
 }
 
 /* ---- ログイン ---- */

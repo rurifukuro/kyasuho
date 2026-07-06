@@ -128,6 +128,7 @@ export type Cast = {
   bio: string;
   acceptsNomination: boolean;
   sortOrder: number;
+  userId: string | null;
 };
 
 /** キャストの出勤枠。 */

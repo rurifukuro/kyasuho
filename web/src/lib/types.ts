@@ -30,6 +30,17 @@ export interface KyCast {
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
+  user_id: string | null;
+}
+
+export interface KyCastInvite {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  code: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by: string | null;
 }
 
 export interface KyShift {

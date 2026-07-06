@@ -10,6 +10,7 @@ type CastRow = {
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
+  user_id: string | null;
 };
 
 type ShiftRow = {
@@ -31,6 +32,7 @@ function rowToCast(row: CastRow): Cast {
     bio: row.bio,
     acceptsNomination: row.accepts_nomination,
     sortOrder: row.sort_order,
+    userId: row.user_id,
   };
 }
 
