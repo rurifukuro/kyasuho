@@ -17,6 +17,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
+import CalendarModal from '../components/CalendarModal';
 import * as profileService from '../services/castProfile';
 import type { CastPersonalInfo, AccountType } from '../types';
 
@@ -53,6 +54,8 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
   const [availableFrom, setAvailableFrom] = useState('');
   const [qualifications, setQualifications] = useState('');
   const [specialNotes, setSpecialNotes] = useState('');
+  const [showDobPicker, setShowDobPicker] = useState(false);
+  const [showAvailPicker, setShowAvailPicker] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -158,7 +161,7 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
             <SectionHeader title={t('personalInfo.sectionBasic')} theme={theme} />
             <Field label={t('personalInfo.fullName')} value={fullName} onChange={setFullName} theme={theme} />
             <Field label={t('personalInfo.furigana')} value={furigana} onChange={setFurigana} theme={theme} />
-            <Field label={t('personalInfo.dateOfBirth')} value={dateOfBirth} onChange={setDateOfBirth} theme={theme} placeholder="1990-01-15" />
+            <DatePickerField label={t('personalInfo.dateOfBirth')} value={dateOfBirth} onPress={() => setShowDobPicker(true)} theme={theme} />
             <Field label={t('personalInfo.gender')} value={gender} onChange={setGender} theme={theme} />
             <Field label={t('personalInfo.address')} value={address} onChange={setAddress} theme={theme} multiline />
             <Field label={t('personalInfo.phone')} value={phone} onChange={setPhone} theme={theme} keyboardType="phone-pad" />
@@ -203,7 +206,7 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
             <SectionHeader title={t('personalInfo.sectionWork')} theme={theme} />
             <Field label={t('personalInfo.desiredDays')} value={desiredDays} onChange={setDesiredDays} theme={theme} keyboardType="numeric" />
             <Field label={t('personalInfo.desiredHours')} value={desiredHours} onChange={setDesiredHours} theme={theme} placeholder={t('personalInfo.desiredHoursPlaceholder')} />
-            <Field label={t('personalInfo.availableFrom')} value={availableFrom} onChange={setAvailableFrom} theme={theme} placeholder="2026-08-01" />
+            <DatePickerField label={t('personalInfo.availableFrom')} value={availableFrom} onPress={() => setShowAvailPicker(true)} theme={theme} />
             <Field label={t('personalInfo.qualifications')} value={qualifications} onChange={setQualifications} theme={theme} multiline />
             <Field label={t('personalInfo.specialNotes')} value={specialNotes} onChange={setSpecialNotes} theme={theme} multiline />
 
@@ -222,6 +225,19 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
         )}
       </KeyboardAvoidingView>
       <KeyboardDoneBar theme={theme} />
+      <CalendarModal
+        visible={showDobPicker}
+        value={dateOfBirth}
+        onSelect={setDateOfBirth}
+        onClose={() => setShowDobPicker(false)}
+        maximumDate={new Date()}
+      />
+      <CalendarModal
+        visible={showAvailPicker}
+        value={availableFrom}
+        onSelect={setAvailableFrom}
+        onClose={() => setShowAvailPicker(false)}
+      />
     </View>
   );
 }
@@ -268,6 +284,32 @@ function Field({
         keyboardType={keyboardType ?? 'default'}
         autoCapitalize="none"
       />
+    </View>
+  );
+}
+
+function DatePickerField({
+  label,
+  value,
+  onPress,
+  theme,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  theme: { text: string; subtext: string; border: string; card: string };
+}) {
+  return (
+    <View style={st.field}>
+      <Text style={[st.fieldLabel, { color: theme.text }]}>{label}</Text>
+      <TouchableOpacity
+        style={[st.input, { borderColor: theme.border, backgroundColor: theme.card, justifyContent: 'center' }]}
+        onPress={onPress}
+      >
+        <Text style={{ color: value ? theme.text : theme.subtext, fontSize: 15 }}>
+          {value || '—'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }

@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
-  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,9 +14,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useTenant } from '../context/TenantContext';
 import { THEMES } from '../types';
-import { CONTACT_EMAIL } from '../config/contact';
 import TermsOfUseModal from '../components/TermsOfUseModal';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
+import ContactFormModal from '../components/ContactFormModal';
 import DeleteAccountModal from '../components/DeleteAccountModal';
 import StoreProfileModal from '../components/StoreProfileModal';
 import PcWorkModal from '../components/PcWorkModal';
@@ -35,6 +34,7 @@ export function SettingsScreen() {
   const [showDelete, setShowDelete] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showPcWork, setShowPcWork] = useState(false);
+  const [showContact, setShowContact] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -42,10 +42,6 @@ export function SettingsScreen() {
       { text: t('settings.signOut'), style: 'destructive', onPress: () => signOut() },
     ]);
   }, [t, signOut]);
-
-  const handleContact = useCallback(() => {
-    Linking.openURL(`mailto:${CONTACT_EMAIL}`);
-  }, []);
 
   const themeKeys = Object.keys(THEMES);
 
@@ -112,8 +108,7 @@ export function SettingsScreen() {
             icon="email-outline"
             label={t('contact.label')}
             theme={theme}
-            onPress={handleContact}
-            detail={CONTACT_EMAIL}
+            onPress={() => setShowContact(true)}
           />
         </View>
 
@@ -181,6 +176,7 @@ export function SettingsScreen() {
 
       <TermsOfUseModal visible={showTerms} onClose={() => setShowTerms(false)} />
       <PrivacyPolicyModal visible={showPrivacy} onClose={() => setShowPrivacy(false)} />
+      <ContactFormModal visible={showContact} onClose={() => setShowContact(false)} />
       <DeleteAccountModal visible={showDelete} onClose={() => setShowDelete(false)} />
       <StoreProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
       <PcWorkModal visible={showPcWork} onClose={() => setShowPcWork(false)} />
