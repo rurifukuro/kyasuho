@@ -98,7 +98,9 @@ export default function AdminApp() {
   return (
     <Routes>
       <Route element={<AdminLayout tenant={tenant} />}>
-        <Route index element={<Navigate to="reservations" replace />} />
+        {/* /admin/* スプラット配下では相対 to がスプラット消費分を基準に解決され
+            /admin/reservations/schedule/... と無限連結するため、Navigate/NavLink は絶対パス固定 */}
+        <Route index element={<Navigate to="/admin/reservations" replace />} />
         <Route path="reservations" element={<AdminReservations tenant={tenant} />} />
         <Route path="schedule" element={<AdminSchedule tenant={tenant} />} />
         <Route path="casts" element={<AdminCasts tenant={tenant} />} />
@@ -106,7 +108,7 @@ export default function AdminApp() {
         <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
         <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
         <Route path="shift-image" element={<AdminShiftImage tenant={tenant} />} />
-        <Route path="*" element={<Navigate to="reservations" replace />} />
+        <Route path="*" element={<Navigate to="/admin/reservations" replace />} />
       </Route>
     </Routes>
   );
