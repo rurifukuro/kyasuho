@@ -33,7 +33,7 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
-            to={item.path}
+            to={`/admin/${item.path}`}
             className={({ isActive }) => `admin-nav-link${isActive ? ' active' : ''}`}
           >
             {item.label}

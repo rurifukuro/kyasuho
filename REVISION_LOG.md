@@ -472,3 +472,30 @@ SPEC §5実装順序14。管理Webの「準備中」3ルートを実画面へ差
 - `npx tsc --noEmit` EXIT:0（G1・G2）
 - エミュ実機（G4）：未確認アカウントでログイン→新文言表示を確認。サインアップ→「確認メールを送信しました」表示・空欄バリデーション・ログイン/新規登録切替も同スモークで確認済み
 - スモーク時の確認事実：`ensureTenant`は設計どおり「セッション確立後に作成」＝confirm前に`ky_tenants` 0行は正常（tenants.tsコメントに明記済みの挙動）
+
+---
+
+## Rev21（2026-07-06）Web公開＝GitHub Pages（客側＋管理Web・ユーザー承認済み）
+
+ユーザー承認「1と2を自走で行うことを承認します」に基づき、客側予約Web＋提供者管理Webを公開。
+
+- **公開リポジトリ作成**：`rurifukuro/kyasuho`（public・GitHub API・rurifukuro垢を`/user`で確認してから作成。日本語入りJSONはbash curlで壊れたためPython urllib版で実行＝HTTP 201）
+- **push＋Pages有効化**：web/一式＋`.github/workflows/deploy.yml`（eb776f8）→ `POST /repos/.../pages` `build_type=workflow`
+- **CI失敗→修正**：`npm run build`（tsc -b）が `vite.config.ts(6,9) TS2580: Cannot find name 'process'` で失敗（CIは`npm ci`で@types/node無し・ローカルWindowsでは顕在化せず）→ **`web/vite.config.ts` を loadEnv 方式へ置換**（process参照除去。deploy repo側コミット f8c69a4）→ Actions success
+- **実HTTP検証（WEB5）**：`https://rurifukuro.github.io/kyasuho/` → **HTTP 200**・title「きゃすりん - 予約」・アセット `/kyasuho/assets/`＝`VITE_BASE_PATH=/kyasuho/` 反映を確認
+- **auth.users confirm（承認1）**：スモークアカウント `tiashe8730+kysmoke0706@gmail.com` の `email_confirmed_at` を単文SQLで更新（対象1行・`db query --linked`）→検証SELECTで `confirmed: true`
+- **運用確定**：デプロイ用cloneは `..\kyasuho-web-deploy\`（ソースの正は本体 `web/`。更新フローは `WORK_PROGRESS.md` §2）
+- **`WORK_PROGRESS.md` 新規作成**：Opus向け引き継ぎ指示書（W3形式・T1アイコン/T2通知/T3 IAP/T4客Web拡張/T5ストア準備/T6文言/T7 Supabase分離）
+- **公開後スモークで管理Webルーティングバグ発見→修正**：受付設定クリックで URL が `#/admin/reservations/schedule/reservations/…` と無限連結し画面が空白化。原因は `/admin/*` スプラットルート配下では相対 `to` がスプラット消費分（現URL全体）基準で解決される React Router の仕様。ナビ7項目（`AdminLayout.tsx`）と index/catch-all リダイレクト（`AdminApp.tsx`）を絶対パス `/admin/<path>` へ変更（tsc PASS・deploy repo コミット 1656ab3）。ローカル開発時は予約台帳（index リダイレクト＝スプラット消費ゼロで正常解決）しか確認しておらず見逃した
+
+### 検証
+- Actions run（head=f8c69a4）：status=completed / conclusion=success
+- 実HTTP：200（index.html取得・title/アセットパス確認）
+- 管理Web実URLスモーク（2026-07-06）:
+  - ログイン（kysmoke0706）→「スモーク検証店」・ナビ7項目・予約台帳表示 PASS
+  - **公開後スモークでルーティングバグ発見→修正→再デプロイ（1656ab3・Actions success・ハードリロードで反映確認）**。修正後ナビ全7項目の href が絶対パス化
+  - 受付設定: 受付枠追加（18:00〜22:00・8席・60分）→枠テーブル反映 PASS
+  - 客Web `#/shop-kysmoke`: カレンダー〇→スロット19個（18:00〜21:00＝〆切−1セットの計算正常）→予約（スモーク太郎・PIN 0706）→「予約が完了しました・席番号: 1」PASS（`ky_make_reservation` RPC・席自動割当・PIN発行）
+  - **Realtime実動 PASS（§24）**: 管理タブ無操作・リロード無しで台帳が「有効な予約 1 件／18:00 1番 スモーク太郎 予約中」へ自動更新
+  - クリーンアップ: スモークテナント `is_suspended=true`（テナント・枠・予約の行はアプリ実機スモーク再利用のため残置）・一時SQL 2本削除
+- エミュ実機スモーク（アプリ側 ensureTenant→5タブ）は未実施＝エミュはお品書きメーカー（別セッション）使用中のため **Opus 引き継ぎ**（WORK_PROGRESS.md §1）
