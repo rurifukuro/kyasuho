@@ -65,6 +65,12 @@ function currentMonth(): string {
   return formatDate(new Date()).slice(0, 7);
 }
 
+function shiftDay(date: string, delta: number): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() + delta);
+  return formatDate(d);
+}
+
 function shiftMonth(yearMonth: string, delta: number): string {
   const [y = 0, m = 0] = yearMonth.split('-').map(Number);
   const total = y * 12 + (m - 1) + delta;
@@ -98,6 +104,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [favorites, setFavorites] = useState<KyShiftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
+  const [dailyDate, setDailyDate] = useState(formatDate(new Date()));
 
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [ov, setOv] = useState<ShiftOverrides>({});
@@ -139,21 +148,25 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     void load();
   }, [load]);
 
-  const castNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of casts) map.set(c.id, c.name);
+  const castById = useMemo(() => {
+    const map = new Map<string, KyCast>();
+    for (const c of casts) map.set(c.id, c);
     return map;
   }, [casts]);
 
   const days = useMemo(() => {
-    const flatRows = shifts.map((s) => ({
-      date: s.date,
-      castName: castNameById.get(s.cast_id) ?? '？',
-      start: s.start_at,
-      end: s.end_at,
-    }));
+    const flatRows = shifts.map((s) => {
+      const cast = castById.get(s.cast_id);
+      return {
+        date: s.date,
+        castName: cast?.name ?? '？',
+        start: s.start_at,
+        end: s.end_at,
+        photoUrl: cast?.photo_url ?? null,
+      };
+    });
     return buildShiftDays(flatRows, yearMonth);
-  }, [shifts, castNameById, yearMonth]);
+  }, [shifts, castById, yearMonth]);
 
   const base =
     aiDef && templateId === aiDef.id ? aiDef : (findTemplate(templateId) ?? DEFAULT_TEMPLATE);
@@ -169,14 +182,15 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     if (ov.accent) palette.accent = ov.accent;
     if (ov.headerText) palette.headerText = ov.headerText;
     if (ov.castName) palette.castName = ov.castName;
+    const layout = viewMode === 'daily' ? 'daily-lineup' as const : (ov.layout ?? base.layout);
     return {
       ...base,
       size,
       palette,
-      layout: ov.layout ?? base.layout,
+      layout,
       decorations: { ...base.decorations, motif: ov.motif ?? base.decorations.motif ?? 'none' },
     };
-  }, [base, ov, aspect]);
+  }, [base, ov, aspect, viewMode]);
 
   const hasCustom = Object.keys(ov).length > 0;
 
@@ -193,7 +207,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `kyasuho_shift_${yearMonth}.png`;
+      a.download = viewMode === 'daily'
+        ? `kyasuho_daily_${dailyDate}.png`
+        : `kyasuho_shift_${yearMonth}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -288,17 +304,66 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     <div>
       <h2 className="admin-page-title">シフト表作成</h2>
 
+      <div className="admin-btn-row" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          className={`admin-btn${viewMode === 'monthly' ? ' primary' : ''}`}
+          onClick={() => setViewMode('monthly')}
+        >
+          月間シフト表
+        </button>
+        <button
+          type="button"
+          className={`admin-btn${viewMode === 'daily' ? ' primary' : ''}`}
+          onClick={() => setViewMode('daily')}
+        >
+          デイリー出勤表
+        </button>
+      </div>
+
       <div className="admin-date-nav">
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, -1))}>
-          ◀ 前月
-        </button>
-        <input type="month" value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} />
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, 1))}>
-          翌月 ▶
-        </button>
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(currentMonth())}>
-          今月
-        </button>
+        {viewMode === 'monthly' ? (
+          <>
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, -1))}>
+              ◀ 前月
+            </button>
+            <input type="month" value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} />
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, 1))}>
+              翌月 ▶
+            </button>
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(currentMonth())}>
+              今月
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="admin-btn" onClick={() => {
+              const nd = shiftDay(dailyDate, -1);
+              setDailyDate(nd);
+              setYearMonth(nd.slice(0, 7));
+            }}>
+              ◀ 前日
+            </button>
+            <input type="date" value={dailyDate} onChange={(e) => {
+              setDailyDate(e.target.value);
+              setYearMonth(e.target.value.slice(0, 7));
+            }} />
+            <button type="button" className="admin-btn" onClick={() => {
+              const nd = shiftDay(dailyDate, 1);
+              setDailyDate(nd);
+              setYearMonth(nd.slice(0, 7));
+            }}>
+              翌日 ▶
+            </button>
+            <button type="button" className="admin-btn" onClick={() => {
+              const today = formatDate(new Date());
+              setDailyDate(today);
+              setYearMonth(today.slice(0, 7));
+            }}>
+              今日
+            </button>
+          </>
+        )}
         <span className="admin-spacer" />
         <button
           type="button"
@@ -325,7 +390,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
+              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} />
             </div>
           </div>
           <p className="admin-note">
@@ -436,25 +501,27 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               </div>
             </div>
 
-            <div className="shift-control-row">
-              <span className="shift-control-label">レイアウト</span>
-              <div className="admin-btn-row">
-                <button
-                  type="button"
-                  className={`admin-btn${def.layout === 'month-grid' ? ' primary' : ''}`}
-                  onClick={() => setOv((o) => ({ ...o, layout: 'month-grid' }))}
-                >
-                  月間カレンダー
-                </button>
-                <button
-                  type="button"
-                  className={`admin-btn${def.layout === 'week-rows' ? ' primary' : ''}`}
-                  onClick={() => setOv((o) => ({ ...o, layout: 'week-rows' }))}
-                >
-                  週別リスト
-                </button>
+            {viewMode === 'monthly' ? (
+              <div className="shift-control-row">
+                <span className="shift-control-label">レイアウト</span>
+                <div className="admin-btn-row">
+                  <button
+                    type="button"
+                    className={`admin-btn${def.layout === 'month-grid' ? ' primary' : ''}`}
+                    onClick={() => setOv((o) => ({ ...o, layout: 'month-grid' }))}
+                  >
+                    月間カレンダー
+                  </button>
+                  <button
+                    type="button"
+                    className={`admin-btn${def.layout === 'week-rows' ? ' primary' : ''}`}
+                    onClick={() => setOv((o) => ({ ...o, layout: 'week-rows' }))}
+                  >
+                    週別リスト
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="shift-control-row">
               <span className="shift-control-label">モチーフ</span>
@@ -588,7 +655,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             type="button"
             className="admin-btn primary"
             onClick={() => {
-              const text = buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = viewMode === 'daily'
+                ? buildDailyPostText(dailyDate, days, tenant.slug)
+                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
               window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank');
             }}
           >
@@ -598,7 +667,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             type="button"
             className="admin-btn"
             onClick={() => {
-              const text = buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = viewMode === 'daily'
+                ? buildDailyPostText(dailyDate, days, tenant.slug)
+                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
               void navigator.clipboard.writeText(text).then(() => window.alert('投稿文をコピーしました'));
             }}
           >
@@ -610,7 +681,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
-          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
+          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} />
         </div>
       </div>
     </div>
@@ -633,6 +704,23 @@ function buildWebPostText(
   const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
   const lines = [`${monthLabel}のシフトが出ました！`];
   if (names) lines.push(`出勤キャスト: ${names}`);
+  lines.push('');
+  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
+  return lines.join('\n');
+}
+
+function buildDailyPostText(
+  date: string,
+  days: import('../shiftTemplates/shiftData').ShiftDayData[],
+  slug: string,
+): string {
+  const [, m, d] = date.split('-').map(Number);
+  const wd = ['日', '月', '火', '水', '木', '金', '土'][new Date(date).getDay()]!;
+  const dayData = days.find(dd => dd.date === date);
+  const names = dayData?.casts.map(c => c.name).join('・') ?? '';
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
+  const lines = [`本日 ${m}/${d}(${wd}) の出勤キャスト`];
+  if (names) lines.push(names);
   lines.push('');
   lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
   return lines.join('\n');

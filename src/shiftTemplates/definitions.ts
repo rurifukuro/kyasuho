@@ -26,7 +26,7 @@ export type ShiftFontKey = 'sans-jp' | 'serif-jp' | 'rounded-jp';
 
 export type ShiftHeaderStyle = 'ribbon' | 'plain' | 'underline';
 
-export type ShiftLayout = 'month-grid' | 'week-rows';
+export type ShiftLayout = 'month-grid' | 'week-rows' | 'daily-lineup';
 
 export type ShiftPalette = {
   bg: string;
