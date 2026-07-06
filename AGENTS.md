@@ -36,7 +36,12 @@
 - [ ] §3-H 勤怠管理: 欠勤/遅刻/早退/代打の記録・月次集計 ★（§23）
 - [ ] §3-I シフト表生成: テンプレート20種＋AIデザイン→画像出力・共有 ★（エンジン=§22・Web正準）
 - [ ] §3-J 提供者管理Web(PC): #/admin・同一Auth/RLS・予約/受付/キャスト/売上/給与/勤怠/CSV/シフト表 ★（§21）
-- [ ] §3-K オーダー管理: メニューCRUD/伝票open→明細→会計→closed/ky_sales自動upsert(entry_mode)/給与ドリンクプリフィル/AdminOrders・AdminMenu ★（詳細=§25・レジさぽっ！RegisterScreen流用）
+- [ ] §3-K オーダー管理: メニューCRUD/伝票open→明細→会計→closed/**お客様名入力欄・一時保存ボタン**/ky_sales自動upsert(entry_mode)/給与ドリンクプリフィル/AdminOrders・AdminMenu ★（詳細=§25・レジさぽっ！RegisterScreen流用）
+- [ ] §27 経費・確定申告補助: ky_expenses/カテゴリ別集計/月次収支/年次サマリ/経費CSV/AdminExpenses ★（税務助言はしない）
+- [ ] §28 是正パック: 日付チップ折返し修正/「客」→「お客様」/ContactFormModal流用差替え/生年月日ホイールピッカー/手動予約追加に指名ドロップダウン/ky_casts.name_kana＋あいうえお順 ★
+- [ ] §29 席種・席料: ky_seat_types CRUD＋席料入力/客Web席種ドロップダウン/伝票へ席料自動明細 ★
+- [ ] §30 キャスト写真: 証明写真＋お店写真/Storage ky-cast-photos/管理側差替え/離脱時自動削除(ky-cast-leave)/PP改訂 ★
+- [ ] §31 シフト表SNS投稿: ky_tenants.sns_links/X intent・Instagram起動/投稿文テンプレ＋予約URL差し込み ★
 - [ ] §24 連携: アプリ「PCで作業」導線・Web台帳Realtime・plan共有 ★
 - [ ] §3-G 設定: Auth(Supabase)/アカウント削除/店プロフィール/規約・PP/通報・ブロック/IAP(OFF)/言語/バージョン/ダークモード ★
 - [ ] 基盤: マルチテナント(tenant_id+RLS)/TypeScript strict/i18n(t()経由)/FONT-JP
