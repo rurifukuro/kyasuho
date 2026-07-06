@@ -36,6 +36,7 @@
 - [ ] §3-H 勤怠管理: 欠勤/遅刻/早退/代打の記録・月次集計 ★（§23）
 - [ ] §3-I シフト表生成: テンプレート20種＋AIデザイン→画像出力・共有 ★（エンジン=§22・Web正準）
 - [ ] §3-J 提供者管理Web(PC): #/admin・同一Auth/RLS・予約/受付/キャスト/売上/給与/勤怠/CSV/シフト表 ★（§21）
+- [ ] §3-K オーダー管理: メニューCRUD/伝票open→明細→会計→closed/ky_sales自動upsert(entry_mode)/給与ドリンクプリフィル/AdminOrders・AdminMenu ★（詳細=§25・レジさぽっ！RegisterScreen流用）
 - [ ] §24 連携: アプリ「PCで作業」導線・Web台帳Realtime・plan共有 ★
 - [ ] §3-G 設定: Auth(Supabase)/アカウント削除/店プロフィール/規約・PP/通報・ブロック/IAP(OFF)/言語/バージョン/ダークモード ★
 - [ ] 基盤: マルチテナント(tenant_id+RLS)/TypeScript strict/i18n(t()経由)/FONT-JP
@@ -46,7 +47,7 @@
 
 ## ゲート①: §9（タブUI／ナビ部品）
 - [ ] BottomTab は `@expo/vector-icons` MaterialCommunityIcons（絵文字直書き禁止＝Android文字化け）
-- [ ] 各タブ `tabBarIcon` 必須・固定名: 予約=`calendar-check` / 受付=`clock-edit` / キャスト=`account-star` / 分析=`chart-box` / 設定=`cog`
+- [ ] 各タブ `tabBarIcon` 必須・固定名: 予約=`calendar-check` / レジ=`cash-register` / 受付=`clock-edit` / キャスト=`account-star` / 分析=`chart-box` / 設定=`cog`
 - [ ] `tabBarLabel` は i18n 経由テキストのみ
 
 ## ゲート②: §11（流用 components の実体照合）

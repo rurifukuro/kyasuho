@@ -1,7 +1,7 @@
 # きゃすりん 仕様書（SPEC）
 
-- 作成日: 2026-07-03 ／ 最終改訂: 2026-07-05（**三面構成へ改訂**＝提供者アプリ＋提供者管理Web(PC)＋客Web。競合価格調査反映）
-- ステータス: **実装進行中（Rev12まで完了＝アプリ基盤/認証/受付設定/予約台帳/キャスト管理/通知/UGC/法務/設定/客Web予約。Phase -1法務ゲート＝条件付きGo通過済み）**
+- 作成日: 2026-07-03 ／ 最終改訂: 2026-07-06（**オーダー管理・レジ機能を追加**＝§3-K/§25。機能ギャップ棚卸し§26新設・キャストアカウント実装済み分をSPECへ反映）
+- ステータス: **実装進行中（Rev25まで完了＝MVP実装順序1〜17全部＋キャストアカウント基盤（2系統ログイン・招待コード・ロール分岐・パスワードリセット・T13〜T18 UI）。次フェーズ＝オーダー管理§25）**
 - ベースアプリ: **concafe-yoyaku**（予約ロジック・客側Web）＋ **とれはんっ！/レジさぽっ！**（UI共有部品・UGC 4要件・i18n・IAP）を流用
 - アプリID（ASC）: 6787006154 ／ Bundle ID: `com.kyasuho.app`（ロック済・R1で変更不可）
 
@@ -60,6 +60,8 @@
 - キャスト登録（名前・写真・SNSリンク・紹介文）
 - 出勤スケジュール登録（どのキャストがどの枠に出るか）
 - 指名予約の受付ON/OFF（キャスト単位）
+- ★ **キャストアカウント（実装済Rev21〜）**：オーナーが招待コード発行→キャスト本人がログイン→キャスト側ホーム（自分のシフト・給与明細閲覧・個人情報登録）。オーナーと2系統ログイン（§12）
+- ◯ キャストのシフト希望提出（キャストが希望枠を出す→店が確定。現状は店側登録のみ＝§26-8）
 - ◯ キャスト個人の予約受付ページ（キャストのSNSから直接飛ばす用）
 
 ### D. 客側公開Web｜予約受付 ★
@@ -73,12 +75,14 @@
 ### E. 通知・リマインダー ◯（一部★）
 - ★ 予約が入ったら提供者へプッシュ通知（expo-notifications）
 - ◯ 予約前日/当日に客へリマインダー（メール or 公開ページ再訪促し。※MVPはアプリ内通知＝提供者向けのみ、客向けメールは有料機能候補）
+- ◯ 予約の変更/キャンセル時の提供者プッシュ（現状は新規予約のみ＝§26-10）
 - ◯ 〆切・満席の通知
 
 ### F. 分析・売上管理 ★（詳細設計＝§23）
 - ★ 来店実績・予約数の集計（concafe-yoyaku `SalesSummary`/`TimeAllocationSummary` 相当）
 - ★ キャスト別指名数ランキング
 - ★ **店舗売上管理**（日別/月別の売上入力・集計ダッシュボード・グラフ表示）
+- ★ **オーダー由来の自動集計**（§3-K/§25＝レジ会計→日別売上へ自動反映。手入力はオーダー未使用店/日の代替入力として併存＝2026-07-06追加）
 - ★ **キャスト別給与計算**（時給×出勤時間＋指名バック＋ドリンクバック等の歩合→日/月の給与明細自動生成。計算式・設定は§23）
 - ★ **税金関連CSV出力**（売上明細/給与明細を確定申告・会計ソフト取込用にエクスポート。形式は§23＝MVPは汎用CSV＋日付/科目/金額列）
 - ◯ 売上目標設定・達成率表示
@@ -126,6 +130,17 @@
 - ◯ 通報管理（ReportInbox相当）
 - **やらないこと**：管理Webは提供者専用（客は§3-Dの公開ページのみ）。プッシュ通知はアプリ側の責務（Webはリアルタイム画面反映のみ）
 
+### K. 提供者アプリ｜オーダー管理・レジ ★【2026-07-06ユーザー指示で追加】
+**レジさぽっ！のレジ画面を参考にした店内オーダー（注文）管理。** 現状の売上管理（§3-F）は日別合計の手入力のみで**オーダー（注文）単位の記録が無い**＝このギャップを埋める（詳細設計＝§25）。
+
+- ★ メニュー登録（セット/延長/指名料/キャストドリンク/ドリンク/フード/チェキ/その他・価格）
+- ★ 伝票（来店グループ単位）＝開く→明細追加（±ステッパー）→会計（預かり金→おつり計算・支払方法記録）→締め
+- ★ キャスト紐付け明細（キャストドリンク・チェキ・指名料が「どのキャストに付いたか」を記録→給与バック自動集計＝§23）
+- ★ **売上の管理側連携**（会計確定→日別売上 `ky_sales` へ自動集計upsert→管理Webの売上/給与/CSVへ波及＝§24・§25-4）
+- ★ 予約チェックイン→伝票オープン連携（reservation_id 紐付け）
+- ◯ 卓タイマー（セット開始→残り時間表示・延長アラート）／◯ 伝票履歴の検索・当日売上ダッシュボード（管理Web・Realtime）
+- △ モバイルオーダー（客スマホからの注文）＝接客が価値のコンカフェとは相性を要検討・当面やらない
+
 ---
 
 ## 4. 技術方針（各種ルール準拠）
@@ -151,7 +166,8 @@
 **MVPの完成定義＝「店が登録→公開ページ発行→客がWebで席予約→店がアプリでもPCでも台帳確認・業務処理できる」の1周が回る。**
 
 - **MVP第1弾に含める（★）**：A（予約台帳）／B（受付設定・席・解禁/〆切・URL発行）／C（キャスト登録・出勤・指名ON/OFF）／D（客Web予約・PIN編集）／E-★（提供者への予約プッシュ）／F（売上管理・給与計算・税金CSV）／G（Auth・アカウント削除・店プロフィール・規約/PP・通報/ブロック）／H（勤怠管理）／I（シフト表画像生成）／**J（提供者管理Web＝PC作業サイト・2026-07-05ユーザー指示で必須化）**
-- **実装順序（Rev12時点の残り）**：①F/H新機能のDB＋アプリ実装 → ②管理Web J（客Webと同一リポで基盤共有＝§21）→ ③シフト表エンジン I（管理Web先行→アプリ移植）→ ④連携仕上げ（§24）
+- **MVP第2弾（2026-07-06ユーザー指示で追加）**：**K（オーダー管理・レジ＝§25）**＝アプリのレジ＋メニュー管理＋管理Webのオーダー履歴/メニュー編集＋売上自動集計連携
+- **実装順序（Rev24時点の残り＝§19の18〜21）**：⑱K-DB（ky_menu_items/ky_orders/ky_order_items＋ky_sales.entry_mode）→ ⑲アプリ：メニュー管理＋レジ画面（レジさぽっ！流用）→ ⑳売上自動集計＋給与ドリンク自動化 → ㉑管理Web：オーダー履歴・メニュー編集・当日ダッシュボード
 - **後フェーズ（◯）**：E-◯（客向けメールリマインダー）／C-◯（キャスト個人ページ）／生誕祭特設枠／経費管理／売上目標
 - **将来・任意（△）**：多言語拡張／Android版
 - **課金**：MVPはIAPフラグOFF（全無料）。§14の境界設計に沿って後付け
@@ -164,6 +180,7 @@
 - [ ] **月額サブスク価格**（§14に推奨レンジ。店舗向けSaaS＝個人向けより高め。競合コンカフェGoスタンダード¥4,800/月が参考。実額は課金前にユーザー承認＝価格判断ゲート）
 - [x] **MVPスコープの骨格**（2026-07-05ユーザー指示＝「アプリ＋PC作業サイト＋連携」の三面が必須。§5の★一式で確定。新機能F/H/I込み）
 - [ ] **i18n範囲**（MVP日本語のみ確定でよいか／訪日客向けに最初からen入れるか）
+- [ ] **オーダー機能のフリー/有料境界**（§14の表に案を1行追加済み＝基本レジは無料/全期間履歴・伝票CSVは有料。伝票履歴の保持期間・メニュー数上限をどこに置くか）
 - [ ] **弁護士確認**（❶個人情報の委託契約/規約の表明保証条項 ❷将来決済時の資金決済法＝§16）
 - [x] アプリ名クリア（J-PlatPat称呼0件＋ASC作成成功＋Web衝突なし）
 - [x] Bundle ID（com.kyasuho.app・ロック済）
@@ -220,16 +237,18 @@
 ### 9-1. 提供者iOSアプリ（BottomTabNavigator・React Navigation 7）
 
 ```
-BottomTabNavigator
+BottomTabNavigator（オーナーロール・6タブ＝2026-07-06にレジ追加）
 ├─ Reservations  📋  予約台帳（§3-A・コア）
+├─ Register      🧾  レジ・オーダー管理（§3-K/§25・2026-07-06追加）
 ├─ Schedule      🗓️  受付設定・営業日/席/解禁〆切（§3-B）
 ├─ Casts         👤  キャスト管理（§3-C）
-├─ Analytics     📊  分析（§3-F・後フェーズは空/簡易）
+├─ Analytics     📊  分析（§3-F・売上はオーダー自動集計＋手入力）
 └─ Settings      ⚙️  設定・アカウント・IAP（§3-G）
 ```
 
+- **ロール分岐（実装済Rev21〜）**：RootGate が role を解決し、owner→上記タブ／cast→`CastHomeScreen`（自分のシフト・給与・個人情報）／none→`RoleSelectScreen`（招待コード入力）
 - タブアイコンは `@expo/vector-icons` MaterialCommunityIcons（絵文字直書き禁止＝ルールTAB-ICON）
-  - 予約=`calendar-check` / 受付=`clock-edit` / キャスト=`account-star` / 分析=`chart-box` / 設定=`cog`
+  - 予約=`calendar-check` / レジ=`cash-register` / 受付=`clock-edit` / キャスト=`account-star` / 分析=`chart-box` / 設定=`cog`
 - `initialRouteName = 'Reservations'`
 - 未ログイン時は `AuthScreen`（サインアップ/ログイン）→ 完了後タブ
 - 初回ログイン後は `StoreSetupScreen`（店プロフィール＋公開URL発行ウィザード）
@@ -238,12 +257,15 @@ BottomTabNavigator
 | 画面 | 主な責務 | モーダル |
 |---|---|---|
 | **ReservationsScreen** | 日付別予約タイムライン・受付/変更/キャンセル・チェックイン・手動追加 | 予約詳細/編集（FormModalShell）、手動追加 |
+| **RegisterScreen**【§25新設】 | 伝票レーン（open伝票一覧）・メニュー±ステッパーで明細追加・会計（預かり→おつり）・売上自動集計 | CheckoutModal、ChangeResultModal、メニュー編集（FormModalShell）、伝票操作 |
 | **ScheduleScreen** | 営業日/時間/席数/1セット時間・解禁/〆切・公開URL発行/QR | 営業設定、URL/QR表示 |
 | **CastsScreen** | キャストCRUD・出勤登録・指名ON/OFF | キャスト編集（FormModalShell）、出勤カレンダー |
 | **AnalyticsScreen** | 売上入力・日/月別集計・グラフ・キャスト別給与計算・指名ランキング・CSV出力 | 売上入力モーダル、給与明細モーダル、CSV出力設定 |
 | **AttendanceScreen**（Analyticsサブ or タブ長押し） | 勤怠管理・欠勤/遅刻/早退記録・月次カレンダー・出勤率集計 | 勤怠記録モーダル |
 | **ShiftImageScreen**（Castsサブ or 長押し） | シフト表画像生成・テンプレート選択・AIデザイン・プレビュー・共有 | テンプレートギャラリー、AIプロンプト入力 |
 | **SettingsScreen** | 店プロフィール・アカウント削除・規約/PP・通報管理・IAP・言語・テーマ・バージョン | 各種モーダル |
+| **CastHomeScreen**（キャストロール・実装済Rev21〜） | キャスト本人ホーム＝自分のシフト・給与明細閲覧・個人情報登録 | 個人情報編集 |
+| **RoleSelectScreen**（ロールnone・実装済Rev21〜） | 招待コード入力→キャスト紐付け（`ky_redeem_cast_invite` RPC） | — |
 
 ### 9-2. 客側公開Web（concafe-yoyaku流用・React+Vite+HashRouter）
 
@@ -269,6 +291,7 @@ BottomTabNavigator
 │   ├─ 🗓️ 受付設定    （営業日・席数・解禁/〆切・公開URL/QR）
 │   ├─ 👤 キャスト     （CRUD・出勤スケジュール表形式一括編集）
 │   ├─ 📊 売上・給与   （売上入力・集計グラフ・給与計算・給与設定・CSV出力）
+│   ├─ 🧾 オーダー     （伝票履歴・日別明細・検索・メニュー管理・当日ダッシュボード＝§25）
 │   ├─ 🕐 勤怠        （月次カレンダー・欠勤/遅刻/早退/代打記録・出勤率）
 │   ├─ 🎨 シフト表作成 （テンプレ選択→プレビュー→カスタマイズ→AI生成→PNG DL）
 │   └─ ⚙️ 設定        （店プロフィール・規約/PP・アカウント削除）
@@ -296,7 +319,10 @@ BottomTabNavigator
 | `ky_reservations` | id, tenant_id, date, slot, seat_no, customer_name, contact, party_size, cast_id(指名), note, status, created_at | 予約本体 |
 | `ky_reservation_pins` | reservation_id, pin_hash | 4桁PIN（客の予約編集・concafe流用） |
 | `ky_attendance` | id, tenant_id, cast_id, date, status(present/late/early_leave/absent/substitute), reason, substitute_cast_id, check_in_at, check_out_at, note, created_at, updated_at | **勤怠記録**（§3-H） |
-| `ky_sales` | id, tenant_id, date, total_revenue, set_count, drink_count, nomination_count, other_revenue, note, created_at, updated_at | **日別売上**（§3-F） |
+| `ky_sales` | id, tenant_id, date, total_revenue, set_count, drink_count, nomination_count, other_revenue, note, **entry_mode('manual'/'auto')**, created_at, updated_at | **日別売上**（§3-F）。entry_mode追加（§25-4）＝'auto'行はオーダー会計が自動upsert・'manual'行は手入力で自動上書きしない（二重計上防止）。tenant_id×date UNIQUE |
+| `ky_menu_items` | id, tenant_id, category('set'/'extension'/'nomination'/'cast_drink'/'drink'/'food'/'cheki'/'other'), name, price, needs_cast(bool), sort_order, is_active | **メニューマスタ**（§3-K/§25・オーダーの商品台帳） |
+| `ky_orders` | id, tenant_id, biz_date, seat_no, reservation_id(null可), customer_label, status('open'/'closed'/'void'), opened_at, closed_at, subtotal, deposit, change, payment_method('cash'/'card'/'qr'/'other'), note | **伝票**（§25・来店グループ単位。予約チェックインと紐付け可） |
+| `ky_order_items` | id, order_id, tenant_id, menu_item_id, name, price, qty, cast_id(null可), created_at | **オーダー明細**（§25・name/priceはスナップショット＝メニュー改定後も過去伝票不変。cast_id＝給与バック集計の源泉） |
 | `ky_cast_payroll` | id, tenant_id, cast_id, date, hours_worked, base_pay, nomination_back, drink_back, other_back, deductions, total_pay, created_at, updated_at | **キャスト日別給与**（§3-F） |
 | `ky_payroll_settings` | id, tenant_id, base_hourly_rate, nomination_back_rate, drink_back_rate, late_deduction, created_at, updated_at | **給与計算設定**（時給/バック率/遅刻控除等） |
 | `ky_shift_templates` | id, tenant_id, name, template_key, custom_settings(jsonb), logo_url, created_at | **シフト表テンプレート設定**（§3-I） |
@@ -332,6 +358,26 @@ type Reservation = {
   customerName: string; contact: string; partySize: number;
   castId: string | null; note: string; status: ReservationStatus; createdAt: string;
 };
+
+// §25 オーダー管理（2026-07-06追加）
+type MenuCategory = 'set' | 'extension' | 'nomination' | 'cast_drink' | 'drink' | 'food' | 'cheki' | 'other';
+type OrderStatus = 'open' | 'closed' | 'void';
+type PaymentMethod = 'cash' | 'card' | 'qr' | 'other';
+
+type MenuItem = {
+  id: string; tenantId: string; category: MenuCategory; name: string;
+  price: number; needsCast: boolean; sortOrder: number; isActive: boolean;
+};
+type Order = {
+  id: string; tenantId: string; bizDate: string; seatNo: number | null;
+  reservationId: string | null; customerLabel: string; status: OrderStatus;
+  openedAt: string; closedAt: string | null; subtotal: number;
+  deposit: number; change: number; paymentMethod: PaymentMethod; note: string;
+};
+type OrderItem = {
+  id: string; orderId: string; tenantId: string; menuItemId: string;
+  name: string; price: number; qty: number; castId: string | null; createdAt: string;
+};
 ```
 
 ---
@@ -354,6 +400,9 @@ type Reservation = {
 | TermsOfUseModal / PrivacyPolicyModal / ContactFormModal | とれはんっ！ | 文面をきゃすりん用（§16の表明保証条項） |
 | **通報/ブロックUI** | とれはんっ！（R28実装） | §15の4要件 |
 | 自動〆切（close_at） | レジさぽっ！ 取り置きRev13 | ScheduleScreenの〆切設定 |
+| **レジ画面（±ステッパー/カート/会計バー）** | レジさぽっ！ `src/screens/RegisterScreen.tsx` | 頒布物→メニュー・SQLite→Supabase(ky_orders)・**伝票（open→締め）概念を追加**（§25） |
+| **CheckoutModal（明細→預かり金→おつり）** | レジさぽっ！ `src/components/CheckoutModal.tsx` | 支払方法・明細UIは維持・記録先を ky_orders へ |
+| **ChangeResultModal（おつり大表示）** | レジさぽっ！ `src/components/ChangeResultModal.tsx` | そのまま |
 
 ### 客Web｜流用（concafe-yoyakuからコピー＋マルチテナント化）
 
@@ -381,6 +430,8 @@ type Reservation = {
 | AdminCsvExport | 売上/給与CSV生成→ブラウザダウンロード（§23の列仕様） |
 | AdminShiftImage | シフト表画像生成（テンプレギャラリー→プレビュー→カスタマイズ→AI→PNG DL＝§22） |
 | AdminSettings | 店プロフィール編集・規約/PP・アカウント削除 |
+| AdminOrders | 伝票履歴・日別明細ドリルダウン・検索・当日売上ダッシュボード（ky_orders Realtime購読＝§25-4） |
+| AdminMenu | メニューマスタCRUD（PC優位の一括編集＝§25） |
 
 ### 新規コンポーネント（提供者アプリ）
 
@@ -398,6 +449,8 @@ type Reservation = {
 | ReportInbox | 通報一覧・24時間以内対応（§15） |
 | DeleteAccountModal | アプリ内アカウント削除（§16・5.1.1(v)） |
 | PlanCard / SubscriptionCard | IAP購入UI（§14・MVPはフラグOFFで非表示） |
+| MenuEditModal | メニューマスタCRUD（FormModalShell・§25） |
+| OrderTicketLane | open伝票のレーン表示・新規/再開/void（§25-3） |
 
 ---
 
@@ -405,6 +458,7 @@ type Reservation = {
 
 ### 認証（Supabase Auth）
 - 提供者＝メール＋パスワードのセルフサインアップ。サインアップ直後に `ky_tenants` を1行作成し `owner_user_id` を紐付け（＝1アカウント1店舗MVP。複数店舗は有料/後フェーズ）
+- キャスト＝**招待コード方式（実装済Rev21〜）**。オーナーが招待コード発行→キャスト本人がサインアップ→コード入力（`ky_redeem_cast_invite` RPC）→ `ky_casts.user_id` 紐付け。ロール解決＝ky_tenants.owner_user_id→owner／ky_casts.user_id→cast／どちらも無し→none（RoleSelectScreen）。キャストは自分の行（シフト・給与明細）のみ self_select
 - 客＝**アカウント不要**。予約時に4桁PIN発行（concafe流用）＝ハッシュ保存し、確認/変更はPIN照合
 - セッション：`@supabase/supabase-js` の永続セッション（AsyncStorage）
 
@@ -420,6 +474,7 @@ create policy public_read_casts on ky_casts
   );
 -- 予約作成はRPC(SECURITY DEFINER)経由のみ。直INSERTはRLSで拒否
 ```
+- **オーダー系（ky_menu_items/ky_orders/ky_order_items・§25）**：オーナーのみ全操作（他テーブルと同じtenantポリシー）。キャストのアクセスは当面なし（給与は ky_cast_payroll の self_select 経由）。客Web(anon)からは不可視
 - **BE-1/BE-3準拠**：後から足す列は `writeWithDriftRetry` で42703を自動degrade。migrationは本番SQL Editor適用→REST再検証（WEB7）
 - **相乗り注意**：concafe-yoyaku本番プロジェクトに同居するので、既存 `reservations` 等とテーブル名衝突しないよう `ky_` プレフィックス必須。**本番前に専用プロジェクトへ分離**（pg_dumpで `ky_*` のみ移行）
 
@@ -451,6 +506,7 @@ create policy public_read_casts on ky_casts
 | キャスト指名予約 | △（1キャストのみ or なし） | ◯ |
 | **勤怠管理（欠勤/遅刻/早退/代打）** | ◯（基本記録のみ） | ◯（集計・CSV・代打通知） |
 | **売上管理（日別/月別入力・集計）** | △（当月のみ・グラフなし） | ◯（全期間・グラフ・比較分析） |
+| **オーダー管理（レジ・伝票・メニュー＝§25）** | ◯（基本レジ・当月伝票履歴） | ◯（全期間履歴・伝票明細CSV） |
 | **キャスト給与計算（時給×勤務＋歩合）** | ✗ | ◯ |
 | **税金関連CSV出力（売上/給与/経費）** | ✗ | ◯（弥生/freee/MFクラウド互換） |
 | **シフト表画像生成（テンプレート20種）** | ◯（透かし付き・月3回） | ◯（透かしなし・無制限） |
@@ -597,7 +653,7 @@ web/src/
 - MVP：concafe-yoyaku（ref=rhmuitgbvilqwdevxxox）に `ky_*` テーブルを migration で追加
 - 本番：専用プロジェクト作成→同じmigration→pg_dumpで `ky_*` のみ移行（kashikari/daiposの分離手順に倣う）
 
-### 9. 実装順序（1〜10は Rev12 までに完了。以下は残フェーズ＝2026-07-05改訂）
+### 9. 実装順序（1〜17は Rev24 までに完了。18〜21＝オーダー管理＝2026-07-06追加）
 1. ✅ 基盤（scaffold・git Rev1・型定義・Theme/Language/i18n・supabase・AuthContext）
 2. ✅ 認証（AuthScreen・サインアップ→テナント自動作成・RLS）
 3. ✅ 受付設定（ScheduleScreen・席/解禁/〆切・公開URL発行）
@@ -606,13 +662,20 @@ web/src/
 6. ✅ キャスト管理（CastsScreen・指名）
 7. ✅ 通知基盤（提供者への予約プッシュ）
 8. ✅ UGC 4要件 ／ 9. ✅ 法務（アカウント削除・規約/PP） ／ 10. ✅ 設定
-11. **新機能DB**（migration: ky_attendance/ky_sales/ky_cast_payroll/ky_payroll_settings/ky_shift_templates＋tenants.plan）
-12. **アプリ：売上・給与・勤怠**（AnalyticsScreen拡張＋AttendanceScreen＝§23）
-13. **管理Web基盤**（`#/admin` ルート・AdminLayout・ログイン・予約台帳/受付設定/キャスト＝既存hooksの管理版）
-14. **管理Web：売上・給与・勤怠・CSV**（PC主戦場機能＝§23）
-15. **シフト表エンジン**（テンプレ定義20種＋Webレンダラー＋PNG出力→アプリ移植＝§22）
-16. **AIデザイン生成**（Edge Function `ky-shift-design`＝§22）
-17. **連携仕上げ**（アプリ「PCで作業」導線・リアルタイム反映＝§24）・公開・スモーク
+11. ✅ **新機能DB**（migration: ky_attendance/ky_sales/ky_cast_payroll/ky_payroll_settings/ky_shift_templates＋tenants.plan）
+12. ✅ **アプリ：売上・給与・勤怠**（AnalyticsScreen拡張＋AttendanceScreen＝§23）
+13. ✅ **管理Web基盤**（`#/admin` ルート・AdminLayout・ログイン・予約台帳/受付設定/キャスト＝既存hooksの管理版）
+14. ✅ **管理Web：売上・給与・勤怠・CSV**（PC主戦場機能＝§23）
+15. ✅ **シフト表エンジン**（テンプレ定義20種＋Webレンダラー＋PNG出力→アプリ移植＝§22）
+16. ✅ **AIデザイン生成**（Edge Function `ky-shift-design`＝§22）
+17. ✅ **連携仕上げ**（アプリ「PCで作業」導線・リアルタイム反映＝§24）・公開・スモーク
+
+（＋Rev21〜24でキャストアカウント基盤＝2系統ログイン・招待コード・キャスト側ホーム・パスワードリセット・ロール分岐を追加実装済）
+
+18. **オーダーDB**（migration: ky_menu_items/ky_orders/ky_order_items＋ky_sales.entry_mode＝§25-2）
+19. **アプリ：メニュー管理＋レジ**（RegisterScreenタブ・レジさぽっ！流用・伝票open→明細→会計→closed＝§25-3）
+20. **売上自動集計＋給与連携**（ky_sales自動upsert・給与ドリンク数プリフィル＝§25-4/25-5）
+21. **管理Web：オーダー**（AdminOrders/AdminMenu・当日Realtimeダッシュボード＝§25-4）
 
 ---
 
@@ -654,6 +717,7 @@ web/src/
 | AdminCasts | useCasts/useShifts |
 | AdminSales/Payroll/Attendance | 新規（§23のサービス層をWeb版で書く・計算ロジックはアプリと同式） |
 | AdminShiftImage | §22エンジン（Web側が正準） |
+| AdminOrders/AdminMenu | 新規（§25。アプリのレジと同一テーブル ky_orders/ky_order_items/ky_menu_items を参照・当日はRealtime購読） |
 
 ---
 
@@ -702,12 +766,13 @@ type ShiftTemplateDefinition = {
 hours_worked   = ky_attendance の check_in/out から自動算出（手修正可・15分丸めなし＝分単位）
 base_pay       = hours_worked × base_hourly_rate（ky_payroll_settings の店既定時給）
 nomination_back = 当日そのキャストの指名数 × nomination_back_rate（円/件）
-drink_back     = ドリンク数 × drink_back_rate（円/杯・ドリンク数は日別手入力）
+drink_back     = ドリンク数 × drink_back_rate（円/杯・オーダー明細から自動集計＝§25-5。オーダー未使用日は手入力）
 deductions     = 遅刻控除（late_deduction 円/回・ky_attendance.status=late と連動）等
 total_pay      = base_pay + nomination_back + drink_back + other_back − deductions
 ```
 
 - 指名数は `ky_reservations`（cast_id・当日・status≠cancelled）から自動集計、手修正可
+- **ドリンク数のオーダー連携（§25-5・2026-07-06追加）**：当日 `ky_order_items`（cast_id=本人・category='cast_drink'）の qty 合計を自動プリフィル・手修正可。オーダー未使用日は従来通り手入力（後方互換）
 - MVPは**店一律時給**（ky_payroll_settings）。キャスト個別時給は後フェーズ（ky_castsに列追加で対応できる構造）
 - 月次給与明細＝日別行の集計。画面は「月×キャスト」の明細ビュー（アプリ=AnalyticsScreen内・Web=AdminPayroll）
 
@@ -742,6 +807,90 @@ total_pay      = base_pay + nomination_back + drink_back + other_back − deduct
 | **リアルタイム** | 管理Web予約台帳＝Supabase Realtime（postgres_changes・ky_reservations INSERT/UPDATE購読）で自動反映。他画面は画面遷移時再取得で十分。アプリ＝既存プッシュ通知（E-★） |
 | **時刻表現** | 'HH:MM'文字列（深夜0時起点・26:00表記なし）＝両面共通timeUtilsで統一（既にアプリ/客Webで共通） |
 | **エンティトルメント** | `ky_tenants.plan` 1箇所（§14）＝両面のゲートが同じ列を参照 |
+| **オーダー→売上（§25・2026-07-06追加）** | アプリのレジ会計確定→`ky_sales` へ日別自動upsert（entry_mode='auto'）→管理Webの売上/給与/CSVは**既存の ky_sales 参照のまま**同値連携（実装影響最小）。管理Web当日ダッシュボードは `ky_orders` のRealtime購読 |
+
+---
+
+## 25. オーダー管理・レジ機能 詳細設計（§3-K／2026-07-06新設・ユーザー指示）
+
+> **動機**：現状の売上管理（§3-F/§23）は「日別合計の手入力」のみで、**オーダー（注文）単位の記録が存在しない**。ユーザー指示＝「アプリ側にオーダーを管理する機能（レジさぽっ！のレジ画面を参考）と、その売上を管理側と連携する機能」。
+
+### 25-1. コンカフェの会計フローとレジさぽっ！との差分
+
+- レジさぽっ！＝即売会：**その場で1回会計**（カート→会計→完了）
+- コンカフェ＝**滞在型**：来店→席でセット開始→ドリンク/チェキを追加注文→退店時にまとめて会計
+- → レジさぽっ！のUI部品（±ステッパー・CheckoutModal・おつり大表示）を流用しつつ、**「開いた伝票（open）に明細をためて最後に締める（closed）」伝票ライフサイクル**を足すのが核心差分
+
+### 25-2. データモデル（§10に追加済み）
+
+- `ky_menu_items`（メニューマスタ）：category 8種＝set/extension/nomination/cast_drink/drink/food/cheki/other。`needs_cast=true` のカテゴリ（nomination/cast_drink/cheki）は明細追加時にキャスト選択チップを出す
+- `ky_orders`（伝票）：status＝open（滞在中）/closed（会計済）/void（取消）。`biz_date`＝営業日（MVPは opened_at のローカル日付。深夜跨ぎの「営業日切替時刻」設定は△後フェーズ）。`reservation_id` で予約とひも付け
+- `ky_order_items`（明細）：name/price はメニューからのスナップショット（後からメニュー価格を変えても過去伝票が不変）。`cast_id` が給与バック自動集計の源泉
+
+### 25-3. アプリUI（RegisterScreenタブ＝§9-1）
+
+1. **伝票レーン**：open伝票をカードで一覧（席番号 or 客ラベル）。「＋新規伝票」／予約台帳のチェックイン→伝票自動オープン（reservation_id・客名・指名キャストを引き継ぎ）
+2. **明細追加**：レジさぽっ！式のメニュー一覧＋±ステッパー（カテゴリ見出し・needs_cast はキャスト選択チップ）
+3. **会計**：CheckoutModal流用＝明細一覧→預かり金入力→おつり計算→支払方法（現金/カード/QR/その他）→確定→ChangeResultModal でおつり大表示
+4. 確定処理＝ky_orders を closed に→**ky_sales へ日別自動集計upsert**（§25-4）→給与のドリンク数プリフィル（§25-5）
+
+- ◯ 卓タイマー（open伝票にセット開始時刻→残り時間表示・延長アラート）＝コンカフェ実務の核だが後フェーズ（まず記録が回ってから）
+- ◯ サービス（¥0）モード＝レジさぽっ！の exchangeMode パターンを流用検討
+- ❌ **決済はしない**：現金/カード等の「記録」だけ（決済端末連携・オンライン決済は資金決済法ゲート＝§7/§16）
+
+### 25-4. 売上の管理側連携（二重計上防止の核心設計）
+
+- **真実は ky_orders**（伝票・明細）。`ky_sales` は「日別サマリのキャッシュ＋オーダー未使用店の手入力先」として併存
+- `ky_sales.entry_mode`：
+  - `'auto'`＝会計確定のたび、その営業日の closed 伝票を再集計して upsert（total_revenue/set_count/drink_count/nomination_count を category 集計から算出）
+  - `'manual'`＝従来の手入力行。**auto集計は manual 行を上書きしない**（オーダー併用店が手入力済みの日を自動で壊さない＝二重計上防止。切替は明示操作）
+  - auto行をユーザーが手修正したら `'manual'` に落とし以後自動更新を停止（画面バナーで明示）
+- `tenant_id×date` UNIQUE（1日1行）＝upsert衝突キー
+- 管理Web（AdminSales/AdminPayroll/AdminCsvExport）は**既存どおり ky_sales を参照するだけで自動連携が成立**（実装影響最小）。AdminOrders が伝票明細のドリルダウンを担当
+- Realtime：管理Webの当日ダッシュボードは ky_orders（INSERT/UPDATE）購読＝予約台帳と同パターン（§24）
+
+### 25-5. 給与連携（§23改訂）
+
+- drink_back のドリンク数＝当日 ky_order_items（cast_id=本人・category='cast_drink'）の qty 合計を自動プリフィル・手修正可
+- 指名数＝従来通り予約（ky_reservations）由来を維持（オーダーの nomination 明細は売上側にのみ計上。給与の指名数との統合は後フェーズ検討＝二重定義を避ける）
+- チェキバック＝MVPは other_back に手入力（cheki明細×レートの自動化は◯後フェーズ）
+
+### 25-6. スコープ
+
+- ★MVP第2弾（§19の18〜21）：メニューCRUD／伝票open→明細→会計→closed／ky_sales自動upsert／給与ドリンクプリフィル／AdminOrders・AdminMenu
+- ◯：卓タイマー・当日Realtimeダッシュボード・伝票検索・サービスモード・チェキバック自動化
+- △：モバイルオーダー・レシート印刷・在庫管理・営業日切替時刻・多端末同時レジ
+
+---
+
+## 26. 機能ギャップ棚卸し（2026-07-06批判的検討・アプリ/管理Web/客Web/連携の4軸）
+
+> ユーザー指示「現時点の機能から不足してるものがないか批判的に検討」の結果一覧。★=今回仕様化／◯=価値ありと判断・後フェーズ／△=将来検討／✗=やらない（理由付き）
+
+| # | ギャップ | 面 | 判定 | 対応 |
+|---|---|---|---|---|
+| 1 | **オーダー（注文）単位の記録が無い**（ky_salesは日別手入力合計のみ） | アプリ＋連携 | ★ | §25で仕様化（ユーザー指示） |
+| 2 | オーダー売上が管理Webへ流れない | 連携 | ★ | §25-4 自動upsert |
+| 3 | ドリンクバックのドリンク数が手入力 | 連携 | ★ | §25-5 自動プリフィル |
+| 4 | メニューマスタが無い | アプリ＋管理Web | ★ | ky_menu_items（§25-2） |
+| 5 | チェックイン後の店内業務が空白（チェックインで台帳の仕事が終わる） | アプリ | ★ | チェックイン→伝票オープン（§25-3） |
+| 6 | 卓のセット時間管理（残り時間・延長アラート）が無い | アプリ | ◯ | §25-3 卓タイマー（後フェーズ） |
+| 7 | 顧客台帳（リピーター・来店/指名履歴の蓄積）が無い＝予約は都度使い捨て | アプリ＋Web | ◯ | コンカフェは常連ビジネスで価値大。ただし競合コンカフェGo（CRM）の主戦場と重なる＋個人情報の保持が増える（PP改訂・保持期間設計が必要）＝**参入判断はユーザーと要相談** |
+| 8 | キャストのシフト希望提出が無い（店側登録のみ） | アプリ | ◯ | §3-C追記。キャストアカウント基盤（実装済）の上に載せられる |
+| 9 | キャスト本人の出退勤打刻が無い（勤怠は店が記録） | アプリ | ◯ | ky_attendance.check_in_at/out_at は既存＝キャスト側UIを足すだけの構造 |
+| 10 | 予約変更/キャンセル時の提供者プッシュが無い（新規予約のみ） | アプリ | ◯ | §3-E追記。通知基盤は既存＝イベント追加のみ |
+| 11 | 客向けリマインダー（前日/当日）が無い | 客Web | ◯ | 既存§3-E ◯のまま（メール送信基盤が前提＝有料機能候補） |
+| 12 | 満席時のキャンセル待ちが無い | 客Web | △ | 客向け通知基盤が前提＝#11とセットで検討 |
+| 13 | 当日売上のリアルタイムダッシュボードが無い | 管理Web | ◯ | §25-4（ky_orders購読＝既存Realtimeパターン流用） |
+| 14 | 複数端末での同時レジ操作 | アプリ | △ | MVPは1店1レジ端末想定。伝票がDB上にあるため構造的には多端末可＝競合制御は後フェーズ |
+| 15 | モバイルオーダー（客が自分のスマホで注文） | 客Web | △ | 接客が価値のコンカフェとは相性を要検討（§25-6） |
+| 16 | レシート/領収書印刷 | アプリ | △ | Bluetoothプリンタ連携は重い。MVPは画面提示＋手書き領収書運用 |
+| 17 | ドリンク等の在庫管理 | アプリ | △ | コンカフェの在庫は軽い（即売会と違い枯渇が会計を止めない）＝優先度低 |
+| 18 | 客Web予約フォームの多言語（訪日客） | 客Web | △ | §18の既存方針どおり（将来 en/zh-TW/ko） |
+| 19 | **キャストアカウント機能がSPEC未記載**（Rev21〜実装済なのに仕様書に無い＝逆ギャップ） | 仕様書 | ★是正 | §3-C/§9-1/§12へ反映済（本改訂） |
+| 20 | 決済仲介・前金 | 客Web | ✗ | 資金決済法ゲート（§7/§16）＝方針不変 |
+
+**客Web側の結論**：予約受付の1周（カレンダー→予約→PIN編集）に大穴は無し。残ギャップは「客向け通知」系（#11/#12）に集中しており、メール基盤導入（有料機能候補）とセットで後フェーズが妥当。
 
 ---
 
