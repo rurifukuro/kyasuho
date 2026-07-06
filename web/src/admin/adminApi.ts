@@ -29,7 +29,7 @@ export async function fetchOwnTenant(): Promise<KyTenant | null> {
   if (!uid) return null;
   const { data, error } = await supabase
     .from('ky_tenants')
-    .select('id, slug, name, genre, business_info, sns_links, is_suspended')
+    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended')
     .eq('owner_user_id', uid)
     .maybeSingle();
   if (error) throw error;

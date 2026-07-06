@@ -10,6 +10,9 @@ export interface KyTenant {
     note?: string;
   };
   sns_links: { platform: string; url: string }[];
+  prefecture: string;
+  area: string;
+  ranking_opt_in: boolean;
   is_suspended: boolean;
 }
 

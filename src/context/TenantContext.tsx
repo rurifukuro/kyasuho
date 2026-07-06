@@ -7,7 +7,7 @@ type TenantContextValue = {
   tenant: Tenant | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks'>>) => Promise<void>;
+  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn'>>) => Promise<void>;
 };
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -43,6 +43,9 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         ownerUserId: data.owner_user_id as string,
         businessInfo: (data.business_info ?? {}) as BusinessInfo,
         snsLinks: (data.sns_links ?? []) as TenantSnsLink[],
+        prefecture: (data.prefecture ?? '') as string,
+        area: (data.area ?? '') as string,
+        rankingOptIn: (data.ranking_opt_in ?? false) as boolean,
         isSuspended: data.is_suspended as boolean,
       });
     }
@@ -54,13 +57,16 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [load]);
 
   const updateTenant = useCallback(
-    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks'>>) => {
+    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn'>>) => {
       if (!tenant) return;
       const payload: Record<string, unknown> = {};
       if (updates.name !== undefined) payload.name = updates.name;
       if (updates.genre !== undefined) payload.genre = updates.genre;
       if (updates.businessInfo !== undefined) payload.business_info = updates.businessInfo;
       if (updates.snsLinks !== undefined) payload.sns_links = updates.snsLinks;
+      if (updates.prefecture !== undefined) payload.prefecture = updates.prefecture;
+      if (updates.area !== undefined) payload.area = updates.area;
+      if (updates.rankingOptIn !== undefined) payload.ranking_opt_in = updates.rankingOptIn;
       const { error } = await supabase.from('ky_tenants').update(payload).eq('id', tenant.id);
       if (error) throw error;
       await load();

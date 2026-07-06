@@ -40,6 +40,8 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
   const [openHours, setOpenHours] = useState('');
   const [tel, setTel] = useState('');
   const [note, setNote] = useState('');
+  const [prefecture, setPrefecture] = useState('');
+  const [area, setArea] = useState('');
   const [snsLinks, setSnsLinks] = useState<TenantSnsLink[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -51,6 +53,8 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
       setOpenHours(tenant.businessInfo.openHours ?? '');
       setTel(tenant.businessInfo.tel ?? '');
       setNote(tenant.businessInfo.note ?? '');
+      setPrefecture(tenant.prefecture);
+      setArea(tenant.area);
       setSnsLinks(tenant.snsLinks.length > 0 ? [...tenant.snsLinks] : []);
     }
   }, [visible, tenant]);
@@ -74,6 +78,8 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
           note: note.trim() || undefined,
         },
         snsLinks: validLinks.map(l => ({ platform: l.platform, url: l.url.trim() })),
+        prefecture: prefecture.trim(),
+        area: area.trim(),
       });
       onClose();
     } catch (e: unknown) {
@@ -81,7 +87,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [name, genre, address, openHours, tel, note, snsLinks, t, updateTenant, onClose]);
+  }, [name, genre, address, openHours, tel, note, prefecture, area, snsLinks, t, updateTenant, onClose]);
 
   return (
     <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
@@ -105,6 +111,8 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
         <Field label={t('settings.storeAddress')} value={address} onChangeText={setAddress} theme={theme} />
         <Field label={t('settings.storeOpenHours')} value={openHours} onChangeText={setOpenHours} theme={theme} placeholder="18:00〜24:00" />
         <Field label={t('settings.storeTel')} value={tel} onChangeText={setTel} theme={theme} keyboardType="phone-pad" />
+        <Field label={t('settings.storePrefecture')} value={prefecture} onChangeText={setPrefecture} theme={theme} placeholder={t('settings.storePrefecturePlaceholder')} />
+        <Field label={t('settings.storeArea')} value={area} onChangeText={setArea} theme={theme} placeholder={t('settings.storeAreaPlaceholder')} />
         <Field label={t('settings.storeNote')} value={note} onChangeText={setNote} theme={theme} multiline />
 
         <View style={s.snsSection}>

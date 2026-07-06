@@ -121,6 +121,9 @@ export type Tenant = {
   ownerUserId: string;
   businessInfo: BusinessInfo;
   snsLinks: TenantSnsLink[];
+  prefecture: string;
+  area: string;
+  rankingOptIn: boolean;
   isSuspended: boolean;
 };
 
