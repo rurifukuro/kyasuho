@@ -17,6 +17,7 @@ const NAV_ITEMS: { path: string; label: string }[] = [
   { path: 'attendance', label: '勤怠管理' },
   { path: 'expenses', label: '経費・収支' },
   { path: 'customers', label: '顧客管理' },
+  { path: 'cast-performance', label: 'キャスト成績' },
   { path: 'shift-image', label: 'シフト表作成' },
 ];
 
