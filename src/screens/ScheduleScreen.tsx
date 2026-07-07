@@ -95,13 +95,13 @@ export function ScheduleScreen() {
   }, [loadSeatTypes]);
 
   const handleSeatTypeSave = useCallback(
-    async (name: string, seatFee: number, id?: string) => {
+    async (name: string, seatFee: number, capacity: number, id?: string) => {
       if (!tenant) return;
       try {
         if (id) {
-          await seatTypeService.updateSeatType(id, { name, seatFee });
+          await seatTypeService.updateSeatType(id, { name, seatFee, capacity });
         } else {
-          await seatTypeService.addSeatType(tenant.id, name, seatFee);
+          await seatTypeService.addSeatType(tenant.id, name, seatFee, capacity);
         }
         setSeatTypeModalVisible(false);
         setEditingSeatType(null);
@@ -150,10 +150,10 @@ export function ScheduleScreen() {
   );
 
   const handleAdd = useCallback(
-    async (openFrom: string, closeAt: string | null, seats: number, setMinutes: number) => {
+    async (openFrom: string, closeAt: string | null, setMinutes: number) => {
       if (!tenant) return;
       try {
-        await scheduleService.addWindow(tenant.id, selectedDate, openFrom, closeAt, seats, setMinutes);
+        await scheduleService.addWindow(tenant.id, selectedDate, openFrom, closeAt, setMinutes);
         setModalVisible(false);
         await loadWindows();
       } catch (e: unknown) {
@@ -228,9 +228,6 @@ export function ScheduleScreen() {
               </View>
               <View style={s.windowMeta}>
                 <Text style={[s.windowMetaText, { color: theme.subtext }]}>
-                  {t('schedule.seats')}: {w.seats}
-                </Text>
-                <Text style={[s.windowMetaText, { color: theme.subtext }]}>
                   {t('schedule.setMinutes', { min: String(w.setMinutes) })}
                 </Text>
               </View>
@@ -271,6 +268,12 @@ export function ScheduleScreen() {
           {t('seatType.sectionTitle')}
         </Text>
 
+        {seatTypes.length > 0 && (
+          <Text style={[s.windowMetaText, { color: theme.subtext, marginBottom: 8 }]}>
+            {t('seatType.totalCapacity', { count: String(seatTypes.filter((st) => st.isActive).reduce((sum, st) => sum + st.capacity, 0)) })}
+          </Text>
+        )}
+
         {seatTypes.length === 0 ? (
           <View style={[s.emptyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             <MaterialCommunityIcons name="sofa-outline" size={28} color={theme.subtext} />
@@ -284,8 +287,11 @@ export function ScheduleScreen() {
                 <Text style={[s.windowTime, { color: st.isActive ? theme.text : theme.subtext }]}>
                   {st.name}
                 </Text>
+                <Text style={[s.windowMetaText, { color: theme.subtext, marginLeft: 8 }]}>
+                  {st.capacity}{t('schedule.seats')}
+                </Text>
                 {st.seatFee > 0 && (
-                  <Text style={[s.windowMetaText, { color: theme.subtext, marginLeft: 8 }]}>
+                  <Text style={[s.windowMetaText, { color: theme.subtext, marginLeft: 4 }]}>
                     ¥{st.seatFee.toLocaleString()}
                   </Text>
                 )}
@@ -350,7 +356,7 @@ type TFunc = (key: TKey, params?: Record<string, string | number>) => string;
 type ModalProps = {
   visible: boolean;
   onClose: () => void;
-  onAdd: (openFrom: string, closeAt: string | null, seats: number, setMinutes: number) => Promise<void>;
+  onAdd: (openFrom: string, closeAt: string | null, setMinutes: number) => Promise<void>;
   theme: ThemeColor;
   t: TFunc;
 };
@@ -360,7 +366,6 @@ function AddWindowModal({ visible, onClose, onAdd, theme, t }: ModalProps) {
   const [startM, setStartM] = useState(0);
   const [endH, setEndH] = useState(22);
   const [endM, setEndM] = useState(0);
-  const [seats, setSeats] = useState(3);
   const [setMin, setSetMin] = useState(60);
   const [useCloseAt, setUseCloseAt] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -370,7 +375,7 @@ function AddWindowModal({ visible, onClose, onAdd, theme, t }: ModalProps) {
 
   const handleSubmit = async () => {
     setSaving(true);
-    await onAdd(openFrom, closeAt, seats, setMin);
+    await onAdd(openFrom, closeAt, setMin);
     setSaving(false);
   };
 
@@ -405,9 +410,6 @@ function AddWindowModal({ visible, onClose, onAdd, theme, t }: ModalProps) {
             </View>
           </>
         )}
-
-        <Text style={[ms.label, { color: theme.subtext }]}>{t('schedule.seats')}</Text>
-        <Stepper value={seats} min={1} max={50} onChange={setSeats} theme={theme} />
 
         <Text style={[ms.label, { color: theme.subtext }]}>{t('schedule.setDuration')}</Text>
         <Stepper value={setMin} min={10} max={180} step={10} onChange={setSetMin} theme={theme} suffix={t('schedule.minutes')} />
@@ -496,7 +498,7 @@ type SeatTypeModalProps = {
   visible: boolean;
   seatType: SeatType | null;
   onClose: () => void;
-  onSave: (name: string, seatFee: number, id?: string) => Promise<void>;
+  onSave: (name: string, seatFee: number, capacity: number, id?: string) => Promise<void>;
   theme: ThemeColor;
   t: TFunc;
 };
@@ -504,12 +506,14 @@ type SeatTypeModalProps = {
 function SeatTypeModal({ visible, seatType, onClose, onSave, theme, t }: SeatTypeModalProps) {
   const [name, setName] = useState('');
   const [feeText, setFeeText] = useState('0');
+  const [capacityText, setCapacityText] = useState('1');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
       setName(seatType?.name ?? '');
       setFeeText(String(seatType?.seatFee ?? 0));
+      setCapacityText(String(seatType?.capacity ?? 1));
     }
   }, [visible, seatType]);
 
@@ -523,8 +527,13 @@ function SeatTypeModal({ visible, seatType, onClose, onSave, theme, t }: SeatTyp
       Alert.alert(t('common.error'), t('seatType.feeInvalid'));
       return;
     }
+    const cap = parseInt(capacityText, 10);
+    if (isNaN(cap) || cap < 1) {
+      Alert.alert(t('common.error'), t('seatType.capacityInvalid'));
+      return;
+    }
     setSaving(true);
-    await onSave(name.trim(), fee, seatType?.id);
+    await onSave(name.trim(), fee, cap, seatType?.id);
     setSaving(false);
   };
 
@@ -551,6 +560,16 @@ function SeatTypeModal({ visible, seatType, onClose, onSave, theme, t }: SeatTyp
           onChangeText={setFeeText}
           keyboardType="number-pad"
           placeholder="0"
+          placeholderTextColor={theme.subtext}
+        />
+
+        <Text style={[ms.label, { color: theme.subtext }]}>{t('seatType.capacity')}</Text>
+        <TextInput
+          style={[stms.input, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
+          value={capacityText}
+          onChangeText={setCapacityText}
+          keyboardType="number-pad"
+          placeholder="1"
           placeholderTextColor={theme.subtext}
         />
 

@@ -7,11 +7,12 @@ interface TimeSlotListProps {
   reservations: KyReservation[];
   casts: KyCast[];
   shifts: KyShift[];
+  totalSeats: number;
   onPickSlot: (slot: string, setMinutes: number) => void;
 }
 
-export function TimeSlotList({ date, windows, reservations, casts, shifts, onPickSlot }: TimeSlotListProps) {
-  const slots = getAvailableSlots(windows, reservations);
+export function TimeSlotList({ date, windows, reservations, casts, shifts, totalSeats, onPickSlot }: TimeSlotListProps) {
+  const slots = getAvailableSlots(windows, reservations, totalSeats);
 
   if (windows.length === 0) {
     return <p className="no-data">この日は受付枠がありません</p>;

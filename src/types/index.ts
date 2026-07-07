@@ -192,6 +192,7 @@ export type SeatType = {
   tenantId: string;
   name: string;
   seatFee: number;
+  capacity: number;
   sortOrder: number;
   isActive: boolean;
 };

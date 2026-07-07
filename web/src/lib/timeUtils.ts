@@ -53,10 +53,13 @@ export function countAvailableSeats(
 export function computeDayStatus(
   windows: KyUnlockWindow[],
   reservations: KyReservation[],
+  totalSeats?: number,
 ): DayStatus {
   if (windows.length === 0) return 'full';
+  const seats = totalSeats ?? 1;
+  if (seats < 1) return 'full';
 
-  let totalSlots = 0;
+  let totalSlotCapacity = 0;
   let freeSlots = 0;
   let anyBookable = false;
 
@@ -65,20 +68,20 @@ export function computeDayStatus(
     const wEnd = w.close_at ? slotToMinutes(w.close_at) : wStart + 480;
 
     for (let t = wStart; t + w.set_minutes <= wEnd; t += w.set_minutes) {
-      const avail = countAvailableSeats(t, t + w.set_minutes, reservations, w.seats);
-      totalSlots += w.seats;
+      const avail = countAvailableSeats(t, t + w.set_minutes, reservations, seats);
+      totalSlotCapacity += seats;
       freeSlots += Math.max(0, avail);
     }
 
     for (let t = wStart; t + w.set_minutes <= wEnd; t += TIME_STEP) {
-      if (countAvailableSeats(t, t + w.set_minutes, reservations, w.seats) > 0) {
+      if (countAvailableSeats(t, t + w.set_minutes, reservations, seats) > 0) {
         anyBookable = true;
       }
     }
   }
 
   if (!anyBookable || freeSlots <= 0) return 'full';
-  const freeRatio = totalSlots > 0 ? freeSlots / totalSlots : 1;
+  const freeRatio = totalSlotCapacity > 0 ? freeSlots / totalSlotCapacity : 1;
   if (freeRatio <= LOW_AVAILABILITY_RATIO) return 'low';
   return 'available';
 }
@@ -86,7 +89,9 @@ export function computeDayStatus(
 export function getAvailableSlots(
   windows: KyUnlockWindow[],
   reservations: KyReservation[],
+  totalSeats?: number,
 ): { slot: string; setMinutes: number; available: number; total: number }[] {
+  const seats = totalSeats ?? 1;
   const slots: { slot: string; setMinutes: number; available: number; total: number }[] = [];
 
   for (const w of windows) {
@@ -94,12 +99,12 @@ export function getAvailableSlots(
     const wEnd = w.close_at ? slotToMinutes(w.close_at) : wStart + 480;
 
     for (let t = wStart; t + w.set_minutes <= wEnd; t += TIME_STEP) {
-      const avail = countAvailableSeats(t, t + w.set_minutes, reservations, w.seats);
+      const avail = countAvailableSeats(t, t + w.set_minutes, reservations, seats);
       slots.push({
         slot: minutesToSlot(t),
         setMinutes: w.set_minutes,
         available: avail,
-        total: w.seats,
+        total: seats,
       });
     }
   }

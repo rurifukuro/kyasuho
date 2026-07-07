@@ -136,7 +136,6 @@ export async function addWindow(input: {
   date: string;
   openFrom: string;
   closeAt: string | null;
-  seats: number;
   setMinutes: number;
 }): Promise<void> {
   const { error } = await supabase.from('ky_unlock_windows').insert({
@@ -144,7 +143,7 @@ export async function addWindow(input: {
     date: input.date,
     open_from: input.openFrom,
     close_at: input.closeAt,
-    seats: input.seats,
+    seats: 0,
     set_minutes: input.setMinutes,
   });
   if (error) throw error;
@@ -770,6 +769,7 @@ export async function addSeatType(
   tenantId: string,
   name: string,
   seatFee: number,
+  capacity: number,
 ): Promise<KySeatType> {
   const { data: maxRow } = await supabase
     .from('ky_seat_types')
@@ -782,7 +782,7 @@ export async function addSeatType(
 
   const { data, error } = await supabase
     .from('ky_seat_types')
-    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, sort_order: nextOrder })
+    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, capacity, sort_order: nextOrder })
     .select()
     .single();
   if (error) throw error;
@@ -791,7 +791,7 @@ export async function addSeatType(
 
 export async function updateSeatType(
   id: string,
-  fields: Partial<{ name: string; seat_fee: number; sort_order: number; is_active: boolean }>,
+  fields: Partial<{ name: string; seat_fee: number; capacity: number; sort_order: number; is_active: boolean }>,
 ): Promise<void> {
   const { error } = await supabase.from('ky_seat_types').update(fields).eq('id', id);
   if (error) throw error;

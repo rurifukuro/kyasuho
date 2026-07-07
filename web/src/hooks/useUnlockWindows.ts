@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { DayStatus, KyReservation, KyUnlockWindow } from '../lib/types';
+import type { DayStatus, KyReservation, KySeatType, KyUnlockWindow } from '../lib/types';
 import { computeDayStatus, formatDate, getDaysInMonth } from '../lib/timeUtils';
 
 export function useUnlockWindows(tenantId: string | undefined, date: string) {
@@ -68,7 +68,7 @@ export function useMonthAvailability(
 
     setLoading(true);
     void (async () => {
-      const [winRes, resvRes] = await Promise.all([
+      const [winRes, resvRes, stRes] = await Promise.all([
         supabase
           .from('ky_unlock_windows')
           .select('date, open_from, close_at, seats, set_minutes')
@@ -82,11 +82,18 @@ export function useMonthAvailability(
           .in('status', ['reserved', 'checked_in'])
           .gte('date', startDate)
           .lte('date', endDate),
+        supabase
+          .from('ky_seat_types')
+          .select('capacity')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true),
       ]);
       if (cancelled) return;
 
       const winRows = (winRes.data ?? []) as KyUnlockWindow[];
       const resvRows = (resvRes.data ?? []) as KyReservation[];
+      const stRows = (stRes.data ?? []) as Pick<KySeatType, 'capacity'>[];
+      const totalSeats = stRows.reduce((sum, st) => sum + (st.capacity ?? 1), 0);
 
       const winsByDate = new Map<string, KyUnlockWindow[]>();
       for (const w of winRows) {
@@ -104,7 +111,7 @@ export function useMonthAvailability(
       const dates = new Set<string>(winsByDate.keys());
       const statuses = new Map<string, DayStatus>();
       for (const [d, wins] of winsByDate) {
-        statuses.set(d, computeDayStatus(wins, resvByDate.get(d) ?? []));
+        statuses.set(d, computeDayStatus(wins, resvByDate.get(d) ?? [], totalSeats));
       }
 
       setUnlockedDates(dates);

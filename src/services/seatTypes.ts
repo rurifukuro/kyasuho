@@ -6,6 +6,7 @@ type SeatTypeRow = {
   tenant_id: string;
   name: string;
   seat_fee: number;
+  capacity: number;
   sort_order: number;
   is_active: boolean;
 };
@@ -16,6 +17,7 @@ function rowToSeatType(r: SeatTypeRow): SeatType {
     tenantId: r.tenant_id,
     name: r.name,
     seatFee: r.seat_fee,
+    capacity: r.capacity,
     sortOrder: r.sort_order,
     isActive: r.is_active,
   };
@@ -36,6 +38,7 @@ export async function addSeatType(
   tenantId: string,
   name: string,
   seatFee: number,
+  capacity: number,
 ): Promise<SeatType> {
   const { data: maxRow } = await supabase
     .from('ky_seat_types')
@@ -48,7 +51,7 @@ export async function addSeatType(
 
   const { data, error } = await supabase
     .from('ky_seat_types')
-    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, sort_order: nextOrder })
+    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, capacity, sort_order: nextOrder })
     .select()
     .single();
   if (error) throw error;
@@ -57,11 +60,12 @@ export async function addSeatType(
 
 export async function updateSeatType(
   id: string,
-  fields: Partial<{ name: string; seatFee: number; sortOrder: number; isActive: boolean }>,
+  fields: Partial<{ name: string; seatFee: number; capacity: number; sortOrder: number; isActive: boolean }>,
 ): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (fields.name !== undefined) updates.name = fields.name;
   if (fields.seatFee !== undefined) updates.seat_fee = fields.seatFee;
+  if (fields.capacity !== undefined) updates.capacity = fields.capacity;
   if (fields.sortOrder !== undefined) updates.sort_order = fields.sortOrder;
   if (fields.isActive !== undefined) updates.is_active = fields.isActive;
   const { error } = await supabase.from('ky_seat_types').update(updates).eq('id', id);

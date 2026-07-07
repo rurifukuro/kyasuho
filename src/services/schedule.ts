@@ -39,7 +39,6 @@ export async function addWindow(
   date: string,
   openFrom: string,
   closeAt: string | null,
-  seats: number,
   setMinutes: number,
 ): Promise<void> {
   const { error } = await supabase.from('ky_unlock_windows').insert({
@@ -47,7 +46,7 @@ export async function addWindow(
     date,
     open_from: openFrom,
     close_at: closeAt,
-    seats,
+    seats: 0,
     set_minutes: setMinutes,
   });
   if (error) throw error;
@@ -60,10 +59,9 @@ export async function removeWindow(id: string): Promise<void> {
 
 export async function updateWindow(
   id: string,
-  updates: Partial<Pick<UnlockWindow, 'seats' | 'setMinutes' | 'closeAt'>>,
+  updates: Partial<Pick<UnlockWindow, 'setMinutes' | 'closeAt'>>,
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
-  if (updates.seats !== undefined) payload.seats = updates.seats;
   if (updates.setMinutes !== undefined) payload.set_minutes = updates.setMinutes;
   if (updates.closeAt !== undefined) payload.close_at = updates.closeAt;
   const { error } = await supabase.from('ky_unlock_windows').update(payload).eq('id', id);

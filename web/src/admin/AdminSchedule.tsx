@@ -31,7 +31,6 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
 
   const [openFrom, setOpenFrom] = useState('18:00');
   const [closeAt, setCloseAt] = useState('22:00');
-  const [seats, setSeats] = useState('8');
   const [setMinutes, setSetMinutes] = useState('60');
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -41,6 +40,7 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
   const [seatTypes, setSeatTypes] = useState<KySeatType[]>([]);
   const [stName, setStName] = useState('');
   const [stFee, setStFee] = useState('0');
+  const [stCapacity, setStCapacity] = useState('1');
   const [stEditId, setStEditId] = useState<string | null>(null);
   const [stBusy, setStBusy] = useState(false);
   const [stError, setStError] = useState<string | null>(null);
@@ -81,6 +81,7 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
   const handleStSave = async (e: FormEvent) => {
     e.preventDefault();
     const fee = parseInt(stFee, 10);
+    const cap = parseInt(stCapacity, 10);
     if (!stName.trim()) {
       setStError('席種名を入力してください。');
       return;
@@ -89,16 +90,21 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
       setStError('席料は0以上で入力してください。');
       return;
     }
+    if (isNaN(cap) || cap < 1) {
+      setStError('席数は1以上で入力してください。');
+      return;
+    }
     setStBusy(true);
     setStError(null);
     try {
       if (stEditId) {
-        await updateSeatType(stEditId, { name: stName.trim(), seat_fee: fee });
+        await updateSeatType(stEditId, { name: stName.trim(), seat_fee: fee, capacity: cap });
       } else {
-        await addSeatType(tenant.id, stName.trim(), fee);
+        await addSeatType(tenant.id, stName.trim(), fee, cap);
       }
       setStName('');
       setStFee('0');
+      setStCapacity('1');
       setStEditId(null);
       await loadSeatTypes();
     } catch (err) {
@@ -133,6 +139,7 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
     setStEditId(st.id);
     setStName(st.name);
     setStFee(String(st.seat_fee));
+    setStCapacity(String(st.capacity ?? 1));
     setStError(null);
   };
 
@@ -140,18 +147,14 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
     setStEditId(null);
     setStName('');
     setStFee('0');
+    setStCapacity('1');
     setStError(null);
   };
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
     if (addBusy) return;
-    const seatsNum = Number(seats);
     const setMinNum = Number(setMinutes);
-    if (!Number.isInteger(seatsNum) || seatsNum < 1) {
-      setAddError('席数は1以上で入力してください。');
-      return;
-    }
     if (!Number.isInteger(setMinNum) || setMinNum < 10) {
       setAddError('1セットの時間は10分以上で入力してください。');
       return;
@@ -168,7 +171,6 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
         date,
         openFrom,
         closeAt: closeAt || null,
-        seats: seatsNum,
         setMinutes: setMinNum,
       });
       await load();
@@ -278,18 +280,6 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
             />
           </div>
           <div className="admin-field">
-            <label htmlFor="win-seats">席数</label>
-            <input
-              id="win-seats"
-              type="number"
-              className="w-sm"
-              min={1}
-              value={seats}
-              onChange={(e) => setSeats(e.target.value)}
-              required
-            />
-          </div>
-          <div className="admin-field">
             <label htmlFor="win-set">1セット（分）</label>
             <input
               id="win-set"
@@ -326,7 +316,6 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
               <tr>
                 <th>受付開始</th>
                 <th>受付〆切</th>
-                <th className="num">席数</th>
                 <th className="num">1セット</th>
                 <th>操作</th>
               </tr>
@@ -336,7 +325,6 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
                 <tr key={row.id}>
                   <td>{fmtTime(row.open_from)}</td>
                   <td>{row.close_at ? fmtTime(row.close_at) : '（開始+8時間）'}</td>
-                  <td className="num">{row.seats}</td>
                   <td className="num">{row.set_minutes}分</td>
                   <td>
                     <button
@@ -384,6 +372,18 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
               required
             />
           </div>
+          <div className="admin-field">
+            <label htmlFor="st-cap">席数</label>
+            <input
+              id="st-cap"
+              type="number"
+              className="w-sm"
+              min={1}
+              value={stCapacity}
+              onChange={(e) => setStCapacity(e.target.value)}
+              required
+            />
+          </div>
           <button type="submit" className="admin-btn primary" disabled={stBusy}>
             {stBusy ? '保存中…' : stEditId ? '更新' : '席種を追加'}
           </button>
@@ -396,6 +396,12 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
         {stError ? <p className="admin-error">{stError}</p> : null}
       </form>
 
+      {seatTypes.length > 0 && (
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0' }}>
+          合計席数: {seatTypes.filter((st) => st.is_active).reduce((sum, st) => sum + (st.capacity ?? 1), 0)}席（有効な席種の合計）
+        </p>
+      )}
+
       {seatTypes.length === 0 ? (
         <div className="admin-empty">席種が登録されていません。席種を追加すると、予約時にお客様が選択できるようになります。</div>
       ) : (
@@ -404,6 +410,7 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
             <thead>
               <tr>
                 <th>席種名</th>
+                <th className="num">席数</th>
                 <th className="num">席料</th>
                 <th>状態</th>
                 <th>操作</th>
@@ -413,6 +420,7 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
               {seatTypes.map((st) => (
                 <tr key={st.id} style={st.is_active ? undefined : { opacity: 0.5 }}>
                   <td>{st.name}</td>
+                  <td className="num">{st.capacity ?? 1}</td>
                   <td className="num">{st.seat_fee > 0 ? `¥${st.seat_fee.toLocaleString('ja-JP')}` : '無料'}</td>
                   <td>
                     <button

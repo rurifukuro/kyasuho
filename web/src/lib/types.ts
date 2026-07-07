@@ -56,6 +56,7 @@ export interface KySeatType {
   tenant_id: string;
   name: string;
   seat_fee: number;
+  capacity: number;
   sort_order: number;
   is_active: boolean;
 }
