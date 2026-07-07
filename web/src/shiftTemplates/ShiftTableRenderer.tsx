@@ -573,12 +573,19 @@ function DailyLineup({
   const casts = dayData?.casts ?? [];
   const count = casts.length;
 
-  const cols = count <= 2 ? count || 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4;
   const gap = deco.cellGap + 4;
   const availW = def.size.w - PADDING * 2;
   const availH = def.size.h - PADDING * 2 - 140;
+
+  const cols = count <= 2 ? count || 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
+  const maxVisible = cols * Math.floor((availH + gap) / (Math.floor((availW - gap * (cols - 1)) / cols) * 0.7 + gap));
+  const safeMax = Math.max(cols, Math.min(count, maxVisible, 25));
+  const shown = casts.slice(0, safeMax);
+  const overflow = count - shown.length;
+
+  const visibleCount = shown.length;
   const cellW = Math.floor((availW - gap * (cols - 1)) / cols);
-  const rows = Math.ceil(count / cols) || 1;
+  const rows = Math.ceil(visibleCount / cols) || 1;
   const cellH = Math.min(Math.floor((availH - gap * (rows - 1)) / rows), cellW * 1.35);
   const photoSize = Math.min(cellW - 24, cellH - 80, 200);
 
@@ -610,7 +617,7 @@ function DailyLineup({
         justifyContent: 'center',
       }}
     >
-      {casts.map((c, i) => (
+      {shown.map((c, i) => (
         <div
           key={i}
           style={{
@@ -684,6 +691,25 @@ function DailyLineup({
           </div>
         </div>
       ))}
+      {overflow > 0 && (
+        <div
+          style={{
+            width: cellW,
+            height: cellH,
+            backgroundColor: p.cellBg,
+            border: `2px dashed ${p.accent}`,
+            borderRadius: deco.cornerRadius + 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxSizing: 'border-box',
+          }}
+        >
+          <span style={{ fontSize: 28, fontWeight: 700, color: p.accent }}>
+            +{overflow}人
+          </span>
+        </div>
+      )}
     </div>
   );
 }
