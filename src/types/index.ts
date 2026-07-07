@@ -281,6 +281,7 @@ export type Order = {
   seatNo: number | null;
   reservationId: string | null;
   customerLabel: string;
+  customerId: string | null;
   status: OrderStatus;
   openedAt: string;
   closedAt: string | null;

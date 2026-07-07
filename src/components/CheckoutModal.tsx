@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FormModalShell } from './common/FormModalShell';
 import { DiscountModal } from './DiscountModal';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-import type { OrderItem, MenuItem, PaymentMethod, ThemeColor } from '../types';
+import type { OrderItem, MenuItem, Customer, StampSettings, PaymentMethod, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 const QUICK_AMOUNTS = [100, 500, 1000, 5000, 10000];
@@ -18,13 +19,15 @@ const PAY_METHODS: { key: PaymentMethod; label: TKey }[] = [
   { key: 'other', label: 'checkout.pay.other' },
 ];
 
-export function CheckoutModal({ visible, onClose, items, discountPresets, onAddDiscount, onConfirm }: {
+export function CheckoutModal({ visible, onClose, items, discountPresets, onAddDiscount, onConfirm, customer, stampSettings }: {
   visible: boolean;
   onClose: () => void;
   items: OrderItem[];
   discountPresets: MenuItem[];
   onAddDiscount: (name: string, price: number) => Promise<void>;
   onConfirm: (subtotal: number, deposit: number, change: number, paymentMethod: PaymentMethod, note: string) => Promise<void>;
+  customer?: Customer | null;
+  stampSettings?: StampSettings | null;
 }) {
   const { theme } = useTheme();
   const { t } = useLanguage();
@@ -87,6 +90,40 @@ export function CheckoutModal({ visible, onClose, items, discountPresets, onAddD
             <Text style={[s.totalAmt, { color: theme.text }]}>¥{subtotal.toLocaleString()}</Text>
           </View>
         </View>
+
+        {customer && (
+          <View style={[s.customerInfo, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialCommunityIcons name="account" size={16} color={theme.primary} />
+              <Text style={{ color: theme.text, fontSize: 14, fontWeight: '700' }}>{customer.name}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <MaterialCommunityIcons name="stamper" size={13} color={theme.primary} />
+                <Text style={{ color: theme.primary, fontSize: 13, fontWeight: '700' }}>{customer.stampCount}</Text>
+                {stampSettings?.isActive && (
+                  <Text style={{ color: theme.subtext, fontSize: 12 }}>
+                    /{stampSettings.rewardThreshold}
+                  </Text>
+                )}
+              </View>
+              {stampSettings?.isActive && stampSettings.rewardThreshold > 0 &&
+                customer.stampCount >= stampSettings.rewardThreshold && (
+                <View style={{ backgroundColor: '#FEF3C7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{t('checkout.rewardReady')}</Text>
+                </View>
+              )}
+              {stampSettings?.isActive && stampSettings.rewardThreshold > 0 &&
+                customer.stampCount < stampSettings.rewardThreshold && (
+                <Text style={{ color: theme.subtext, fontSize: 12 }}>
+                  {t('checkout.stampRemaining', {
+                    count: String(stampSettings.rewardThreshold - customer.stampCount),
+                  })}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
 
         {negativeTotal && (
           <Text style={[s.warnText, { color: '#EF4444' }]}>{t('checkout.negativeGuard')}</Text>
@@ -189,6 +226,7 @@ function makeStyles(theme: ThemeColor) {
     headerTitle: { fontSize: 16, fontWeight: '700' },
     body: { padding: 16 },
     card: { borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 12 },
+    customerInfo: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
     lineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, gap: 8 },
     lineName: { flex: 1, fontSize: 14 },
     lineQty: { fontSize: 13, width: 36, textAlign: 'right' },

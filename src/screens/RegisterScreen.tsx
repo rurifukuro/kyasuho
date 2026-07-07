@@ -25,11 +25,13 @@ import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
 import { CheckoutModal } from '../components/CheckoutModal';
 import { ChangeResultModal } from '../components/ChangeResultModal';
 import { MenuEditModal } from '../components/MenuEditModal';
+import CustomerPickerModal from '../components/CustomerPickerModal';
 import * as ordersService from '../services/orders';
 import * as menuItemsService from '../services/menuItems';
 import { fetchCasts } from '../services/casts';
+import { fetchStampSettings } from '../services/customers';
 import { todayStr, formatYen } from './analytics/common';
-import type { Order, OrderItem, MenuItem, MenuCategory, Cast, PaymentMethod, ThemeColor } from '../types';
+import type { Order, OrderItem, MenuItem, MenuCategory, Cast, Customer, StampSettings, PaymentMethod, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 // ── カテゴリ表示順・ラベル ──
@@ -72,6 +74,9 @@ export function RegisterScreen() {
   const [changeResult, setChangeResult] = useState<{ subtotal: number; deposit: number; change: number } | null>(null);
   const [showMenuEdit, setShowMenuEdit] = useState(false);
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [stampSettings, setStampSettings] = useState<StampSettings | null>(null);
 
   const tenantId = tenant?.id ?? '';
 
@@ -101,6 +106,13 @@ export function RegisterScreen() {
     } catch (e) { console.warn('[kyasuho] loadCasts:', e); }
   }, [tenantId]);
 
+  const loadStampSettings = useCallback(async () => {
+    if (!tenantId) return;
+    try {
+      setStampSettings(await fetchStampSettings(tenantId));
+    } catch (e) { console.warn('[kyasuho] loadStampSettings:', e); }
+  }, [tenantId]);
+
   const loadOrderItems = useCallback(async (orderId: string) => {
     try {
       const data = await ordersService.fetchOrderItems(orderId);
@@ -113,8 +125,9 @@ export function RegisterScreen() {
       void loadOrders();
       void loadMenuItems();
       void loadCasts();
+      void loadStampSettings();
     }
-  }, [tenantId, loadOrders, loadMenuItems, loadCasts]);
+  }, [tenantId, loadOrders, loadMenuItems, loadCasts, loadStampSettings]);
 
   // ── 伝票操作 ──
 
@@ -125,6 +138,7 @@ export function RegisterScreen() {
       const order = await ordersService.openOrder(tenantId, { bizDate: todayStr() });
       setActiveOrderId(order.id);
       setCustomerLabel('');
+      setSelectedCustomer(null);
       setOrderItems([]);
       setView('detail');
       await loadOrders();
@@ -135,6 +149,7 @@ export function RegisterScreen() {
   const openExistingOrder = (order: Order) => {
     setActiveOrderId(order.id);
     setCustomerLabel(order.customerLabel);
+    setSelectedCustomer(null);
     void loadOrderItems(order.id);
     setView('detail');
   };
@@ -227,16 +242,42 @@ export function RegisterScreen() {
     if (activeOrderId) await loadOrderItems(activeOrderId);
   };
 
+  const handleCustomerSelect = (c: Customer) => {
+    setSelectedCustomer(c);
+    setCustomerLabel(c.name);
+    if (activeOrderId) {
+      void ordersService.updateOrderLabel(activeOrderId, c.name);
+    }
+  };
+
+  const handleCustomerClear = () => {
+    setSelectedCustomer(null);
+  };
+
   const handleCheckoutConfirm = async (
     subtotal: number, deposit: number, change: number,
     paymentMethod: PaymentMethod, note: string,
   ) => {
     if (!activeOrderId || !tenantId) return;
-    await ordersService.closeOrder(activeOrderId, tenantId, {
+    const stampResult = await ordersService.closeOrder(activeOrderId, tenantId, {
       subtotal, deposit, change, paymentMethod, note,
+      customerId: selectedCustomer?.id ?? null,
     }, orderItems);
     setShowCheckout(false);
     setChangeResult({ subtotal, deposit, change });
+
+    if (stampResult) {
+      const msg = stampResult.rewardReached
+        ? t('register.stampRewardReached', {
+            count: String(stampResult.newStampCount),
+            reward: stampResult.rewardDescription,
+          })
+        : t('register.stampAdded', {
+            added: String(stampResult.added),
+            total: String(stampResult.newStampCount),
+          });
+      setTimeout(() => Alert.alert(t('register.stampResult'), msg), 600);
+    }
   };
 
   const handleChangeResultClose = async () => {
@@ -410,6 +451,53 @@ export function RegisterScreen() {
             />
           </View>
 
+          {/* 顧客紐付け */}
+          <View style={s.section}>
+            <Text style={[s.sectionLabel, { color: theme.subtext }]}>{t('register.linkCustomer')}</Text>
+            {selectedCustomer ? (
+              <View style={[s.customerLinked, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {selectedCustomer.isBanned && (
+                      <View style={{ backgroundColor: '#FEE2E2', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>{t('customer.banned')}</Text>
+                      </View>
+                    )}
+                    <Text style={[s.linkedName, { color: theme.text }]}>{selectedCustomer.name}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <MaterialCommunityIcons name="stamper" size={13} color={theme.primary} />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.primary }}>
+                        {selectedCustomer.stampCount}
+                      </Text>
+                    </View>
+                    {stampSettings?.isActive && stampSettings.rewardThreshold > 0 &&
+                      selectedCustomer.stampCount >= stampSettings.rewardThreshold && (
+                      <View style={{ backgroundColor: '#FEF3C7', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 1 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706' }}>{t('register.rewardReady')}</Text>
+                      </View>
+                    )}
+                    <Text style={{ fontSize: 12, color: theme.subtext }}>
+                      {t('customer.visitsUnit', { count: String(selectedCustomer.totalVisits) })}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={handleCustomerClear} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <MaterialCommunityIcons name="close-circle" size={22} color={theme.subtext} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[s.linkCustomerBtn, { borderColor: theme.primary }]}
+                onPress={() => setShowCustomerPicker(true)}
+              >
+                <MaterialCommunityIcons name="account-search" size={18} color={theme.primary} />
+                <Text style={{ color: theme.primary, fontSize: 14, fontWeight: '600' }}>{t('register.selectCustomer')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
           {/* 注文内容 */}
           <View style={s.section}>
             <Text style={[s.sectionLabel, { color: theme.subtext }]}>{t('register.orderItems')}</Text>
@@ -503,6 +591,8 @@ export function RegisterScreen() {
           discountPresets={discountPresets}
           onAddDiscount={handleAddDiscount}
           onConfirm={handleCheckoutConfirm}
+          customer={selectedCustomer}
+          stampSettings={stampSettings}
         />
 
         {changeResult && (
@@ -514,6 +604,12 @@ export function RegisterScreen() {
             onClose={handleChangeResultClose}
           />
         )}
+
+        <CustomerPickerModal
+          visible={showCustomerPicker}
+          onClose={() => setShowCustomerPicker(false)}
+          onSelect={handleCustomerSelect}
+        />
       </View>
     );
   }
@@ -634,6 +730,11 @@ function makeStyles(theme: ThemeColor) {
     tempSaveBtn: { flex: 1, borderWidth: 1.5, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
     checkoutBtn: { flex: 2, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
     checkoutText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+
+    // Customer link
+    customerLinked: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, padding: 12, gap: 10 },
+    linkedName: { fontSize: 15, fontWeight: '700' },
+    linkCustomerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, alignSelf: 'flex-start' },
 
     // Menu manage
     menuManageRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, padding: 14, marginBottom: 6, gap: 10 },

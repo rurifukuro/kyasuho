@@ -541,5 +541,16 @@
   "customer.stampsPerVisit": { "ja": "1回あたりのスタンプ数" },
   "customer.rewardThreshold": { "ja": "特典に必要なスタンプ数" },
   "customer.rewardDescription": { "ja": "特典内容" },
-  "customer.rewardDescriptionPlaceholder": { "ja": "例：ドリンク1杯無料" }
+  "customer.rewardDescriptionPlaceholder": { "ja": "例：ドリンク1杯無料" },
+  "customer.pick": { "ja": "顧客を選択" },
+
+  "register.linkCustomer": { "ja": "顧客の紐付け" },
+  "register.selectCustomer": { "ja": "顧客を選択" },
+  "register.rewardReady": { "ja": "特典あり" },
+  "register.stampResult": { "ja": "スタンプ" },
+  "register.stampAdded": { "ja": "{added}個のスタンプを付与しました（合計{total}個）" },
+  "register.stampRewardReached": { "ja": "スタンプが{count}個に達しました！\n特典：{reward}" },
+
+  "checkout.rewardReady": { "ja": "特典達成！" },
+  "checkout.stampRemaining": { "ja": "あと{count}個で特典" }
 }

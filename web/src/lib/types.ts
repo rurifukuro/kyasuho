@@ -154,6 +154,7 @@ export interface KyOrder {
   seat_no: number | null;
   reservation_id: string | null;
   customer_label: string;
+  customer_id: string | null;
   status: KyOrderStatus;
   opened_at: string;
   closed_at: string | null;

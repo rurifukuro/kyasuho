@@ -1,7 +1,7 @@
 // src/services/orders.ts — 伝票・明細CRUD＋会計確定（SPEC §25・ky_orders/ky_order_items）
 
 import { supabase } from '../config/supabase';
-import type { Order, OrderItem, OrderStatus, PaymentMethod } from '../types';
+import type { Order, OrderItem, OrderStatus, PaymentMethod, StampSettings } from '../types';
 
 // ── row → domain 変換 ──
 
@@ -12,6 +12,7 @@ type OrderRow = {
   seat_no: number | null;
   reservation_id: string | null;
   customer_label: string;
+  customer_id: string | null;
   status: OrderStatus;
   opened_at: string;
   closed_at: string | null;
@@ -42,6 +43,7 @@ function rowToOrder(row: OrderRow): Order {
     seatNo: row.seat_no,
     reservationId: row.reservation_id,
     customerLabel: row.customer_label,
+    customerId: row.customer_id,
     status: row.status,
     openedAt: row.opened_at,
     closedAt: row.closed_at,
@@ -211,14 +213,22 @@ export type CloseOrderInput = {
   change: number;
   paymentMethod: PaymentMethod;
   note?: string;
+  customerId?: string | null;
 };
+
+export type StampResult = {
+  newStampCount: number;
+  added: number;
+  rewardReached: boolean;
+  rewardDescription: string;
+} | null;
 
 export async function closeOrder(
   orderId: string,
   tenantId: string,
   input: CloseOrderInput,
   items: OrderItem[],
-): Promise<void> {
+): Promise<StampResult> {
   const { error: closeErr } = await supabase
     .from('ky_orders')
     .update({
@@ -229,6 +239,7 @@ export async function closeOrder(
       change: input.change,
       payment_method: input.paymentMethod,
       note: input.note ?? '',
+      customer_id: input.customerId ?? null,
     })
     .eq('id', orderId);
   if (closeErr) throw closeErr;
@@ -242,6 +253,76 @@ export async function closeOrder(
   const bizDate = (bizDateRes.data as { biz_date: string }).biz_date;
 
   await autoUpsertSales(tenantId, bizDate);
+
+  const stampResult = await applyStamp(tenantId, input.customerId ?? null);
+  return stampResult;
+}
+
+async function applyStamp(
+  tenantId: string,
+  customerId: string | null,
+): Promise<StampResult> {
+  if (!customerId) return null;
+
+  const { data: settingsRow } = await supabase
+    .from('ky_stamp_settings')
+    .select('stamps_per_visit, reward_threshold, reward_description, is_active')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+
+  const settings = settingsRow as {
+    stamps_per_visit: number;
+    reward_threshold: number;
+    reward_description: string;
+    is_active: boolean;
+  } | null;
+
+  if (!settings || !settings.is_active) {
+    const { data: cRow } = await supabase
+      .from('ky_customers')
+      .select('total_visits')
+      .eq('id', customerId)
+      .single();
+    const currentVisits = (cRow as { total_visits: number } | null)?.total_visits ?? 0;
+    await supabase
+      .from('ky_customers')
+      .update({
+        total_visits: currentVisits + 1,
+        last_visit_date: new Date().toISOString().slice(0, 10),
+      })
+      .eq('id', customerId);
+    return null;
+  }
+
+  const { data: cRow } = await supabase
+    .from('ky_customers')
+    .select('stamp_count, total_visits')
+    .eq('id', customerId)
+    .single();
+  if (!cRow) return null;
+
+  const prev = (cRow as { stamp_count: number; total_visits: number });
+  const added = settings.stamps_per_visit;
+  const newCount = prev.stamp_count + added;
+  const rewardReached = settings.reward_threshold > 0 &&
+    prev.stamp_count < settings.reward_threshold &&
+    newCount >= settings.reward_threshold;
+
+  await supabase
+    .from('ky_customers')
+    .update({
+      stamp_count: newCount,
+      total_visits: prev.total_visits + 1,
+      last_visit_date: new Date().toISOString().slice(0, 10),
+    })
+    .eq('id', customerId);
+
+  return {
+    newStampCount: newCount,
+    added,
+    rewardReached,
+    rewardDescription: settings.reward_description,
+  };
 }
 
 // §25-5: 指定月のキャストドリンク数を「castId|date」→杯数 のマップで返す
