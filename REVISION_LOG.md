@@ -1556,6 +1556,42 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 - P3: anon ky_tenants plan UPDATE → 204（RLSで行不一致＝更新0行）
 - `npx tsc --noEmit`（アプリ）EXIT:0 ／ `npx tsc -b`（Web）EXIT:0
 
+## Rev67（2026-07-07）§22-5 モードA廃止＋モードB/C実装（空テンプレ決定論グリッド検出＋任意画像背景＋可読性ガード）
+
+**ユーザー指示:** モード A はもう廃止しよう。B のテスト用のからのテンプレートの作成と、添付の画像を用いて C のテストを行ってみて
+
+### モードA廃止
+- `AdminShiftImage.tsx` から `analyzeShiftImage` のインポートと `handleAnalyze` を除去
+- Edge Function `ky-shift-analyze` と `adminApi.ts` の `analyzeShiftImage` は未削除（将来の参考用として残置）
+- 「AIで解析」ボタンを2択ボタン（モードB/C）に置き換え
+
+### モードB: 空テンプレートのグリッド自動検出（新規ファイル）
+- **`web/src/shiftTemplates/gridDetect.ts`** 新設：`detectGridFromImage(imageUrl) → ShiftPlacement | null`
+  - 投影プロファイル方式: loadImage → 最大1200pxダウンスケール → グレースケール → 水平/垂直暗ピクセル密度ヒストグラム → ピーク検出(PEAK_RATIO=0.25) → inferGridBounds → ShiftPlacement
+  - Canvas 2D APIのみ＝依存追加なし・Edge Function不要・APIコスト0
+- テスト: 1080×1350px 空グリッドテンプレ（7列×6行）でcols=7, rows=5, hasHeaderRow=true を正確検出。gridArea座標の誤差 < 1%
+
+### モードC: 任意画像を背景に（可読性ガード）
+- **`definitions.ts`** 拡張: `ShiftPlacement` に `cellBgAlpha?: number` / `textOutline?: boolean` 追加。`defaultFreeformPlacement()` 新設（安全な既定配置）
+- **`ShiftTableRenderer.tsx`** 拡張:
+  - `cellBgWithAlpha(hex, alpha)`: hex色をrgbaに変換（セル背景の半透明化）
+  - `outlineStyle(textColor)`: 文字色の輝度から白/黒を選び4方向text-shadow生成
+  - CustomPlacement: タイトル/ヘッダー/セルの全テキストにtextShadow適用、セル背景にcellBgAlpha適用
+- **`AdminShiftImage.tsx`** UI: PlacementEditor内に「可読性ガード」セクション追加（cellBgAlphaスライダー + textOutlineチェックボックス）
+- テスト: カラフルグラデーション背景で文字の可読性を確認（4方向白text-shadow + rgba(255,255,255,0.82)セル背景）
+
+### その他
+- `ShiftTableRenderer.tsx`: ヘッダーの `padding` ↔ `paddingBottom` ショートハンド競合を個別プロパティに展開（React警告解消）
+
+### SPEC.md更新
+- §22-5タイトル/本文をモードA廃止・モードB/C実装済みに更新。参照箇所（§3-I・§19・§22）も連動更新。改訂履歴を第8次へ
+
+### 検証
+- `npx tsc -b` EXIT:0
+- ブラウザプレビュー: モードB（空テンプレ→グリッド検出→正確配置）/ モードC（写真背景→freeform配置→可読性ガード描画）両方動作確認
+
+---
+
 ## Rev66（2026-07-07）シフト表取込の改善仕様書＝SPEC §22-5新設（仕様のみ・実装なし）
 
 **ユーザー指示:** シフト表の作成について店舗の持っている空テンプレート、特定の画像を背景にシフト表を作成できるように、今のうちに修正改善の仕様書を作成しておいて

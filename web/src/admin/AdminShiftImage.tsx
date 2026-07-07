@@ -10,7 +10,6 @@ import type { KyCast, KyShift, KyShiftTemplate, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
 import {
   addShiftTemplate,
-  analyzeShiftImage,
   fetchCastList,
   fetchShiftTemplateList,
   fetchShiftsByMonth,
@@ -29,8 +28,10 @@ import {
   CATEGORY_LABELS,
   MOTIF_CHARS,
   SHIFT_TEMPLATES,
+  defaultFreeformPlacement,
   findTemplate,
 } from '../shiftTemplates/definitions';
+import { detectGridFromImage } from '../shiftTemplates/gridDetect';
 import { buildShiftDays } from '../shiftTemplates/shiftData';
 import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
@@ -314,70 +315,29 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setAspect(parsed.aspect);
   };
 
-  const handleAnalyze = async () => {
+  const handleDetectGrid = async () => {
     if (!bgImageUrl || analyzeBusy) return;
     setAnalyzeBusy(true);
     setAnalyzeError(null);
     try {
-      const raw = await analyzeShiftImage(bgImageUrl) as {
-        placement?: {
-          type?: string;
-          gridArea?: { x?: number; y?: number; w?: number; h?: number };
-          titleArea?: { x?: number; y?: number; w?: number; h?: number };
-          cols?: number;
-          rows?: number;
-          hasHeaderRow?: boolean;
-          cellBg?: string;
-          textColor?: string;
-          timeColor?: string;
-          accentColor?: string;
-        };
-      };
-      const p = raw?.placement;
-      if (!p || !p.gridArea || !p.titleArea) {
-        setAnalyzeError('AIが構造を検出できませんでした。別の画像をお試しください。');
+      const result = await detectGridFromImage(bgImageUrl);
+      if (!result) {
+        setAnalyzeError('グリッド構造を検出できませんでした。「好きな画像を背景に」モードをお試しください。');
         return;
       }
-      const clamp = (v: unknown, lo: number, hi: number, fallback: number): number => {
-        const n = typeof v === 'number' ? v : fallback;
-        return Math.max(lo, Math.min(hi, n));
-      };
-      const result: ShiftPlacement = {
-        gridArea: {
-          x: clamp(p.gridArea.x, 0, 1, 0),
-          y: clamp(p.gridArea.y, 0, 1, 0),
-          w: clamp(p.gridArea.w, 0.1, 1, 1),
-          h: clamp(p.gridArea.h, 0.1, 1, 1),
-        },
-        titleArea: {
-          x: clamp(p.titleArea.x, 0, 1, 0),
-          y: clamp(p.titleArea.y, 0, 1, 0),
-          w: clamp(p.titleArea.w, 0.05, 1, 0.3),
-          h: clamp(p.titleArea.h, 0.02, 1, 0.1),
-        },
-        cols: clamp(p.cols, 1, 14, 7),
-        rows: clamp(p.rows, 1, 10, 5),
-        hasHeaderRow: p.hasHeaderRow ?? true,
-        cellBg: typeof p.cellBg === 'string' ? p.cellBg : '#FFFFFF',
-        cellInset: 2,
-        textColor: typeof p.textColor === 'string' ? p.textColor : '#333333',
-        timeColor: typeof p.timeColor === 'string' ? p.timeColor : '#666666',
-        accentColor: typeof p.accentColor === 'string' ? p.accentColor : '#E91E63',
-      };
       setPlacement(result);
     } catch (e) {
-      console.warn('[kyasuho] analyzeShiftImage failed:', e);
-      const msg = e instanceof Error ? e.message : '';
-      setAnalyzeError(
-        msg === 'rate_limit'
-          ? '本日のAI解析回数の上限に達しました。明日またお試しください。'
-          : msg === 'global_limit'
-            ? 'ただいま混み合っています。時間をおいてお試しください。'
-            : 'AI解析に失敗しました。しばらくしてからもう一度お試しください。',
-      );
+      console.warn('[kyasuho] detectGridFromImage failed:', e);
+      setAnalyzeError('グリッド検出に失敗しました。「好きな画像を背景に」モードをお試しください。');
     } finally {
       setAnalyzeBusy(false);
     }
+  };
+
+  const handleFreeformMode = () => {
+    if (!bgImageUrl) return;
+    setAnalyzeError(null);
+    setPlacement(defaultFreeformPlacement());
   };
 
   const handleDeleteFavorite = async (fav: KyShiftTemplate) => {
@@ -682,10 +642,10 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
-              店舗テンプレート
+              背景画像
             </div>
             <p className="admin-note" style={{ marginTop: 0 }}>
-              お店の既存シフト表画像をアップロードし、AIで構造を解析してデータを重ねます。
+              画像をアップロードして、シフトデータを重ねて表示します。
             </p>
             <div className="admin-form-row">
               <input
@@ -710,31 +670,40 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                 }}
               />
               {bgImageUrl ? (
-                <>
+                <button type="button" className="admin-btn" onClick={() => { setBgImageUrl(null); setPlacement(null); setAnalyzeError(null); }}>
+                  解除
+                </button>
+              ) : null}
+            </div>
+            {bgImageUrl && !placement ? (
+              <div style={{ marginTop: 8 }}>
+                <p className="admin-note" style={{ marginTop: 0 }}>
+                  取り込みモードを選択してください。
+                </p>
+                <div className="admin-btn-row">
                   <button
                     type="button"
                     className="admin-btn primary"
                     disabled={analyzeBusy}
-                    onClick={() => void handleAnalyze()}
+                    onClick={() => void handleDetectGrid()}
                   >
-                    {analyzeBusy ? '解析中…' : 'AIで解析'}
+                    {analyzeBusy ? '検出中…' : '空テンプレート（グリッド自動検出）'}
                   </button>
-                  <button type="button" className="admin-btn" onClick={() => { setBgImageUrl(null); setPlacement(null); }}>
-                    解除
+                  <button
+                    type="button"
+                    className="admin-btn primary"
+                    onClick={handleFreeformMode}
+                  >
+                    好きな画像を背景に
                   </button>
-                </>
-              ) : null}
-            </div>
-            {analyzeError ? <p className="admin-error">{analyzeError}</p> : null}
-            {bgImageUrl && !placement ? (
-              <p className="admin-note" style={{ marginTop: 4 }}>
-                画像をアップロードしました。「AIで解析」を押すと、シフト表の構造を自動検出してデータを配置します。
-              </p>
+                </div>
+              </div>
             ) : null}
+            {analyzeError ? <p className="admin-error">{analyzeError}</p> : null}
             {placement ? (
               <div style={{ marginTop: 8 }}>
                 <p className="admin-note" style={{ marginTop: 0 }}>
-                  AIが構造を検出しました。下のスライダーで微調整できます。
+                  配置が設定されました。下のスライダーで微調整できます。
                 </p>
                 <PlacementEditor placement={placement} onChange={setPlacement} />
               </div>
@@ -924,6 +893,16 @@ function PlacementEditor({
         <label className="shift-color-item">
           アクセント
           <input type="color" value={pl.accentColor} onChange={(e) => onChange({ ...pl, accentColor: e.target.value })} />
+        </label>
+      </div>
+      <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
+        可読性ガード
+      </div>
+      <div className="placement-slider-grid">
+        <label>セル不透明度 <input type="range" min="0" max="100" value={Math.round((pl.cellBgAlpha ?? 1) * 100)} onChange={(e) => onChange({ ...pl, cellBgAlpha: Number(e.target.value) / 100 })} /> {Math.round((pl.cellBgAlpha ?? 1) * 100)}%</label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={pl.textOutline ?? false} onChange={(e) => onChange({ ...pl, textOutline: e.target.checked })} />
+          文字の縁取り（背景画像上で読みやすくする）
         </label>
       </div>
     </div>

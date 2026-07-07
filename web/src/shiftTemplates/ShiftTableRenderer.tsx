@@ -8,6 +8,23 @@
 import type { CSSProperties } from 'react';
 import type { ShiftFontKey, ShiftPlacement, ShiftTemplateDefinition } from './definitions';
 import { MOTIF_CHARS } from './definitions';
+
+function cellBgWithAlpha(hex: string, alpha?: number): string {
+  if (alpha === undefined || alpha >= 1) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  if (isNaN(r)) return hex;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function outlineStyle(color: string): string {
+  const lum = parseInt(color.slice(1, 3), 16) * 0.299
+    + parseInt(color.slice(3, 5), 16) * 0.587
+    + parseInt(color.slice(5, 7), 16) * 0.114;
+  const shadow = lum > 128 ? '#000000' : '#FFFFFF';
+  return `1px 1px 2px ${shadow}, -1px -1px 2px ${shadow}, 1px -1px 2px ${shadow}, -1px 1px 2px ${shadow}`;
+}
 import type { ShiftDayData } from './shiftData';
 import {
   WEEKDAY_LABELS,
@@ -147,11 +164,13 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
               fontWeight: 700,
               color: deco.headerStyle === 'ribbon' ? '#FFFFFF' : p.headerText,
               backgroundColor: deco.headerStyle === 'ribbon' ? p.accent : undefined,
-              padding: deco.headerStyle === 'ribbon' ? '8px 48px' : undefined,
+              paddingTop: deco.headerStyle === 'ribbon' ? 8 : undefined,
+              paddingRight: deco.headerStyle === 'ribbon' ? 48 : undefined,
+              paddingBottom: deco.headerStyle === 'ribbon' ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
+              paddingLeft: deco.headerStyle === 'ribbon' ? 48 : undefined,
               borderRadius: deco.headerStyle === 'ribbon' ? deco.cornerRadius + 6 : undefined,
               borderBottom:
                 deco.headerStyle === 'underline' ? `5px solid ${p.accent}` : undefined,
-              paddingBottom: deco.headerStyle === 'underline' ? 10 : undefined,
               lineHeight: 1.25,
             }}
           >
@@ -808,7 +827,8 @@ function CustomPlacement({
           top: titleY + inset,
           width: titleW - inset * 2,
           height: titleH - inset * 2,
-          backgroundColor: pl.cellBg,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -822,6 +842,7 @@ function CustomPlacement({
             fontWeight: 700,
             color: pl.accentColor,
             letterSpacing: 3,
+            textShadow: pl.textOutline ? outlineStyle(pl.accentColor) : undefined,
           }}
         >
           {storeName}
@@ -832,6 +853,7 @@ function CustomPlacement({
             fontWeight: 600,
             color: pl.textColor,
             marginTop: 4,
+            textShadow: pl.textOutline ? outlineStyle(pl.textColor) : undefined,
           }}
         >
           {isDaily && dailyDate
@@ -851,13 +873,14 @@ function CustomPlacement({
                 top: gridY + inset,
                 width: cellW - inset * 2,
                 height: cellH - inset * 2,
-                backgroundColor: pl.cellBg,
+                backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: Math.min(20, cellW * 0.12),
                 fontWeight: 700,
                 color: ci === 0 ? pl.accentColor : pl.textColor,
+                textShadow: pl.textOutline ? outlineStyle(ci === 0 ? pl.accentColor : pl.textColor) : undefined,
               }}
             >
               {w}
@@ -902,6 +925,7 @@ function renderMonthlyCells(
     const nameFs = Math.min(15, w * 0.085);
     const timeFs = Math.min(12, w * 0.065);
 
+    const txtShadow = pl.textOutline ? outlineStyle(pl.textColor) : undefined;
     elements.push(
       <div
         key={date}
@@ -911,7 +935,7 @@ function renderMonthlyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: pl.cellBg,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
           overflow: 'hidden',
           padding: '3px 5px',
           boxSizing: 'border-box',
@@ -923,6 +947,7 @@ function renderMonthlyCells(
             fontWeight: 700,
             color: col === 0 ? pl.accentColor : pl.textColor,
             lineHeight: 1.2,
+            textShadow: pl.textOutline ? outlineStyle(col === 0 ? pl.accentColor : pl.textColor) : undefined,
           }}
         >
           {day}
@@ -935,6 +960,7 @@ function renderMonthlyCells(
                 fontWeight: 700,
                 color: pl.textColor,
                 whiteSpace: 'nowrap',
+                textShadow: txtShadow,
               }}
             >
               {c.name}
@@ -945,6 +971,7 @@ function renderMonthlyCells(
                 color: pl.timeColor,
                 marginLeft: 3,
                 whiteSpace: 'nowrap',
+                textShadow: pl.textOutline ? outlineStyle(pl.timeColor) : undefined,
               }}
             >
               {shortRange(c.start, c.end)}
@@ -952,7 +979,7 @@ function renderMonthlyCells(
           </div>
         ))}
         {rest > 0 ? (
-          <div style={{ fontSize: timeFs, fontWeight: 700, color: pl.accentColor }}>
+          <div style={{ fontSize: timeFs, fontWeight: 700, color: pl.accentColor, textShadow: pl.textOutline ? outlineStyle(pl.accentColor) : undefined }}>
             +{rest}人
           </div>
         ) : null}
@@ -994,7 +1021,7 @@ function renderDailyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: pl.cellBg,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -1044,6 +1071,7 @@ function renderDailyCells(
             whiteSpace: 'nowrap',
             textOverflow: 'ellipsis',
             maxWidth: w - 8,
+            textShadow: pl.textOutline ? outlineStyle(pl.textColor) : undefined,
           }}
         >
           {c.name}
@@ -1053,6 +1081,7 @@ function renderDailyCells(
             marginTop: 2,
             fontSize: Math.min(14, w * 0.09),
             color: pl.timeColor,
+            textShadow: pl.textOutline ? outlineStyle(pl.timeColor) : undefined,
           }}
         >
           {shortRange(c.start, c.end)}
