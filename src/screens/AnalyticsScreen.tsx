@@ -14,16 +14,20 @@ import { SalesView } from './analytics/SalesView';
 import { PayrollView } from './analytics/PayrollView';
 import { AttendanceView } from './analytics/AttendanceView';
 import { ExpensesView } from './analytics/ExpensesView';
+import { BottleKeepView } from './analytics/BottleKeepView';
+import { VouchersView } from './analytics/VouchersView';
 import { currentYearMonth, shiftYearMonth } from './analytics/common';
 import type { TKey } from '../i18n';
 
-type Segment = 'sales' | 'payroll' | 'attendance' | 'expenses';
+type Segment = 'sales' | 'payroll' | 'attendance' | 'expenses' | 'bottle' | 'voucher';
 
 const SEGMENT_KEYS: Record<Segment, TKey> = {
   sales: 'analytics.segment.sales',
   payroll: 'analytics.segment.payroll',
   attendance: 'analytics.segment.attendance',
   expenses: 'analytics.segment.expenses',
+  bottle: 'analytics.segment.bottle',
+  voucher: 'analytics.segment.voucher',
 };
 
 const SEGMENT_ICONS: Record<
@@ -34,9 +38,13 @@ const SEGMENT_ICONS: Record<
   payroll: 'account-cash',
   attendance: 'calendar-account',
   expenses: 'receipt',
+  bottle: 'bottle-wine',
+  voucher: 'ticket-confirmation',
 };
 
-const SEGMENTS: Segment[] = ['sales', 'payroll', 'attendance', 'expenses'];
+const BASE_SEGMENTS: Segment[] = ['sales', 'payroll', 'attendance', 'expenses'];
+
+const MONTH_FREE_SEGMENTS: ReadonlySet<Segment> = new Set(['bottle', 'voucher']);
 
 export function AnalyticsScreen() {
   const { theme } = useTheme();
@@ -46,6 +54,15 @@ export function AnalyticsScreen() {
 
   const [segment, setSegment] = useState<Segment>('sales');
   const [yearMonth, setYearMonth] = useState(currentYearMonth());
+
+  const segments: Segment[] = React.useMemo(() => {
+    const list = [...BASE_SEGMENTS];
+    if (tenant?.enableBottleKeep) list.push('bottle');
+    if (tenant?.enableVouchers) list.push('voucher');
+    return list;
+  }, [tenant?.enableBottleKeep, tenant?.enableVouchers]);
+
+  const showMonthNav = !MONTH_FREE_SEGMENTS.has(segment);
 
   if (!tenant) {
     return (
@@ -67,26 +84,28 @@ export function AnalyticsScreen() {
         <Text style={[s.headerTitle, { color: theme.text }]}>{t('analytics.title')}</Text>
       </View>
 
-      {/* 月ナビゲーション */}
-      <View style={s.monthNav}>
-        <TouchableOpacity
-          onPress={() => setYearMonth(shiftYearMonth(yearMonth, -1))}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="chevron-left" size={28} color={theme.primary} />
-        </TouchableOpacity>
-        <Text style={[s.monthLabel, { color: theme.text }]}>{monthLabel}</Text>
-        <TouchableOpacity
-          onPress={() => setYearMonth(shiftYearMonth(yearMonth, 1))}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <MaterialCommunityIcons name="chevron-right" size={28} color={theme.primary} />
-        </TouchableOpacity>
-      </View>
+      {/* 月ナビゲーション（ボトル/回数券では非表示） */}
+      {showMonthNav ? (
+        <View style={s.monthNav}>
+          <TouchableOpacity
+            onPress={() => setYearMonth(shiftYearMonth(yearMonth, -1))}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="chevron-left" size={28} color={theme.primary} />
+          </TouchableOpacity>
+          <Text style={[s.monthLabel, { color: theme.text }]}>{monthLabel}</Text>
+          <TouchableOpacity
+            onPress={() => setYearMonth(shiftYearMonth(yearMonth, 1))}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <MaterialCommunityIcons name="chevron-right" size={28} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
-      {/* セグメント切替（売上/給与/勤怠） */}
+      {/* セグメント切替 */}
       <View style={[s.segmentRow, { borderColor: theme.border }]}>
-        {SEGMENTS.map((seg) => {
+        {segments.map((seg) => {
           const active = segment === seg;
           return (
             <TouchableOpacity
@@ -122,6 +141,12 @@ export function AnalyticsScreen() {
       )}
       {segment === 'expenses' && (
         <ExpensesView tenant={tenant} theme={theme} t={t} yearMonth={yearMonth} />
+      )}
+      {segment === 'bottle' && (
+        <BottleKeepView tenant={tenant} theme={theme} t={t} />
+      )}
+      {segment === 'voucher' && (
+        <VouchersView tenant={tenant} theme={theme} t={t} />
       )}
     </View>
   );
