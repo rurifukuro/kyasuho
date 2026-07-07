@@ -406,3 +406,32 @@ export type CastPersonalInfo = {
   qualifications: string;
   specialNotes: string;
 };
+
+// ── 顧客名簿＋スタンプ（§32-2） ──────────────────────────
+
+/** 顧客マスタ（テナント毎）。 */
+export type Customer = {
+  id: string;
+  tenantId: string;
+  name: string;
+  nameKana: string;
+  contact: string;
+  personaNotes: string;
+  internalNotes: string;
+  isBanned: boolean;
+  banReason: string;
+  stampCount: number;
+  totalVisits: number;
+  lastVisitDate: string | null;
+  createdAt: string;
+};
+
+/** スタンプ設定（テナントで1行）。 */
+export type StampSettings = {
+  id: string;
+  tenantId: string;
+  stampsPerVisit: number;
+  rewardThreshold: number;
+  rewardDescription: string;
+  isActive: boolean;
+};

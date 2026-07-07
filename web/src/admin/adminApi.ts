@@ -4,6 +4,7 @@ import type {
   KyCast,
   KyCastInvite,
   KyCastPayroll,
+  KyCustomer,
   KyExpense,
   KyMenuItem,
   KyOrder,
@@ -14,6 +15,7 @@ import type {
   KySeatType,
   KyShift,
   KyShiftTemplate,
+  KyStampSettings,
   KyTenant,
   KyUnlockWindow,
   MakeReservationResult,
@@ -873,6 +875,95 @@ export async function fetchMonthlyPayrollTotal(
     (sum, r) => sum + r.total_pay,
     0,
   );
+}
+
+// ---- 店舗テンプレ背景（§22-3） ----
+
+// ---- 顧客管理（ky_customers・§32-2） ----
+
+const CUSTOMER_SELECT =
+  'id, tenant_id, name, name_kana, contact, persona_notes, internal_notes, is_banned, ban_reason, stamp_count, total_visits, last_visit_date, created_at';
+
+export async function fetchCustomerList(tenantId: string): Promise<KyCustomer[]> {
+  const { data, error } = await supabase
+    .from('ky_customers')
+    .select(CUSTOMER_SELECT)
+    .eq('tenant_id', tenantId)
+    .order('name_kana')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyCustomer[];
+}
+
+export async function addCustomerRecord(
+  tenantId: string,
+  input: {
+    name: string;
+    name_kana: string;
+    contact: string;
+    persona_notes: string;
+    internal_notes: string;
+  },
+): Promise<KyCustomer> {
+  const { data, error } = await supabase
+    .from('ky_customers')
+    .insert({ tenant_id: tenantId, ...input })
+    .select(CUSTOMER_SELECT)
+    .single();
+  if (error) throw error;
+  return data as KyCustomer;
+}
+
+export async function updateCustomerRecord(
+  id: string,
+  fields: Partial<{
+    name: string;
+    name_kana: string;
+    contact: string;
+    persona_notes: string;
+    internal_notes: string;
+    is_banned: boolean;
+    ban_reason: string;
+    stamp_count: number;
+    total_visits: number;
+    last_visit_date: string | null;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_customers').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteCustomerRecord(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_customers').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- スタンプ設定（ky_stamp_settings） ----
+
+export async function fetchStampSettingsRecord(tenantId: string): Promise<KyStampSettings | null> {
+  const { data, error } = await supabase
+    .from('ky_stamp_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as KyStampSettings | null) ?? null;
+}
+
+export async function saveStampSettingsRecord(
+  tenantId: string,
+  input: {
+    stamps_per_visit: number;
+    reward_threshold: number;
+    reward_description: string;
+    is_active: boolean;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_stamp_settings').upsert(
+    { tenant_id: tenantId, ...input },
+    { onConflict: 'tenant_id' },
+  );
+  if (error) throw error;
 }
 
 // ---- 店舗テンプレ背景（§22-3） ----

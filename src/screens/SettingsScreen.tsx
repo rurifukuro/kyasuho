@@ -20,6 +20,7 @@ import ContactFormModal from '../components/ContactFormModal';
 import DeleteAccountModal from '../components/DeleteAccountModal';
 import StoreProfileModal from '../components/StoreProfileModal';
 import PcWorkModal from '../components/PcWorkModal';
+import CustomerListModal from '../components/CustomerListModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -35,6 +36,7 @@ export function SettingsScreen() {
   const [showProfile, setShowProfile] = useState(false);
   const [showPcWork, setShowPcWork] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showCustomers, setShowCustomers] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -65,6 +67,21 @@ export function SettingsScreen() {
               <Text style={[s.rowSub, { color: theme.subtext }]}>
                 {tenant?.genre || t('settings.storeGenrePlaceholder')}
               </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 顧客管理 */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionCustomer')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowCustomers(true)}>
+            <MaterialCommunityIcons name="account-group" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('customer.title')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('customer.settingsSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -180,6 +197,7 @@ export function SettingsScreen() {
       <DeleteAccountModal visible={showDelete} onClose={() => setShowDelete(false)} />
       <StoreProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
       <PcWorkModal visible={showPcWork} onClose={() => setShowPcWork(false)} />
+      <CustomerListModal visible={showCustomers} onClose={() => setShowCustomers(false)} />
     </View>
   );
 }

@@ -225,6 +225,33 @@ export interface KyCastPayroll {
   note: string;
 }
 
+/** 顧客マスタ（ky_customers・テナント毎）。 */
+export interface KyCustomer {
+  id: string;
+  tenant_id: string;
+  name: string;
+  name_kana: string;
+  contact: string;
+  persona_notes: string;
+  internal_notes: string;
+  is_banned: boolean;
+  ban_reason: string;
+  stamp_count: number;
+  total_visits: number;
+  last_visit_date: string | null;
+  created_at: string;
+}
+
+/** スタンプ設定（ky_stamp_settings・テナントで1行）。 */
+export interface KyStampSettings {
+  id: string;
+  tenant_id: string;
+  stamps_per_visit: number;
+  reward_threshold: number;
+  reward_description: string;
+  is_active: boolean;
+}
+
 export type DayStatus = 'available' | 'low' | 'full';
 
 export interface MakeReservationResult {
