@@ -605,7 +605,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
-              店舗テンプレート（§22-3）
+              店舗テンプレート
             </div>
             <p className="admin-note" style={{ marginTop: 0 }}>
               お店のオリジナル画像を背景に敷いて、シフトデータを重ねます。
