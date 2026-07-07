@@ -206,7 +206,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
   return (
     <>
       <h3 className="admin-section-title">
-        経費・収支（§27）
+        経費・収支
       </h3>
 
       <div className="admin-date-nav">
