@@ -22,11 +22,11 @@ import * as receiptService from '../../services/receipts';
 import { shareCsv } from '../../utils/csv';
 import { formatYen, todayStr, monthDates } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
-import type { Expense, ExpenseCategory, ThemeColor } from '../../types';
+import type { Expense, ExpenseCategory, CustomExpenseCategory, ThemeColor } from '../../types';
 
 const EXPENSE_HEADER = ['日付', 'カテゴリ', '金額', 'メモ'];
 
-const CATEGORIES: { key: ExpenseCategory; label: string }[] = [
+const BUILTIN_CATEGORIES: { key: ExpenseCategory; label: string }[] = [
   { key: 'purchase', label: '仕入（酒・食材）' },
   { key: 'rent', label: '家賃' },
   { key: 'utilities', label: '水道光熱費' },
@@ -38,8 +38,16 @@ const CATEGORIES: { key: ExpenseCategory; label: string }[] = [
   { key: 'misc', label: '雑費' },
 ];
 
-function categoryLabel(key: string): string {
-  return CATEGORIES.find((c) => c.key === key)?.label ?? key;
+function mergeCategories(
+  custom: CustomExpenseCategory[],
+): { key: string; label: string }[] {
+  const merged: { key: string; label: string }[] = [...BUILTIN_CATEGORIES];
+  for (const c of custom) {
+    if (!merged.some((m) => m.key === c.key)) {
+      merged.push({ key: c.key, label: c.label });
+    }
+  }
+  return merged;
 }
 
 export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
@@ -48,6 +56,14 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<CustomExpenseCategory[]>([]);
+
+  const allCategories = useMemo(() => mergeCategories(customCategories), [customCategories]);
+
+  const categoryLabel = useCallback(
+    (key: string) => allCategories.find((c) => c.key === key)?.label ?? key,
+    [allCategories],
+  );
 
   const dates = useMemo(() => monthDates(yearMonth), [yearMonth]);
   const startDate = dates[0];
@@ -56,8 +72,12 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await expenseService.fetchExpenses(tenant.id, startDate, endDate);
+      const [data, cats] = await Promise.all([
+        expenseService.fetchExpenses(tenant.id, startDate, endDate),
+        expenseService.fetchCustomCategories(tenant.id),
+      ]);
       setExpenses(data);
+      setCustomCategories(cats);
     } catch (e: unknown) {
       console.warn('[kyasuho] fetchExpenses:', e);
     } finally {
@@ -79,12 +99,12 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
     for (const e of expenses) {
       map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
     }
-    return CATEGORIES.filter((c) => map.has(c.key)).map((c) => ({
+    return allCategories.filter((c) => map.has(c.key)).map((c) => ({
       key: c.key,
       label: c.label,
       total: map.get(c.key)!,
     }));
-  }, [expenses]);
+  }, [expenses, allCategories]);
 
   const handleDelete = useCallback(
     (exp: Expense) => {
@@ -272,6 +292,7 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
           tenantId={tenant.id}
           theme={theme}
           t={t}
+          categories={allCategories}
           onClose={() => setAddModalVisible(false)}
           onSaved={async () => {
             setAddModalVisible(false);
@@ -314,6 +335,7 @@ function AddExpenseModal({
   tenantId,
   theme,
   t,
+  categories,
   onClose,
   onSaved,
 }: {
@@ -321,6 +343,7 @@ function AddExpenseModal({
   tenantId: string;
   theme: ThemeColor;
   t: TFunc;
+  categories: { key: string; label: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -330,11 +353,11 @@ function AddExpenseModal({
   const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const categoryOptions: DropOption[] = CATEGORIES.map((c) => ({
+  const categoryOptions: DropOption[] = categories.map((c) => ({
     key: c.key,
     label: c.label,
     active: c.key === category,
-    onPress: () => setCategory(c.key),
+    onPress: () => setCategory(c.key as ExpenseCategory),
   }));
 
   const handleSave = useCallback(async () => {
@@ -375,7 +398,7 @@ function AddExpenseModal({
 
         <AnchoredDropdown
           label={t('expense.category')}
-          valueLabel={CATEGORIES.find((c) => c.key === category)?.label ?? ''}
+          valueLabel={categories.find((c) => c.key === category)?.label ?? ''}
           options={categoryOptions}
           theme={theme}
         />

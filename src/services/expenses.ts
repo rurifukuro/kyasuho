@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import type { Expense, ExpenseCategory } from '../types';
+import type { Expense, ExpenseCategory, CustomExpenseCategory } from '../types';
 
 type ExpenseRow = {
   id: string;
@@ -71,5 +71,45 @@ export async function updateExpense(
 
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await supabase.from('ky_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+type CustomCategoryRow = {
+  id: string;
+  tenant_id: string;
+  key: string;
+  label: string;
+  sort_order: number;
+};
+
+export async function fetchCustomCategories(tenantId: string): Promise<CustomExpenseCategory[]> {
+  const { data, error } = await supabase
+    .from('ky_expense_categories')
+    .select('id, tenant_id, key, label, sort_order')
+    .eq('tenant_id', tenantId)
+    .order('sort_order');
+  if (error) throw error;
+  return ((data as CustomCategoryRow[] | null) ?? []).map((r) => ({
+    id: r.id,
+    tenantId: r.tenant_id,
+    key: r.key,
+    label: r.label,
+    sortOrder: r.sort_order,
+  }));
+}
+
+export async function addCustomCategory(
+  tenantId: string,
+  key: string,
+  label: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_expense_categories')
+    .insert({ tenant_id: tenantId, key, label });
+  if (error) throw error;
+}
+
+export async function deleteCustomCategory(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_expense_categories').delete().eq('id', id);
   if (error) throw error;
 }

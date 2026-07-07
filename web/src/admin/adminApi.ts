@@ -903,6 +903,47 @@ export async function deleteReceipt(
   if (error) throw error;
 }
 
+// ---- カスタム経費カテゴリ (D) ----
+
+export interface KyExpenseCategory {
+  id: string;
+  tenant_id: string;
+  key: string;
+  label: string;
+  sort_order: number;
+}
+
+export async function fetchCustomExpenseCategories(
+  tenantId: string,
+): Promise<KyExpenseCategory[]> {
+  const { data, error } = await supabase
+    .from('ky_expense_categories')
+    .select('id, tenant_id, key, label, sort_order')
+    .eq('tenant_id', tenantId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data as KyExpenseCategory[] | null) ?? [];
+}
+
+export async function addCustomExpenseCategory(
+  tenantId: string,
+  key: string,
+  label: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_expense_categories')
+    .insert({ tenant_id: tenantId, key, label });
+  if (error) throw error;
+}
+
+export async function deleteCustomExpenseCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_expense_categories')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function fetchMonthlySalesTotal(
   tenantId: string,
   startDate: string,

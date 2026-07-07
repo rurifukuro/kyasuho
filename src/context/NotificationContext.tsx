@@ -65,6 +65,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           });
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ky_reservations',
+          filter: `tenant_id=eq.${tenant.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { customer_name?: string; slot?: string; date?: string; status?: string };
+          const old = payload.old as { status?: string };
+          if (row.status === old.status) return;
+          const isCancelled = row.status === 'cancelled';
+          void Notifications.scheduleNotificationAsync({
+            content: {
+              title: isCancelled
+                ? t('notification.reservationCancelled')
+                : t('notification.reservationChanged'),
+              body: isCancelled
+                ? t('notification.reservationCancelledBody', {
+                    name: row.customer_name ?? '',
+                    date: row.date ?? '',
+                    time: row.slot ?? '',
+                  })
+                : t('notification.reservationChangedBody', {
+                    name: row.customer_name ?? '',
+                    date: row.date ?? '',
+                    time: row.slot ?? '',
+                  }),
+              sound: 'default',
+            },
+            trigger: null,
+          });
+        },
+      )
       .subscribe();
 
     channelRef.current = channel;

@@ -127,6 +127,7 @@ export function ReservationsScreen() {
         const msg = e instanceof Error ? e.message : String(e);
         const key = msg === 'no_available_seat' ? t('reservation.errorNoSeat') :
                     msg === 'not_unlocked' ? t('reservation.errorNotUnlocked') :
+                    msg === 'duplicate_contact' ? t('reservation.errorDuplicateContact') :
                     msg;
         Alert.alert(t('common.error'), key);
       }

@@ -9,9 +9,13 @@ import {
   fetchMonthlySalesTotal,
   fetchMonthlyPayrollTotal,
   uploadReceipt,
+  fetchCustomExpenseCategories,
+  addCustomExpenseCategory,
+  deleteCustomExpenseCategory,
 } from './adminApi';
+import type { KyExpenseCategory } from './adminApi';
 
-const CATEGORIES: { key: string; label: string }[] = [
+const BUILTIN_CATEGORIES: { key: string; label: string }[] = [
   { key: 'purchase', label: '仕入（酒・食材）' },
   { key: 'rent', label: '家賃' },
   { key: 'utilities', label: '水道光熱費' },
@@ -23,8 +27,16 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: 'misc', label: '雑費' },
 ];
 
-function categoryLabel(key: string): string {
-  return CATEGORIES.find((c) => c.key === key)?.label ?? key;
+function mergeCategories(
+  custom: KyExpenseCategory[],
+): { key: string; label: string }[] {
+  const merged = [...BUILTIN_CATEGORIES];
+  for (const c of custom) {
+    if (!merged.some((m) => m.key === c.key)) {
+      merged.push({ key: c.key, label: c.label });
+    }
+  }
+  return merged;
 }
 
 function pad2(n: number): string {
@@ -68,6 +80,18 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
   const [formError, setFormError] = useState<string | null>(null);
   const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<KyExpenseCategory[]>([]);
+  const [newCatKey, setNewCatKey] = useState('');
+  const [newCatLabel, setNewCatLabel] = useState('');
+  const [catBusy, setCatBusy] = useState(false);
+  const [showCatManager, setShowCatManager] = useState(false);
+
+  const allCategories = useMemo(() => mergeCategories(customCategories), [customCategories]);
+
+  const categoryLabel = useCallback(
+    (key: string) => allCategories.find((c) => c.key === key)?.label ?? key,
+    [allCategories],
+  );
 
   const { start, end } = useMemo(() => monthRange(yearMonth), [yearMonth]);
 
@@ -75,14 +99,16 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
     setLoading(true);
     setError(null);
     try {
-      const [exp, sales, payroll] = await Promise.all([
+      const [exp, sales, payroll, cats] = await Promise.all([
         fetchExpenses(tenant.id, start, end),
         fetchMonthlySalesTotal(tenant.id, start, end),
         fetchMonthlyPayrollTotal(tenant.id, start, end),
+        fetchCustomExpenseCategories(tenant.id),
       ]);
       setExpenses(exp);
       setSalesTotal(sales);
       setPayrollTotal(payroll);
+      setCustomCategories(cats);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -104,12 +130,12 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
     for (const e of expenses) {
       map.set(e.category, (map.get(e.category) ?? 0) + e.amount);
     }
-    return CATEGORIES.filter((c) => map.has(c.key)).map((c) => ({
+    return allCategories.filter((c) => map.has(c.key)).map((c) => ({
       key: c.key,
       label: c.label,
       total: map.get(c.key)!,
     }));
-  }, [expenses]);
+  }, [expenses, allCategories]);
 
   const netIncome = salesTotal - expenseTotal - payrollTotal;
 
@@ -212,7 +238,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
         fetchMonthlyPayrollTotal(tenant.id, r.start, r.end),
       ]);
       const expTotal = exp.reduce((s, e) => s + e.amount, 0);
-      const catCols = CATEGORIES.map((c) =>
+      const catCols = allCategories.map((c) =>
         exp.filter((e) => e.category === c.key).reduce((s, e) => s + e.amount, 0),
       );
       rows.push([m, sales, expTotal, ...catCols, payroll, sales - expTotal - payroll].join(','));
@@ -221,7 +247,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
       '月',
       '総売上',
       '経費計',
-      ...CATEGORIES.map((c) => c.label),
+      ...allCategories.map((c) => c.label),
       '人件費',
       '差引収支',
     ].join(',');
@@ -234,7 +260,44 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
     a.download = `年次収支_${year}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [tenant.id, yearMonth]);
+  }, [tenant.id, yearMonth, allCategories]);
+
+  const handleAddCategory = useCallback(async () => {
+    const key = newCatKey.trim().replace(/\s+/g, '_').toLowerCase();
+    const label = newCatLabel.trim();
+    if (!key || !label) return;
+    if (allCategories.some((c) => c.key === key)) {
+      alert('同じキーのカテゴリが既にあります。');
+      return;
+    }
+    setCatBusy(true);
+    try {
+      await addCustomExpenseCategory(tenant.id, key, label);
+      setNewCatKey('');
+      setNewCatLabel('');
+      await loadData();
+    } catch (e) {
+      alert(`追加失敗: ${String(e)}`);
+    } finally {
+      setCatBusy(false);
+    }
+  }, [tenant.id, newCatKey, newCatLabel, allCategories, loadData]);
+
+  const handleDeleteCategory = useCallback(
+    async (cat: KyExpenseCategory) => {
+      if (!confirm(`カスタムカテゴリ「${cat.label}」を削除しますか？`)) return;
+      setCatBusy(true);
+      try {
+        await deleteCustomExpenseCategory(cat.id);
+        await loadData();
+      } catch (e) {
+        alert(`削除失敗: ${String(e)}`);
+      } finally {
+        setCatBusy(false);
+      }
+    },
+    [loadData],
+  );
 
   const [y, m] = yearMonth.split('-');
 
@@ -328,7 +391,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
             <label>
               カテゴリ
               <select value={formCategory} onChange={(e) => setFormCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
+                {allCategories.map((c) => (
                   <option key={c.key} value={c.key}>{c.label}</option>
                 ))}
               </select>
@@ -358,8 +421,8 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
             </button>
           </form>
 
-          {/* CSV出力 */}
-          <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
+          {/* CSV出力・月次レポート */}
+          <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
             <button
               type="button"
               className="admin-btn"
@@ -375,6 +438,106 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
             >
               年次収支CSV
             </button>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => {
+                const w = window.open('', '_blank');
+                if (!w) return;
+                const catRows = categoryTotals
+                  .map((ct) => `<tr><td style="padding:4px 16px 4px 24px">${ct.label}</td><td style="text-align:right;padding:4px 8px">${formatYen(ct.total)}</td></tr>`)
+                  .join('');
+                const expRows = expenses
+                  .map((e) => `<tr><td>${e.date}</td><td>${categoryLabel(e.category)}</td><td style="text-align:right">${formatYen(e.amount)}</td><td>${e.memo || ''}</td></tr>`)
+                  .join('');
+                w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>月次レポート ${y}年${Number(m)}月 - ${tenant.name}</title>
+<style>body{font-family:sans-serif;padding:20px;max-width:800px;margin:0 auto}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px}th{background:#f3f4f6;text-align:left}.summary td{border:none;font-size:14px}.summary .label{font-weight:600}h1{font-size:18px}h2{font-size:15px;margin-top:24px;border-bottom:2px solid #333;padding-bottom:4px}@media print{body{padding:0}}</style>
+</head><body>
+<h1>${tenant.name} 月次レポート</h1>
+<p>${y}年${Number(m)}月</p>
+<h2>収支サマリ</h2>
+<table class="summary">
+<tr><td class="label">売上</td><td style="text-align:right">${formatYen(salesTotal)}</td></tr>
+<tr><td class="label">経費計</td><td style="text-align:right;color:#dc2626">−${formatYen(expenseTotal)}</td></tr>
+${catRows}
+<tr><td class="label">人件費</td><td style="text-align:right;color:#dc2626">−${formatYen(payrollTotal)}</td></tr>
+<tr style="border-top:2px solid #333"><td class="label" style="padding-top:8px">差引収支</td><td style="text-align:right;padding-top:8px;font-size:18px;font-weight:700;color:${netIncome >= 0 ? '#16a34a' : '#dc2626'}">${netIncome >= 0 ? '' : '−'}${formatYen(Math.abs(netIncome))}</td></tr>
+</table>
+<h2>経費明細</h2>
+<table><thead><tr><th>日付</th><th>カテゴリ</th><th>金額</th><th>メモ</th></tr></thead><tbody>${expRows || '<tr><td colspan="4" style="text-align:center;color:#888">この月の経費はありません</td></tr>'}</tbody></table>
+<script>window.print()</script>
+</body></html>`);
+                w.document.close();
+              }}
+            >
+              月次レポート印刷
+            </button>
+          </div>
+
+          {/* カスタムカテゴリ管理 */}
+          <div style={{ margin: '0 0 16px' }}>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => setShowCatManager(!showCatManager)}
+              style={{ fontSize: 13 }}
+            >
+              {showCatManager ? '▲ カテゴリ管理を閉じる' : '▼ カテゴリを追加・管理'}
+            </button>
+            {showCatManager && (
+              <div style={{ marginTop: 8, padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                  <label style={{ fontSize: 13 }}>
+                    キー（英数字）
+                    <input
+                      type="text"
+                      value={newCatKey}
+                      onChange={(e) => setNewCatKey(e.target.value)}
+                      placeholder="travel"
+                      style={{ display: 'block', marginTop: 2, padding: '4px 8px', fontSize: 13, width: 120 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 13 }}>
+                    表示名
+                    <input
+                      type="text"
+                      value={newCatLabel}
+                      onChange={(e) => setNewCatLabel(e.target.value)}
+                      placeholder="交通費"
+                      style={{ display: 'block', marginTop: 2, padding: '4px 8px', fontSize: 13, width: 160 }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="admin-btn primary"
+                    onClick={() => void handleAddCategory()}
+                    disabled={catBusy || !newCatKey.trim() || !newCatLabel.trim()}
+                    style={{ fontSize: 13, padding: '4px 12px' }}
+                  >
+                    追加
+                  </button>
+                </div>
+                {customCategories.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>カスタムカテゴリ一覧</div>
+                    {customCategories.map((c) => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+                        <span style={{ fontSize: 13 }}>{c.label}（{c.key}）</span>
+                        <button
+                          type="button"
+                          className="admin-btn danger"
+                          onClick={() => void handleDeleteCategory(c)}
+                          disabled={catBusy}
+                          style={{ fontSize: 11, padding: '1px 8px' }}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 経費一覧 */}

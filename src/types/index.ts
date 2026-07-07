@@ -174,7 +174,16 @@ export type ExpenseCategory =
   | 'costume'
   | 'supplies'
   | 'outsourcing'
-  | 'misc';
+  | 'misc'
+  | (string & {});
+
+export type CustomExpenseCategory = {
+  id: string;
+  tenantId: string;
+  key: string;
+  label: string;
+  sortOrder: number;
+};
 
 /** 経費（§27）。 */
 export type Expense = {
