@@ -112,6 +112,7 @@
   "cast.shiftStart": { "ja": "出勤開始" },
   "cast.shiftEnd": { "ja": "出勤終了" },
   "cast.shiftDeleteConfirm": { "ja": "この出勤枠を削除しますか？" },
+  "cast.laborEstimate": { "ja": "見込み人件費: ¥{cost}（{hours}時間 × 基本時給）" },
   "cast.count": { "ja": "{count}名" },
   "cast.shiftImage": { "ja": "シフト表" },
   "shiftImage.title": { "ja": "シフト表画像" },

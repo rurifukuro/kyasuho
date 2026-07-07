@@ -2,19 +2,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyCast, KyCastInvite, KyShift, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import type { KyPayrollSettings } from '../lib/types';
 import {
   addCast,
   addShift,
   createInvite,
+  DEFAULT_PAYROLL_SETTINGS,
   deleteInvite,
   fetchCastList,
   fetchInvites,
+  fetchPayrollSettings,
   fetchShiftList,
   removeCast,
   removeShift,
   updateCast,
   uploadCastShopPhoto,
 } from './adminApi';
+import { calcMinutesWorked } from './payrollCalc';
 
 function fmtTime(value: string): string {
   return value.slice(0, 5);
@@ -51,6 +55,13 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const [shiftEnd, setShiftEnd] = useState('23:00');
   const [shiftBusy, setShiftBusy] = useState(false);
   const [shiftFormError, setShiftFormError] = useState<string | null>(null);
+  const [paySettings, setPaySettings] = useState<KyPayrollSettings | null>(null);
+
+  useEffect(() => {
+    fetchPayrollSettings(tenant.id)
+      .then(setPaySettings)
+      .catch((e) => console.warn('[kyasuho] fetchPayrollSettings:', e));
+  }, [tenant.id]);
 
   const loadCasts = useCallback(async () => {
     setLoading(true);
@@ -502,6 +513,24 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           </table>
         </div>
       )}
+
+      {shifts.length > 0 && (() => {
+        const rate = paySettings?.base_hourly_rate ?? DEFAULT_PAYROLL_SETTINGS.baseHourlyRate;
+        const totalMinutes = shifts.reduce(
+          (sum, row) => sum + calcMinutesWorked(row.start_at, row.end_at),
+          0,
+        );
+        const estimatedCost = Math.floor(totalMinutes * rate / 60);
+        return (
+          <div className="admin-card" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <strong>見込み人件費:</strong>
+            <span>¥{estimatedCost.toLocaleString()}</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+              （{(totalMinutes / 60).toFixed(1)}時間 × ¥{rate.toLocaleString()}/時）
+            </span>
+          </div>
+        );
+      })()}
 
       <CastInvitePanel tenant={tenant} casts={casts} />
     </div>

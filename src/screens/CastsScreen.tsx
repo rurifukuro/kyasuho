@@ -24,8 +24,10 @@ import * as castService from '../services/casts';
 import * as inviteService from '../services/castInvites';
 import * as profileService from '../services/castProfile';
 import { pickAndUploadShopPhoto } from '../services/castPhotos';
+import { fetchPayrollSettings, DEFAULT_PAYROLL_SETTINGS } from '../services/payroll';
+import { calcMinutesWorked } from '../utils/payrollCalc';
 import { guardFields } from '../utils/contentGuard';
-import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, ThemeColor } from '../types';
+import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, PayrollSettings, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 type TFunc = (key: TKey, params?: Record<string, string>) => string;
@@ -341,6 +343,13 @@ function CastDetailView({
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [addShiftVisible, setAddShiftVisible] = useState(false);
   const [evalModalVisible, setEvalModalVisible] = useState(false);
+  const [payrollSettings, setPayrollSettings] = useState<PayrollSettings | null>(null);
+
+  useEffect(() => {
+    fetchPayrollSettings(tenant.id)
+      .then(setPayrollSettings)
+      .catch((e: unknown) => console.warn('[kyasuho] fetchPayrollSettings:', e));
+  }, [tenant.id]);
 
   const loadShifts = useCallback(async () => {
     setLoadingShifts(true);
@@ -532,6 +541,23 @@ function CastDetailView({
           <MaterialCommunityIcons name="plus" size={18} color={theme.primary} />
           <Text style={[s.addButtonText, { color: theme.primary }]}>{t('cast.addShift')}</Text>
         </TouchableOpacity>
+
+        {shifts.length > 0 && (() => {
+          const rate = payrollSettings?.baseHourlyRate ?? DEFAULT_PAYROLL_SETTINGS.baseHourlyRate;
+          const totalMinutes = shifts.reduce(
+            (sum, sh) => sum + calcMinutesWorked(sh.startAt, sh.endAt),
+            0,
+          );
+          const estimatedCost = Math.floor(totalMinutes * rate / 60);
+          return (
+            <View style={[s.laborCostCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <MaterialCommunityIcons name="currency-jpy" size={18} color={theme.primary} />
+              <Text style={[s.laborCostText, { color: theme.text }]}>
+                {t('cast.laborEstimate', { cost: estimatedCost.toLocaleString(), hours: (totalMinutes / 60).toFixed(1) })}
+              </Text>
+            </View>
+          );
+        })()}
       </ScrollView>
 
       {addShiftVisible && (
@@ -1324,6 +1350,8 @@ const s = StyleSheet.create({
   bodyContent: { padding: 16 },
   shiftCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, padding: 12, marginBottom: 8, gap: 10 },
   shiftTime: { flex: 1, fontSize: 15, fontWeight: '500' },
+  laborCostCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 10, borderWidth: 1, padding: 12, marginTop: 12, gap: 8 } as const,
+  laborCostText: { fontSize: 13, fontWeight: '500' } as const,
   addButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed', marginTop: 8, gap: 6 },
   addButtonText: { fontSize: 14, fontWeight: '500' },
   modalContent: { padding: 20 },
