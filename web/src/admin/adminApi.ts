@@ -1155,7 +1155,7 @@ export async function deleteBottleKeep(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ---- 回数券・チェキ券（ky_vouchers） ----
+// ---- 回数券・クーポン券（ky_vouchers） ----
 
 export async function fetchVouchers(tenantId: string): Promise<KyVoucher[]> {
   const { data, error } = await supabase

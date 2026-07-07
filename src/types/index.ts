@@ -454,10 +454,10 @@ export type BottleKeep = {
   createdAt: string;
 };
 
-/** 回数券/チェキ券種別。 */
+/** 回数券/クーポン券種別。 */
 export type VoucherType = 'ticket' | 'cheki' | 'other';
 
-/** 回数券/チェキ券（ky_vouchers）。 */
+/** 回数券/クーポン券（ky_vouchers）。 */
 export type Voucher = {
   id: string;
   tenantId: string;

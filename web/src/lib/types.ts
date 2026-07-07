@@ -284,7 +284,7 @@ export interface KyBottleKeep {
   created_at: string;
 }
 
-/** 回数券/チェキ券（ky_vouchers）。 */
+/** 回数券/クーポン券（ky_vouchers）。 */
 export type KyVoucherType = 'ticket' | 'cheki' | 'other';
 
 export interface KyVoucher {

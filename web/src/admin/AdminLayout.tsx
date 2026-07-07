@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'cast-performance', label: 'キャスト成績' },
   { path: 'events', label: 'イベント' },
   { path: 'bottle-keep', label: 'ボトルキープ', flag: 'enable_bottle_keep' },
-  { path: 'vouchers', label: '回数券・チェキ券', flag: 'enable_vouchers' },
+  { path: 'vouchers', label: '回数券・クーポン券', flag: 'enable_vouchers' },
   { path: 'shift-image', label: 'シフト表作成' },
   { path: 'settings', label: '機能設定' },
 ];
