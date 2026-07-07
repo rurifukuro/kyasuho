@@ -9,7 +9,13 @@ export interface KyTenant {
     tel?: string;
     note?: string;
   };
+  sns_links: { platform: string; url: string }[];
+  prefecture: string;
+  area: string;
+  ranking_opt_in: boolean;
   is_suspended: boolean;
+  enable_bottle_keep: boolean;
+  enable_vouchers: boolean;
 }
 
 export interface KyUnlockWindow {
@@ -26,10 +32,42 @@ export interface KyCast {
   id: string;
   tenant_id: string;
   name: string;
+  name_kana: string;
   photo_url: string | null;
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
+  user_id: string | null;
+}
+
+/** 経費（§27）。 */
+export interface KyExpense {
+  id: string;
+  tenant_id: string;
+  date: string;
+  category: string;
+  amount: number;
+  memo: string;
+}
+
+/** 席種・席料（§29）。 */
+export interface KySeatType {
+  id: string;
+  tenant_id: string;
+  name: string;
+  seat_fee: number;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface KyCastInvite {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  code: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by: string | null;
 }
 
 export interface KyShift {
@@ -68,6 +106,7 @@ export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   contact: string;
   party_size: number;
   cast_id: string | null;
+  seat_type_id: string | null;
   note: string;
   created_at: string;
 }
@@ -83,6 +122,62 @@ export interface KySales {
   nomination_count: number;
   other_revenue: number;
   note: string;
+  entry_mode: 'manual' | 'auto';
+}
+
+/** メニューマスタカテゴリ（§25-2）。 */
+export type KyMenuCategory =
+  | 'set' | 'extension' | 'nomination' | 'cast_drink'
+  | 'drink' | 'food' | 'cheki' | 'other' | 'discount';
+
+/** メニュー項目（ky_menu_items）。 */
+export interface KyMenuItem {
+  id: string;
+  tenant_id: string;
+  category: KyMenuCategory;
+  name: string;
+  price: number;
+  needs_cast: boolean;
+  sort_order: number;
+  is_active: boolean;
+}
+
+/** 伝票ステータス（§25-2）。 */
+export type KyOrderStatus = 'open' | 'closed' | 'void';
+
+/** 支払方法（§25-2）。 */
+export type KyPaymentMethod = 'cash' | 'card' | 'qr' | 'other';
+
+/** 伝票（ky_orders）。 */
+export interface KyOrder {
+  id: string;
+  tenant_id: string;
+  biz_date: string;
+  seat_no: number | null;
+  reservation_id: string | null;
+  customer_label: string;
+  customer_id: string | null;
+  status: KyOrderStatus;
+  opened_at: string;
+  closed_at: string | null;
+  subtotal: number;
+  deposit: number;
+  change: number;
+  payment_method: KyPaymentMethod;
+  note: string;
+}
+
+/** オーダー明細（ky_order_items・スナップショット）。 */
+export interface KyOrderItem {
+  id: string;
+  order_id: string;
+  tenant_id: string;
+  menu_item_id: string | null;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  cast_id: string | null;
 }
 
 export type KyAttendanceStatus = 'present' | 'late' | 'early_leave' | 'absent' | 'substitute';
@@ -131,6 +226,78 @@ export interface KyCastPayroll {
   deductions: number;
   total_pay: number;
   note: string;
+}
+
+/** 顧客マスタ（ky_customers・テナント毎）。 */
+export interface KyCustomer {
+  id: string;
+  tenant_id: string;
+  name: string;
+  name_kana: string;
+  contact: string;
+  persona_notes: string;
+  internal_notes: string;
+  is_banned: boolean;
+  ban_reason: string;
+  stamp_count: number;
+  total_visits: number;
+  last_visit_date: string | null;
+  created_at: string;
+}
+
+/** スタンプ設定（ky_stamp_settings・テナントで1行）。 */
+export interface KyStampSettings {
+  id: string;
+  tenant_id: string;
+  stamps_per_visit: number;
+  reward_threshold: number;
+  reward_description: string;
+  is_active: boolean;
+}
+
+/** 店舗イベント（ky_events）。 */
+export interface KyEvent {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  event_type: string;
+  is_public: boolean;
+  created_at: string;
+}
+
+/** ボトルキープ（ky_bottle_keeps）。 */
+export interface KyBottleKeep {
+  id: string;
+  tenant_id: string;
+  customer_name: string;
+  item_name: string;
+  start_date: string;
+  expiry_date: string | null;
+  remaining: string;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** 回数券/チェキ券（ky_vouchers）。 */
+export type KyVoucherType = 'ticket' | 'cheki' | 'other';
+
+export interface KyVoucher {
+  id: string;
+  tenant_id: string;
+  voucher_type: KyVoucherType;
+  name: string;
+  customer_name: string;
+  total_count: number;
+  remaining_count: number;
+  expiry_date: string | null;
+  note: string;
+  is_active: boolean;
+  created_at: string;
 }
 
 export type DayStatus = 'available' | 'low' | 'full';

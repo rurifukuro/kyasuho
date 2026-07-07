@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { KyCast, KyShift } from '../lib/types';
+import type { KyCast, KySeatType, KyShift } from '../lib/types';
 
 export function useCasts(tenantId: string | undefined) {
   const [casts, setCasts] = useState<KyCast[]>([]);
@@ -9,7 +9,7 @@ export function useCasts(tenantId: string | undefined) {
     if (!tenantId) return;
     supabase
       .from('ky_casts')
-      .select('id, tenant_id, name, photo_url, bio, accepts_nomination, sort_order')
+      .select('id, tenant_id, name, name_kana, photo_url, bio, accepts_nomination, sort_order, user_id')
       .eq('tenant_id', tenantId)
       .order('sort_order')
       .then(({ data }) => {
@@ -18,6 +18,25 @@ export function useCasts(tenantId: string | undefined) {
   }, [tenantId]);
 
   return { casts };
+}
+
+export function useSeatTypes(tenantId: string | undefined) {
+  const [seatTypes, setSeatTypes] = useState<KySeatType[]>([]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    supabase
+      .from('ky_seat_types')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true)
+      .order('sort_order')
+      .then(({ data }) => {
+        setSeatTypes((data as KySeatType[] | null) ?? []);
+      });
+  }, [tenantId]);
+
+  return { seatTypes };
 }
 
 export function useShifts(tenantId: string | undefined, date: string) {

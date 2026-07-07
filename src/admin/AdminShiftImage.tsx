@@ -15,6 +15,7 @@ import {
   fetchShiftsByMonth,
   removeShiftTemplate,
   requestAiShiftDesign,
+  uploadShiftBackground,
 } from './adminApi';
 import type {
   ShiftLayout,
@@ -65,6 +66,12 @@ function currentMonth(): string {
   return formatDate(new Date()).slice(0, 7);
 }
 
+function shiftDay(date: string, delta: number): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() + delta);
+  return formatDate(d);
+}
+
 function shiftMonth(yearMonth: string, delta: number): string {
   const [y = 0, m = 0] = yearMonth.split('-').map(Number);
   const total = y * 12 + (m - 1) + delta;
@@ -99,6 +106,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
+  const [dailyDate, setDailyDate] = useState(formatDate(new Date()));
+
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [ov, setOv] = useState<ShiftOverrides>({});
   const [aspect, setAspect] = useState<Aspect>('4:5');
@@ -106,6 +116,10 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
   const [favName, setFavName] = useState('');
   const [favBusy, setFavBusy] = useState(false);
+
+  // 店舗テンプレ背景（§22-3）
+  const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
+  const [bgUploading, setBgUploading] = useState(false);
 
   // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
@@ -139,21 +153,25 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     void load();
   }, [load]);
 
-  const castNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const c of casts) map.set(c.id, c.name);
+  const castById = useMemo(() => {
+    const map = new Map<string, KyCast>();
+    for (const c of casts) map.set(c.id, c);
     return map;
   }, [casts]);
 
   const days = useMemo(() => {
-    const flatRows = shifts.map((s) => ({
-      date: s.date,
-      castName: castNameById.get(s.cast_id) ?? '？',
-      start: s.start_at,
-      end: s.end_at,
-    }));
+    const flatRows = shifts.map((s) => {
+      const cast = castById.get(s.cast_id);
+      return {
+        date: s.date,
+        castName: cast?.name ?? '？',
+        start: s.start_at,
+        end: s.end_at,
+        photoUrl: cast?.photo_url ?? null,
+      };
+    });
     return buildShiftDays(flatRows, yearMonth);
-  }, [shifts, castNameById, yearMonth]);
+  }, [shifts, castById, yearMonth]);
 
   const base =
     aiDef && templateId === aiDef.id ? aiDef : (findTemplate(templateId) ?? DEFAULT_TEMPLATE);
@@ -169,14 +187,15 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     if (ov.accent) palette.accent = ov.accent;
     if (ov.headerText) palette.headerText = ov.headerText;
     if (ov.castName) palette.castName = ov.castName;
+    const layout = viewMode === 'daily' ? 'daily-lineup' as const : (ov.layout ?? base.layout);
     return {
       ...base,
       size,
       palette,
-      layout: ov.layout ?? base.layout,
+      layout,
       decorations: { ...base.decorations, motif: ov.motif ?? base.decorations.motif ?? 'none' },
     };
-  }, [base, ov, aspect]);
+  }, [base, ov, aspect, viewMode]);
 
   const hasCustom = Object.keys(ov).length > 0;
 
@@ -193,7 +212,9 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = `kyasuho_shift_${yearMonth}.png`;
+      a.download = viewMode === 'daily'
+        ? `kyasuho_daily_${dailyDate}.png`
+        : `kyasuho_shift_${yearMonth}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -236,11 +257,14 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setFavBusy(true);
     try {
       const isAi = base.category === 'ai';
+      const cs = isAi ? { ...ov, aspect, ai: extractAiDesign(base) } : { ...ov, aspect };
+      if (bgImageUrl) (cs as Record<string, unknown>)['bgImageUrl'] = bgImageUrl;
+      const tplKey = bgImageUrl ? 'shop' : isAi ? 'ai' : base.id;
       await addShiftTemplate({
         tenantId: tenant.id,
-        name: favName.trim() || `${base.name}（${aspect}）`,
-        templateKey: isAi ? 'ai' : base.id,
-        customSettings: isAi ? { ...ov, aspect, ai: extractAiDesign(base) } : { ...ov, aspect },
+        name: favName.trim() || (bgImageUrl ? '店舗テンプレート' : `${base.name}（${aspect}）`),
+        templateKey: tplKey,
+        customSettings: cs,
       });
       setFavName('');
       setFavorites(await fetchShiftTemplateList(tenant.id));
@@ -254,11 +278,17 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
   const handleLoadFavorite = (fav: KyShiftTemplate) => {
     const parsed = parseCustomSettings(fav.custom_settings);
+    const savedBg = typeof fav.custom_settings['bgImageUrl'] === 'string' ? fav.custom_settings['bgImageUrl'] : null;
+    setBgImageUrl(savedBg);
     if (fav.template_key === 'ai') {
-      // AI生成デザインの復元（custom_settings.ai → buildAiDefinition＝保存時とラウンドトリップ）
       const def = buildAiDefinition(fav.custom_settings['ai'], `ai-${Date.now()}`);
       setAiDef(def);
       setTemplateId(def.id);
+      setOv(parsed.ov);
+      setAspect(parsed.aspect);
+      return;
+    }
+    if (fav.template_key === 'shop') {
       setOv(parsed.ov);
       setAspect(parsed.aspect);
       return;
@@ -288,17 +318,66 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     <div>
       <h2 className="admin-page-title">シフト表作成</h2>
 
+      <div className="admin-btn-row" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          className={`admin-btn${viewMode === 'monthly' ? ' primary' : ''}`}
+          onClick={() => setViewMode('monthly')}
+        >
+          月間シフト表
+        </button>
+        <button
+          type="button"
+          className={`admin-btn${viewMode === 'daily' ? ' primary' : ''}`}
+          onClick={() => setViewMode('daily')}
+        >
+          デイリー出勤表
+        </button>
+      </div>
+
       <div className="admin-date-nav">
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, -1))}>
-          ◀ 前月
-        </button>
-        <input type="month" value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} />
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, 1))}>
-          翌月 ▶
-        </button>
-        <button type="button" className="admin-btn" onClick={() => setYearMonth(currentMonth())}>
-          今月
-        </button>
+        {viewMode === 'monthly' ? (
+          <>
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, -1))}>
+              ◀ 前月
+            </button>
+            <input type="month" value={yearMonth} onChange={(e) => setYearMonth(e.target.value)} />
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(shiftMonth(yearMonth, 1))}>
+              翌月 ▶
+            </button>
+            <button type="button" className="admin-btn" onClick={() => setYearMonth(currentMonth())}>
+              今月
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className="admin-btn" onClick={() => {
+              const nd = shiftDay(dailyDate, -1);
+              setDailyDate(nd);
+              setYearMonth(nd.slice(0, 7));
+            }}>
+              ◀ 前日
+            </button>
+            <input type="date" value={dailyDate} onChange={(e) => {
+              setDailyDate(e.target.value);
+              setYearMonth(e.target.value.slice(0, 7));
+            }} />
+            <button type="button" className="admin-btn" onClick={() => {
+              const nd = shiftDay(dailyDate, 1);
+              setDailyDate(nd);
+              setYearMonth(nd.slice(0, 7));
+            }}>
+              翌日 ▶
+            </button>
+            <button type="button" className="admin-btn" onClick={() => {
+              const today = formatDate(new Date());
+              setDailyDate(today);
+              setYearMonth(today.slice(0, 7));
+            }}>
+              今日
+            </button>
+          </>
+        )}
         <span className="admin-spacer" />
         <button
           type="button"
@@ -325,7 +404,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
+              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} />
             </div>
           </div>
           <p className="admin-note">
@@ -436,25 +515,27 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               </div>
             </div>
 
-            <div className="shift-control-row">
-              <span className="shift-control-label">レイアウト</span>
-              <div className="admin-btn-row">
-                <button
-                  type="button"
-                  className={`admin-btn${def.layout === 'month-grid' ? ' primary' : ''}`}
-                  onClick={() => setOv((o) => ({ ...o, layout: 'month-grid' }))}
-                >
-                  月間カレンダー
-                </button>
-                <button
-                  type="button"
-                  className={`admin-btn${def.layout === 'week-rows' ? ' primary' : ''}`}
-                  onClick={() => setOv((o) => ({ ...o, layout: 'week-rows' }))}
-                >
-                  週別リスト
-                </button>
+            {viewMode === 'monthly' ? (
+              <div className="shift-control-row">
+                <span className="shift-control-label">レイアウト</span>
+                <div className="admin-btn-row">
+                  <button
+                    type="button"
+                    className={`admin-btn${def.layout === 'month-grid' ? ' primary' : ''}`}
+                    onClick={() => setOv((o) => ({ ...o, layout: 'month-grid' }))}
+                  >
+                    月間カレンダー
+                  </button>
+                  <button
+                    type="button"
+                    className={`admin-btn${def.layout === 'week-rows' ? ' primary' : ''}`}
+                    onClick={() => setOv((o) => ({ ...o, layout: 'week-rows' }))}
+                  >
+                    週別リスト
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="shift-control-row">
               <span className="shift-control-label">モチーフ</span>
@@ -524,6 +605,46 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
+              店舗テンプレート（§22-3）
+            </div>
+            <p className="admin-note" style={{ marginTop: 0 }}>
+              お店のオリジナル画像を背景に敷いて、シフトデータを重ねます。
+            </p>
+            <div className="admin-form-row">
+              <input
+                type="file"
+                accept="image/*"
+                disabled={bgUploading}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setBgUploading(true);
+                  try {
+                    const url = await uploadShiftBackground(tenant.id, file);
+                    setBgImageUrl(url);
+                  } catch (err) {
+                    console.warn('[kyasuho] uploadShiftBackground failed:', err);
+                    window.alert('背景画像のアップロードに失敗しました。');
+                  } finally {
+                    setBgUploading(false);
+                  }
+                }}
+              />
+              {bgImageUrl ? (
+                <button type="button" className="admin-btn" onClick={() => setBgImageUrl(null)}>
+                  背景を解除
+                </button>
+              ) : null}
+            </div>
+            {bgImageUrl ? (
+              <p className="admin-note" style={{ marginTop: 4 }}>
+                背景画像を設定中。テンプレートの配色は上から重ねて表示されます。
+              </p>
+            ) : null}
+          </div>
+
+          <div className="admin-card" style={{ marginBottom: 0 }}>
+            <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
               お気に入り
             </div>
             <div className="admin-form-row">
@@ -577,12 +698,84 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         </div>
       </div>
 
+      {/* SNS投稿（§31） */}
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <div className="admin-section-title" style={{ margin: '0 0 8px' }}>SNS投稿</div>
+        <p className="admin-note" style={{ marginTop: 0 }}>
+          シフト表画像をダウンロードした後、SNSで共有できます。投稿文をコピーしてご利用ください。
+        </p>
+        <div className="admin-btn-row" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="admin-btn primary"
+            onClick={() => {
+              const text = viewMode === 'daily'
+                ? buildDailyPostText(dailyDate, days, tenant.slug)
+                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank');
+            }}
+          >
+            Xで投稿
+          </button>
+          <button
+            type="button"
+            className="admin-btn"
+            onClick={() => {
+              const text = viewMode === 'daily'
+                ? buildDailyPostText(dailyDate, days, tenant.slug)
+                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              void navigator.clipboard.writeText(text).then(() => window.alert('投稿文をコピーしました'));
+            }}
+          >
+            投稿文をコピー
+          </button>
+        </div>
+      </div>
+
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
-          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
+          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} />
         </div>
       </div>
     </div>
   );
+}
+
+function buildWebPostText(
+  yearMonth: string,
+  casts: KyCast[],
+  shifts: KyShift[],
+  slug: string,
+): string {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthLabel = `${y}年${m}月`;
+  const castIds = [...new Set(shifts.map(s => s.cast_id))];
+  const names = castIds
+    .map(id => casts.find(c => c.id === id)?.name)
+    .filter(Boolean)
+    .join('・');
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
+  const lines = [`${monthLabel}のシフトが出ました！`];
+  if (names) lines.push(`出勤キャスト: ${names}`);
+  lines.push('');
+  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
+  return lines.join('\n');
+}
+
+function buildDailyPostText(
+  date: string,
+  days: import('../shiftTemplates/shiftData').ShiftDayData[],
+  slug: string,
+): string {
+  const [, m, d] = date.split('-').map(Number);
+  const wd = ['日', '月', '火', '水', '木', '金', '土'][new Date(date).getDay()]!;
+  const dayData = days.find(dd => dd.date === date);
+  const names = dayData?.casts.map(c => c.name).join('・') ?? '';
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
+  const lines = [`本日 ${m}/${d}(${wd}) の出勤キャスト`];
+  if (names) lines.push(names);
+  lines.push('');
+  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
+  return lines.join('\n');
 }

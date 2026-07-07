@@ -9,9 +9,10 @@ export type ShiftFlatRow = {
   castName: string;
   start: string; // 'HH:MM'
   end: string; // 'HH:MM'
+  photoUrl?: string | null;
 };
 
-export type ShiftCastEntry = { name: string; start: string; end: string };
+export type ShiftCastEntry = { name: string; start: string; end: string; photoUrl?: string | null };
 
 /** 1日ぶんの出勤リスト */
 export type ShiftDayData = { date: string; casts: ShiftCastEntry[] };
@@ -25,7 +26,7 @@ export function buildShiftDays(rows: ShiftFlatRow[], yearMonth: string): ShiftDa
   for (const r of rows) {
     if (!r.date.startsWith(`${yearMonth}-`)) continue;
     const list = byDate.get(r.date) ?? [];
-    list.push({ name: r.castName, start: r.start, end: r.end });
+    list.push({ name: r.castName, start: r.start, end: r.end, photoUrl: r.photoUrl });
     byDate.set(r.date, list);
   }
   const days: ShiftDayData[] = [];

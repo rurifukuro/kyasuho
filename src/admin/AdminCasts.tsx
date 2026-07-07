@@ -1,16 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyCast, KyShift, KyTenant } from '../lib/types';
+import type { KyCast, KyCastInvite, KyShift, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import type { KyPayrollSettings } from '../lib/types';
 import {
   addCast,
   addShift,
+  createInvite,
+  DEFAULT_PAYROLL_SETTINGS,
+  deleteInvite,
   fetchCastList,
+  fetchInvites,
+  fetchPayrollSettings,
   fetchShiftList,
   removeCast,
   removeShift,
   updateCast,
+  uploadCastShopPhoto,
 } from './adminApi';
+import { calcMinutesWorked } from './payrollCalc';
 
 function fmtTime(value: string): string {
   return value.slice(0, 5);
@@ -31,6 +39,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   // 追加・編集フォーム（editingId が null なら新規追加）
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
+  const [formNameKana, setFormNameKana] = useState('');
   const [formBio, setFormBio] = useState('');
   const [formNomination, setFormNomination] = useState(true);
   const [formBusy, setFormBusy] = useState(false);
@@ -46,6 +55,13 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const [shiftEnd, setShiftEnd] = useState('23:00');
   const [shiftBusy, setShiftBusy] = useState(false);
   const [shiftFormError, setShiftFormError] = useState<string | null>(null);
+  const [paySettings, setPaySettings] = useState<KyPayrollSettings | null>(null);
+
+  useEffect(() => {
+    fetchPayrollSettings(tenant.id)
+      .then(setPaySettings)
+      .catch((e) => console.warn('[kyasuho] fetchPayrollSettings:', e));
+  }, [tenant.id]);
 
   const loadCasts = useCallback(async () => {
     setLoading(true);
@@ -92,6 +108,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const startEdit = (cast: KyCast) => {
     setEditingId(cast.id);
     setFormName(cast.name);
+    setFormNameKana(cast.name_kana ?? '');
     setFormBio(cast.bio);
     setFormNomination(cast.accepts_nomination);
     setFormError(null);
@@ -100,6 +117,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
   const resetForm = () => {
     setEditingId(null);
     setFormName('');
+    setFormNameKana('');
     setFormBio('');
     setFormNomination(true);
     setFormError(null);
@@ -119,6 +137,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
       if (editingId) {
         await updateCast(editingId, {
           name,
+          nameKana: formNameKana.trim(),
           bio: formBio.trim(),
           acceptsNomination: formNomination,
         });
@@ -126,6 +145,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
         await addCast({
           tenantId: tenant.id,
           name,
+          nameKana: formNameKana.trim(),
           bio: formBio.trim(),
           acceptsNomination: formNomination,
         });
@@ -239,6 +259,17 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
             />
           </div>
           <div className="admin-field">
+            <label htmlFor="cast-kana">ふりがな</label>
+            <input
+              id="cast-kana"
+              type="text"
+              className="w-md"
+              value={formNameKana}
+              onChange={(e) => setFormNameKana(e.target.value)}
+              placeholder="ひらがな（ソート用）"
+            />
+          </div>
+          <div className="admin-field">
             <label htmlFor="cast-bio">紹介文（任意）</label>
             <input
               id="cast-bio"
@@ -286,9 +317,12 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           <table className="admin-table">
             <thead>
               <tr>
+                <th>写真</th>
                 <th>名前</th>
+                <th>ふりがな</th>
                 <th>紹介文</th>
                 <th>指名予約</th>
+                <th>アカウント</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -297,7 +331,21 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                 const busy = busyId === cast.id;
                 return (
                   <tr key={cast.id}>
+                    <td>
+                      <CastPhotoCell
+                        cast={cast}
+                        tenantId={tenant.id}
+                        onUploaded={(url) => {
+                          setCasts((prev) =>
+                            prev.map((c) =>
+                              c.id === cast.id ? { ...c, photo_url: url } : c,
+                            ),
+                          );
+                        }}
+                      />
+                    </td>
                     <td>{cast.name}</td>
+                    <td>{cast.name_kana || '—'}</td>
                     <td>{cast.bio || '—'}</td>
                     <td>
                       <button
@@ -308,6 +356,13 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
                       >
                         {cast.accepts_nomination ? '受付中' : '停止中'}
                       </button>
+                    </td>
+                    <td>
+                      {cast.user_id ? (
+                        <span className="admin-badge green">連携済み</span>
+                      ) : (
+                        <span className="admin-badge gray">未連携</span>
+                      )}
                     </td>
                     <td>
                       <div className="admin-btn-row">
@@ -458,6 +513,282 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           </table>
         </div>
       )}
+
+      {shifts.length > 0 && (() => {
+        const rate = paySettings?.base_hourly_rate ?? DEFAULT_PAYROLL_SETTINGS.baseHourlyRate;
+        const totalMinutes = shifts.reduce(
+          (sum, row) => sum + calcMinutesWorked(row.start_at, row.end_at),
+          0,
+        );
+        const estimatedCost = Math.floor(totalMinutes * rate / 60);
+        return (
+          <div className="admin-card" style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <strong>見込み人件費:</strong>
+            <span>¥{estimatedCost.toLocaleString()}</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+              （{(totalMinutes / 60).toFixed(1)}時間 × ¥{rate.toLocaleString()}/時）
+            </span>
+          </div>
+        );
+      })()}
+
+      <CastInvitePanel tenant={tenant} casts={casts} />
+    </div>
+  );
+}
+
+// ── 招待管理パネル ──
+
+function CastInvitePanel({ tenant, casts }: { tenant: KyTenant; casts: KyCast[] }) {
+  const [invites, setInvites] = useState<KyCastInvite[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteCastId, setInviteCastId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const castNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of casts) map.set(c.id, c.name);
+    return map;
+  }, [casts]);
+
+  const unlinkedCasts = useMemo(() => casts.filter((c) => !c.user_id), [casts]);
+
+  const loadInvites = useCallback(async () => {
+    setLoading(true);
+    try {
+      const rows = await fetchInvites(tenant.id);
+      setInvites(rows);
+    } catch (e) {
+      console.warn('[kyasuho] fetchInvites failed:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant.id]);
+
+  useEffect(() => {
+    void loadInvites();
+  }, [loadInvites]);
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!inviteCastId || creating) return;
+    setCreating(true);
+    try {
+      await createInvite(tenant.id, inviteCastId);
+      await loadInvites();
+      setInviteCastId('');
+    } catch (err) {
+      console.warn('[kyasuho] createInvite failed:', err);
+      window.alert('招待コードの作成に失敗しました。');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCopy = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      window.alert('コードをコピーしました');
+    } catch {
+      window.prompt('コードをコピーしてください:', code);
+    }
+  };
+
+  const handleDelete = async (inv: KyCastInvite) => {
+    if (!window.confirm(`招待コード「${inv.code}」を削除しますか？`)) return;
+    setBusyId(inv.id);
+    try {
+      await deleteInvite(inv.id);
+      await loadInvites();
+    } catch (e) {
+      console.warn('[kyasuho] deleteInvite failed:', e);
+      window.alert('削除に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const fmtDate = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleDateString('ja-JP');
+    } catch {
+      return iso;
+    }
+  };
+
+  return (
+    <>
+      <h3 className="admin-section-title">キャスト招待管理</h3>
+      <p className="admin-note" style={{ marginBottom: 8 }}>
+        招待コードを作成してキャストに渡すと、キャストが自分のアカウントでアプリにログインし、シフトや給与を確認できるようになります。コードの有効期限は7日間です。
+      </p>
+
+      {unlinkedCasts.length > 0 && (
+        <form className="admin-card" onSubmit={handleCreate}>
+          <div className="admin-form-row">
+            <div className="admin-field">
+              <label htmlFor="invite-cast">招待するキャスト</label>
+              <select
+                id="invite-cast"
+                className="w-md"
+                value={inviteCastId}
+                onChange={(e) => setInviteCastId(e.target.value)}
+              >
+                <option value="">選択してください</option>
+                {unlinkedCasts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="submit" className="admin-btn primary" disabled={creating || !inviteCastId}>
+              {creating ? '作成中…' : '招待コードを作成'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <div className="admin-empty">読み込み中…</div>
+      ) : invites.length === 0 ? (
+        <div className="admin-table-wrap">
+          <div className="admin-empty">招待コードはまだ作成されていません。</div>
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>キャスト</th>
+                <th>招待コード</th>
+                <th>有効期限</th>
+                <th>ステータス</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invites.map((inv) => {
+                const expired = new Date(inv.expires_at) < new Date();
+                const used = !!inv.used_at;
+                return (
+                  <tr key={inv.id}>
+                    <td>{castNameById.get(inv.cast_id) ?? '—'}</td>
+                    <td style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{inv.code}</td>
+                    <td>{fmtDate(inv.expires_at)}</td>
+                    <td>
+                      {used ? (
+                        <span className="admin-badge green">使用済み</span>
+                      ) : expired ? (
+                        <span className="admin-badge red">期限切れ</span>
+                      ) : (
+                        <span className="admin-badge blue">有効</span>
+                      )}
+                    </td>
+                    <td>
+                      <div className="admin-btn-row">
+                        {!used && !expired && (
+                          <button
+                            type="button"
+                            className="admin-btn"
+                            onClick={() => void handleCopy(inv.code)}
+                          >
+                            コピー
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="admin-btn danger"
+                          disabled={busyId === inv.id}
+                          onClick={() => void handleDelete(inv)}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+function CastPhotoCell({
+  cast,
+  tenantId,
+  onUploaded,
+}: {
+  cast: KyCast;
+  tenantId: string;
+  onUploaded: (url: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+        const url = await uploadCastShopPhoto(tenantId, cast.id, file);
+        onUploaded(url);
+      } catch (err) {
+        alert(`アップロード失敗: ${String(err)}`);
+      } finally {
+        setUploading(false);
+        e.target.value = '';
+      }
+    },
+    [tenantId, cast.id, onUploaded],
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      {cast.photo_url ? (
+        <img
+          src={cast.photo_url}
+          alt={cast.name}
+          style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: '#e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 18,
+            color: '#9ca3af',
+          }}
+        >
+          👤
+        </div>
+      )}
+      <label
+        style={{
+          fontSize: 11,
+          color: '#6366f1',
+          cursor: uploading ? 'wait' : 'pointer',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {uploading ? '…' : '変更'}
+        <input
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => void handleFileChange(e)}
+          disabled={uploading}
+        />
+      </label>
     </div>
   );
 }

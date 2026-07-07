@@ -1,15 +1,26 @@
 import { supabase } from '../lib/supabase';
 import type {
   KyAttendance,
+  KyBottleKeep,
   KyCast,
+  KyCastInvite,
   KyCastPayroll,
+  KyCustomer,
+  KyEvent,
+  KyExpense,
+  KyMenuItem,
+  KyOrder,
+  KyOrderItem,
   KyPayrollSettings,
   KyReservationFull,
   KySales,
+  KySeatType,
   KyShift,
   KyShiftTemplate,
+  KyStampSettings,
   KyTenant,
   KyUnlockWindow,
+  KyVoucher,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -23,7 +34,7 @@ export async function fetchOwnTenant(): Promise<KyTenant | null> {
   if (!uid) return null;
   const { data, error } = await supabase
     .from('ky_tenants')
-    .select('id, slug, name, genre, business_info, is_suspended')
+    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended, enable_bottle_keep, enable_vouchers')
     .eq('owner_user_id', uid)
     .maybeSingle();
   if (error) throw error;
@@ -86,6 +97,27 @@ export async function adminMakeReservation(input: {
   return data as MakeReservationResult;
 }
 
+export async function countNoShowByContacts(
+  tenantId: string,
+  contacts: string[],
+): Promise<Map<string, number>> {
+  const unique = [...new Set(contacts.filter((c) => c.trim()))];
+  const map = new Map<string, number>();
+  if (unique.length === 0) return map;
+  const { data, error } = await supabase
+    .from('ky_reservations')
+    .select('contact')
+    .eq('tenant_id', tenantId)
+    .in('contact', unique)
+    .eq('status', 'no_show');
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const c = (row as { contact: string }).contact;
+    map.set(c, (map.get(c) ?? 0) + 1);
+  }
+  return map;
+}
+
 // ---- 受付枠 ----
 
 export async function fetchWindows(tenantId: string, date: string): Promise<KyUnlockWindow[]> {
@@ -128,7 +160,7 @@ export async function removeWindow(id: string): Promise<void> {
 export async function fetchCastList(tenantId: string): Promise<KyCast[]> {
   const { data, error } = await supabase
     .from('ky_casts')
-    .select('id, tenant_id, name, photo_url, bio, accepts_nomination, sort_order')
+    .select('id, tenant_id, name, photo_url, bio, accepts_nomination, sort_order, user_id')
     .eq('tenant_id', tenantId)
     .order('sort_order')
     .order('name');
@@ -139,12 +171,14 @@ export async function fetchCastList(tenantId: string): Promise<KyCast[]> {
 export async function addCast(input: {
   tenantId: string;
   name: string;
+  nameKana?: string;
   bio: string;
   acceptsNomination: boolean;
 }): Promise<void> {
   const { error } = await supabase.from('ky_casts').insert({
     tenant_id: input.tenantId,
     name: input.name,
+    name_kana: input.nameKana ?? '',
     bio: input.bio,
     accepts_nomination: input.acceptsNomination,
     sns_links: [],
@@ -154,10 +188,11 @@ export async function addCast(input: {
 
 export async function updateCast(
   id: string,
-  fields: { name?: string; bio?: string; acceptsNomination?: boolean },
+  fields: { name?: string; nameKana?: string; bio?: string; acceptsNomination?: boolean },
 ): Promise<void> {
   const update: Record<string, unknown> = {};
   if (fields.name !== undefined) update.name = fields.name;
+  if (fields.nameKana !== undefined) update.name_kana = fields.nameKana;
   if (fields.bio !== undefined) update.bio = fields.bio;
   if (fields.acceptsNomination !== undefined) update.accepts_nomination = fields.acceptsNomination;
   const { error } = await supabase.from('ky_casts').update(update).eq('id', id);
@@ -241,6 +276,7 @@ export async function upsertSales(
       nomination_count: input.nominationCount,
       other_revenue: input.otherRevenue,
       note: input.note,
+      entry_mode: 'manual',
     },
     { onConflict: 'tenant_id,date' },
   );
@@ -454,7 +490,10 @@ export async function generatePayrollFromAttendance(
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
   const existingKeys = new Set(existing.map((p) => `${p.cast_id}|${p.date}`));
-  const nominations = await countNominationsByMonth(tenantId, yearMonth);
+  const [nominations, castDrinks] = await Promise.all([
+    countNominationsByMonth(tenantId, yearMonth),
+    countCastDrinksByMonth(tenantId, yearMonth),
+  ]);
 
   const rows = attendance
     .filter((a) => WORKED_STATUSES.has(a.status))
@@ -462,10 +501,11 @@ export async function generatePayrollFromAttendance(
     .map((a) => {
       const minutesWorked = calcMinutesWorked(a.check_in_at, a.check_out_at);
       const nominationCount = nominations.get(`${a.cast_id}|${a.date}`) ?? 0;
+      const drinkCount = castDrinks.get(`${a.cast_id}|${a.date}`) ?? 0;
       const breakdown = calcPayroll(settings, {
         minutesWorked,
         nominationCount,
-        drinkCount: 0, // ドリンク数は日別手入力（§23）＝生成時は0
+        drinkCount,
         otherBack: 0,
         lateCount: a.status === 'late' ? 1 : 0,
       });
@@ -477,7 +517,7 @@ export async function generatePayrollFromAttendance(
         base_pay: breakdown.basePay,
         nomination_count: nominationCount,
         nomination_back: breakdown.nominationBack,
-        drink_count: 0,
+        drink_count: drinkCount,
         drink_back: breakdown.drinkBack,
         other_back: breakdown.otherBack,
         deductions: breakdown.deductions,
@@ -567,4 +607,600 @@ export async function requestAiShiftDesign(mood: string, storeName: string): Pro
   const design = (data as { design?: unknown } | null)?.design;
   if (design === undefined || design === null) throw new Error('bad_ai_output');
   return design;
+}
+
+// ---- 招待管理（ky_cast_invites・T13） ----
+
+function generateInviteCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+export async function fetchInvites(tenantId: string): Promise<KyCastInvite[]> {
+  const { data, error } = await supabase
+    .from('ky_cast_invites')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyCastInvite[];
+}
+
+export async function createInvite(tenantId: string, castId: string): Promise<KyCastInvite> {
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('ky_cast_invites')
+    .insert({
+      tenant_id: tenantId,
+      cast_id: castId,
+      code: generateInviteCode(),
+      expires_at: expiresAt,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as KyCastInvite;
+}
+
+export async function deleteInvite(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_cast_invites').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- オーダー管理（ky_orders/ky_order_items/ky_menu_items・§25） ----
+
+export async function fetchOrdersByDate(tenantId: string, date: string): Promise<KyOrder[]> {
+  const { data, error } = await supabase
+    .from('ky_orders')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('biz_date', date)
+    .order('opened_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyOrder[];
+}
+
+export async function fetchOrderItems(orderId: string): Promise<KyOrderItem[]> {
+  const { data, error } = await supabase
+    .from('ky_order_items')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at');
+  if (error) throw error;
+  return (data ?? []) as KyOrderItem[];
+}
+
+export async function fetchMenuItems(tenantId: string): Promise<KyMenuItem[]> {
+  const { data, error } = await supabase
+    .from('ky_menu_items')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyMenuItem[];
+}
+
+export async function upsertMenuItem(
+  tenantId: string,
+  input: {
+    id?: string;
+    category: string;
+    name: string;
+    price: number;
+    needsCast: boolean;
+    sortOrder: number;
+    isActive: boolean;
+  },
+): Promise<void> {
+  const row = {
+    tenant_id: tenantId,
+    category: input.category,
+    name: input.name,
+    price: input.price,
+    needs_cast: input.needsCast,
+    sort_order: input.sortOrder,
+    is_active: input.isActive,
+    ...(input.id ? { id: input.id } : {}),
+  };
+  const { error } = input.id
+    ? await supabase.from('ky_menu_items').update(row).eq('id', input.id)
+    : await supabase.from('ky_menu_items').insert(row);
+  if (error) throw error;
+}
+
+export async function deleteMenuItem(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_menu_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** §25-5: 指定月のキャストドリンク数を「castId|date」→杯数 のマップで返す */
+export async function countCastDrinksByMonth(
+  tenantId: string,
+  yearMonth: string,
+): Promise<Map<string, number>> {
+  const { from, toExclusive } = monthRange(yearMonth);
+  const { data: orders, error: ordErr } = await supabase
+    .from('ky_orders')
+    .select('id, biz_date')
+    .eq('tenant_id', tenantId)
+    .gte('biz_date', from)
+    .lt('biz_date', toExclusive)
+    .eq('status', 'closed');
+  if (ordErr) throw ordErr;
+  if (!orders || orders.length === 0) return new Map();
+
+  const orderIds = (orders as { id: string; biz_date: string }[]).map((o) => o.id);
+  const dateById = new Map((orders as { id: string; biz_date: string }[]).map((o) => [o.id, o.biz_date]));
+
+  const { data: items, error: itemErr } = await supabase
+    .from('ky_order_items')
+    .select('order_id, cast_id, qty')
+    .in('order_id', orderIds)
+    .eq('category', 'cast_drink')
+    .not('cast_id', 'is', null);
+  if (itemErr) throw itemErr;
+
+  const counts = new Map<string, number>();
+  for (const row of (items ?? []) as { order_id: string; cast_id: string; qty: number }[]) {
+    const bizDate = dateById.get(row.order_id);
+    if (!bizDate) continue;
+    const key = `${row.cast_id}|${bizDate}`;
+    counts.set(key, (counts.get(key) ?? 0) + row.qty);
+  }
+  return counts;
+}
+
+// ── 席種・席料（§29） ──────────────────────────────────────────
+
+export async function fetchSeatTypes(tenantId: string): Promise<KySeatType[]> {
+  const { data, error } = await supabase
+    .from('ky_seat_types')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KySeatType[];
+}
+
+export async function addSeatType(
+  tenantId: string,
+  name: string,
+  seatFee: number,
+): Promise<KySeatType> {
+  const { data: maxRow } = await supabase
+    .from('ky_seat_types')
+    .select('sort_order')
+    .eq('tenant_id', tenantId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single();
+  const nextOrder = ((maxRow as { sort_order: number } | null)?.sort_order ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from('ky_seat_types')
+    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, sort_order: nextOrder })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as KySeatType;
+}
+
+export async function updateSeatType(
+  id: string,
+  fields: Partial<{ name: string; seat_fee: number; sort_order: number; is_active: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_seat_types').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteSeatType(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_seat_types').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- キャスト写真 ----
+
+const PHOTO_BUCKET = 'ky-cast-photos';
+
+export async function uploadCastShopPhoto(
+  tenantId: string,
+  castId: string,
+  file: File,
+): Promise<string> {
+  const path = `${tenantId}/${castId}/shop.jpg`;
+  const { error: upErr } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) throw upErr;
+  const { data: urlData } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+  const { error: updErr } = await supabase
+    .from('ky_casts')
+    .update({ photo_url: publicUrl })
+    .eq('id', castId);
+  if (updErr) throw updErr;
+  return publicUrl;
+}
+
+// ---- 経費 (§27) ----
+
+export async function fetchExpenses(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<KyExpense[]> {
+  const { data, error } = await supabase
+    .from('ky_expenses')
+    .select('id, tenant_id, date, category, amount, memo')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+  if (error) throw error;
+  return (data as KyExpense[] | null) ?? [];
+}
+
+export async function addExpense(
+  tenantId: string,
+  date: string,
+  category: string,
+  amount: number,
+  memo: string,
+): Promise<KyExpense> {
+  const { data, error } = await supabase
+    .from('ky_expenses')
+    .insert({ tenant_id: tenantId, date, category, amount, memo })
+    .select('id, tenant_id, date, category, amount, memo')
+    .single();
+  if (error) throw error;
+  return data as KyExpense;
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchMonthlySalesTotal(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('ky_sales')
+    .select('total_revenue')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+  if (error) throw error;
+  return ((data as { total_revenue: number }[] | null) ?? []).reduce(
+    (sum, r) => sum + r.total_revenue,
+    0,
+  );
+}
+
+export async function fetchMonthlyPayrollTotal(
+  tenantId: string,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('ky_cast_payroll')
+    .select('total_pay')
+    .eq('tenant_id', tenantId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+  if (error) throw error;
+  return ((data as { total_pay: number }[] | null) ?? []).reduce(
+    (sum, r) => sum + r.total_pay,
+    0,
+  );
+}
+
+// ---- 店舗テンプレ背景（§22-3） ----
+
+// ---- 顧客管理（ky_customers・§32-2） ----
+
+const CUSTOMER_SELECT =
+  'id, tenant_id, name, name_kana, contact, persona_notes, internal_notes, is_banned, ban_reason, stamp_count, total_visits, last_visit_date, created_at';
+
+export async function fetchCustomerList(tenantId: string): Promise<KyCustomer[]> {
+  const { data, error } = await supabase
+    .from('ky_customers')
+    .select(CUSTOMER_SELECT)
+    .eq('tenant_id', tenantId)
+    .order('name_kana')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyCustomer[];
+}
+
+export async function addCustomerRecord(
+  tenantId: string,
+  input: {
+    name: string;
+    name_kana: string;
+    contact: string;
+    persona_notes: string;
+    internal_notes: string;
+  },
+): Promise<KyCustomer> {
+  const { data, error } = await supabase
+    .from('ky_customers')
+    .insert({ tenant_id: tenantId, ...input })
+    .select(CUSTOMER_SELECT)
+    .single();
+  if (error) throw error;
+  return data as KyCustomer;
+}
+
+export async function updateCustomerRecord(
+  id: string,
+  fields: Partial<{
+    name: string;
+    name_kana: string;
+    contact: string;
+    persona_notes: string;
+    internal_notes: string;
+    is_banned: boolean;
+    ban_reason: string;
+    stamp_count: number;
+    total_visits: number;
+    last_visit_date: string | null;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_customers').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteCustomerRecord(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_customers').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- スタンプ設定（ky_stamp_settings） ----
+
+export async function fetchStampSettingsRecord(tenantId: string): Promise<KyStampSettings | null> {
+  const { data, error } = await supabase
+    .from('ky_stamp_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as KyStampSettings | null) ?? null;
+}
+
+export async function saveStampSettingsRecord(
+  tenantId: string,
+  input: {
+    stamps_per_visit: number;
+    reward_threshold: number;
+    reward_description: string;
+    is_active: boolean;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_stamp_settings').upsert(
+    { tenant_id: tenantId, ...input },
+    { onConflict: 'tenant_id' },
+  );
+  if (error) throw error;
+}
+
+// ---- 店舗テンプレ背景（§22-3） ----
+
+export async function uploadShiftBackground(
+  tenantId: string,
+  file: File,
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const path = `${tenantId}/bg_${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from('ky-shift-backgrounds')
+    .upload(path, file, { cacheControl: '86400', upsert: true });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage
+    .from('ky-shift-backgrounds')
+    .getPublicUrl(path);
+  return urlData.publicUrl;
+}
+
+// ---- イベント（ky_events・§19-㉞） ----
+
+export async function fetchEvents(tenantId: string): Promise<KyEvent[]> {
+  const { data, error } = await supabase
+    .from('ky_events')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('event_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as KyEvent[];
+}
+
+export async function addEvent(
+  tenantId: string,
+  input: { title: string; description: string; eventDate: string; startTime: string | null; endTime: string | null; eventType: string; isPublic: boolean },
+): Promise<void> {
+  const { error } = await supabase.from('ky_events').insert({
+    tenant_id: tenantId,
+    title: input.title,
+    description: input.description,
+    event_date: input.eventDate,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    event_type: input.eventType,
+    is_public: input.isPublic,
+  });
+  if (error) throw error;
+}
+
+export async function updateEvent(
+  id: string,
+  input: { title: string; description: string; eventDate: string; startTime: string | null; endTime: string | null; eventType: string; isPublic: boolean },
+): Promise<void> {
+  const { error } = await supabase.from('ky_events').update({
+    title: input.title,
+    description: input.description,
+    event_date: input.eventDate,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    event_type: input.eventType,
+    is_public: input.isPublic,
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_events').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchPublicEvents(tenantId: string): Promise<KyEvent[]> {
+  const { data, error } = await supabase
+    .from('ky_events')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('is_public', true)
+    .gte('event_date', new Date().toISOString().slice(0, 10))
+    .order('event_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as KyEvent[];
+}
+
+// ---- テナント機能フラグ更新（§19-㊲） ----
+
+export async function updateTenantFlags(
+  tenantId: string,
+  flags: Partial<{ enable_bottle_keep: boolean; enable_vouchers: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_tenants').update(flags).eq('id', tenantId);
+  if (error) throw error;
+}
+
+// ---- ボトルキープ（ky_bottle_keeps） ----
+
+export async function fetchBottleKeeps(tenantId: string): Promise<KyBottleKeep[]> {
+  const { data, error } = await supabase
+    .from('ky_bottle_keeps')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('is_active', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyBottleKeep[];
+}
+
+export async function addBottleKeep(
+  tenantId: string,
+  input: {
+    customerName: string;
+    itemName: string;
+    startDate: string;
+    expiryDate: string | null;
+    remaining: string;
+    note: string;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').insert({
+    tenant_id: tenantId,
+    customer_name: input.customerName,
+    item_name: input.itemName,
+    start_date: input.startDate,
+    expiry_date: input.expiryDate || null,
+    remaining: input.remaining,
+    note: input.note,
+  });
+  if (error) throw error;
+}
+
+export async function updateBottleKeep(
+  id: string,
+  fields: Partial<{
+    customer_name: string;
+    item_name: string;
+    start_date: string;
+    expiry_date: string | null;
+    remaining: string;
+    note: string;
+    is_active: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteBottleKeep(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- 回数券・チェキ券（ky_vouchers） ----
+
+export async function fetchVouchers(tenantId: string): Promise<KyVoucher[]> {
+  const { data, error } = await supabase
+    .from('ky_vouchers')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('is_active', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyVoucher[];
+}
+
+export async function addVoucher(
+  tenantId: string,
+  input: {
+    voucherType: string;
+    name: string;
+    customerName: string;
+    totalCount: number;
+    expiryDate: string | null;
+    note: string;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').insert({
+    tenant_id: tenantId,
+    voucher_type: input.voucherType,
+    name: input.name,
+    customer_name: input.customerName,
+    total_count: input.totalCount,
+    remaining_count: input.totalCount,
+    expiry_date: input.expiryDate || null,
+    note: input.note,
+  });
+  if (error) throw error;
+}
+
+export async function updateVoucher(
+  id: string,
+  fields: Partial<{
+    voucher_type: string;
+    name: string;
+    customer_name: string;
+    total_count: number;
+    remaining_count: number;
+    expiry_date: string | null;
+    note: string;
+    is_active: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function useVoucher(id: string, currentRemaining: number): Promise<void> {
+  if (currentRemaining <= 0) return;
+  const { error } = await supabase
+    .from('ky_vouchers')
+    .update({ remaining_count: currentRemaining - 1 })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteVoucher(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').delete().eq('id', id);
+  if (error) throw error;
 }

@@ -13,6 +13,15 @@ import { AdminSales } from './AdminSales';
 import { AdminPayroll } from './AdminPayroll';
 import { AdminAttendance } from './AdminAttendance';
 import { AdminShiftImage } from './AdminShiftImage';
+import { AdminOrders } from './AdminOrders';
+import { AdminMenu } from './AdminMenu';
+import { AdminExpenses } from './AdminExpenses';
+import { AdminCustomers } from './AdminCustomers';
+import { AdminCastPerformance } from './AdminCastPerformance';
+import { AdminEvents } from './AdminEvents';
+import { AdminBottleKeep } from './AdminBottleKeep';
+import { AdminVouchers } from './AdminVouchers';
+import { AdminSettings } from './AdminSettings';
 import './admin.css';
 
 export default function AdminApp() {
@@ -95,6 +104,13 @@ export default function AdminApp() {
     );
   }
 
+  const handleTenantUpdate = useCallback(
+    (patch: Partial<KyTenant>) => {
+      setTenant((prev) => (prev ? { ...prev, ...patch } : prev));
+    },
+    [],
+  );
+
   return (
     <Routes>
       <Route element={<AdminLayout tenant={tenant} />}>
@@ -104,10 +120,19 @@ export default function AdminApp() {
         <Route path="reservations" element={<AdminReservations tenant={tenant} />} />
         <Route path="schedule" element={<AdminSchedule tenant={tenant} />} />
         <Route path="casts" element={<AdminCasts tenant={tenant} />} />
+        <Route path="orders" element={<AdminOrders tenant={tenant} />} />
+        <Route path="menu" element={<AdminMenu tenant={tenant} />} />
         <Route path="sales" element={<AdminSales tenant={tenant} />} />
         <Route path="payroll" element={<AdminPayroll tenant={tenant} />} />
         <Route path="attendance" element={<AdminAttendance tenant={tenant} />} />
         <Route path="shift-image" element={<AdminShiftImage tenant={tenant} />} />
+        <Route path="expenses" element={<AdminExpenses tenant={tenant} />} />
+        <Route path="customers" element={<AdminCustomers tenant={tenant} />} />
+        <Route path="cast-performance" element={<AdminCastPerformance tenant={tenant} />} />
+        <Route path="events" element={<AdminEvents tenant={tenant} />} />
+        <Route path="bottle-keep" element={<AdminBottleKeep tenant={tenant} />} />
+        <Route path="vouchers" element={<AdminVouchers tenant={tenant} />} />
+        <Route path="settings" element={<AdminSettings tenant={tenant} onTenantUpdate={handleTenantUpdate} />} />
         <Route path="*" element={<Navigate to="/admin/reservations" replace />} />
       </Route>
     </Routes>

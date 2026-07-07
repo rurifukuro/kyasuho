@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/timeUtils';
 import {
   adminMakeReservation,
+  countNoShowByContacts,
   fetchAllReservations,
   fetchCastList,
   removeReservation,
@@ -46,6 +47,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
   const [addNote, setAddNote] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [noShowMap, setNoShowMap] = useState<Map<string, number>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +55,13 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     try {
       const rows = await fetchAllReservations(tenant.id, date);
       setItems(rows);
+      const contacts = rows.map((r) => r.contact).filter(Boolean);
+      if (contacts.length > 0) {
+        const nsMap = await countNoShowByContacts(tenant.id, contacts);
+        setNoShowMap(nsMap);
+      } else {
+        setNoShowMap(new Map());
+      }
     } catch (e) {
       console.warn('[kyasuho] fetchAllReservations failed:', e);
       setError('予約の取得に失敗しました。再読み込みしてください。');
@@ -336,7 +345,14 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                       {fmtTime(row.slot)}（{row.set_minutes}分）
                     </td>
                     <td>{row.seat_no != null ? `${row.seat_no}番` : '—'}</td>
-                    <td>{row.customer_name}</td>
+                    <td>
+                      {row.customer_name}
+                      {row.contact && (noShowMap.get(row.contact) ?? 0) > 0 ? (
+                        <span className="admin-badge st-no_show" style={{ marginLeft: 6, fontSize: 11 }}>
+                          無断{noShowMap.get(row.contact)}回
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="num">{row.party_size}</td>
                     <td>{row.cast_id ? (castNameById.get(row.cast_id) ?? '—') : '—'}</td>
                     <td>{row.contact || '—'}</td>

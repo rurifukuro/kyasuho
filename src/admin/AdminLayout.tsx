@@ -6,14 +6,25 @@ import type { KyTenant } from '../lib/types';
 const APP_STORE_URL = 'https://apps.apple.com/jp/app/id6787006154';
 const SHOW_APP_STORE_LINK = false;
 
-const NAV_ITEMS: { path: string; label: string }[] = [
+type NavItem = { path: string; label: string; flag?: 'enable_bottle_keep' | 'enable_vouchers' };
+
+const NAV_ITEMS: NavItem[] = [
   { path: 'reservations', label: '予約台帳' },
   { path: 'schedule', label: '受付設定' },
   { path: 'casts', label: 'キャスト' },
+  { path: 'orders', label: 'オーダー履歴' },
+  { path: 'menu', label: 'メニュー管理' },
   { path: 'sales', label: '売上管理' },
   { path: 'payroll', label: '給与計算' },
   { path: 'attendance', label: '勤怠管理' },
+  { path: 'expenses', label: '経費・収支' },
+  { path: 'customers', label: '顧客管理' },
+  { path: 'cast-performance', label: 'キャスト成績' },
+  { path: 'events', label: 'イベント' },
+  { path: 'bottle-keep', label: 'ボトルキープ', flag: 'enable_bottle_keep' },
+  { path: 'vouchers', label: '回数券・チェキ券', flag: 'enable_vouchers' },
   { path: 'shift-image', label: 'シフト表作成' },
+  { path: 'settings', label: '機能設定' },
 ];
 
 export function AdminLayout({ tenant }: { tenant: KyTenant }) {
@@ -30,7 +41,7 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
       <aside className="admin-sidebar">
         <div className="admin-brand">きゃすりん</div>
         <div className="admin-brand-sub">店舗管理（PC版）</div>
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEMS.filter((item) => !item.flag || tenant[item.flag]).map((item) => (
           <NavLink
             key={item.path}
             to={`/admin/${item.path}`}

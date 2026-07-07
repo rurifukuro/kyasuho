@@ -35,9 +35,11 @@ type Props = {
   yearMonth: string; // 'YYYY-MM'
   storeName: string;
   logoUrl?: string | null;
+  dailyDate?: string; // 'YYYY-MM-DD'（daily-lineup用）
+  bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl }: Props) {
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
@@ -50,10 +52,14 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
     height: def.size.h,
     boxSizing: 'border-box',
     padding: PADDING,
-    backgroundColor: p.bg,
-    backgroundImage: p.bgGradient
-      ? `linear-gradient(160deg, ${p.bgGradient[0]}, ${p.bgGradient[1]})`
-      : undefined,
+    backgroundColor: bgImageUrl ? 'transparent' : p.bg,
+    backgroundImage: bgImageUrl
+      ? `url(${bgImageUrl})`
+      : p.bgGradient
+        ? `linear-gradient(160deg, ${p.bgGradient[0]}, ${p.bgGradient[1]})`
+        : undefined,
+    backgroundSize: bgImageUrl ? 'cover' : undefined,
+    backgroundPosition: bgImageUrl ? 'center' : undefined,
     fontFamily: bodyFont,
     overflow: 'hidden',
     display: 'flex',
@@ -130,7 +136,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
                 {motif}
               </span>
             ) : null}
-            {yearMonthLabel(yearMonth)} シフト表
+            {def.layout === 'daily-lineup' && dailyDate
+              ? `${dailyDateLabel(dailyDate)} 出勤キャスト`
+              : `${yearMonthLabel(yearMonth)} シフト表`}
             {motif ? (
               <span style={{ fontSize: 34, verticalAlign: 'middle', marginLeft: 20 }}>
                 {motif}
@@ -141,7 +149,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
       </div>
 
       {/* 本体 */}
-      {def.layout === 'month-grid' ? (
+      {def.layout === 'daily-lineup' && dailyDate ? (
+        <DailyLineup def={def} days={days} dailyDate={dailyDate} />
+      ) : def.layout === 'month-grid' ? (
         <MonthGrid def={def} days={days} yearMonth={yearMonth} />
       ) : (
         <WeekRows def={def} days={days} />
@@ -530,6 +540,148 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
               </div>
             );
           })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── ヘルパー（daily-lineup） ──
+
+function dailyDateLabel(date: string): string {
+  const [y = 0, m = 0, d = 0] = date.split('-').map(Number);
+  const wd = WEEKDAY_LABELS[new Date(y, m - 1, d).getDay()]!;
+  return `${m}/${d}(${wd})`;
+}
+
+// ── デイリー出勤表（§22-2: 写真入りグリッド） ──
+
+const DEFAULT_AVATAR_COLOR = '#D1D5DB';
+
+function DailyLineup({
+  def,
+  days,
+  dailyDate,
+}: {
+  def: ShiftTemplateDefinition;
+  days: ShiftDayData[];
+  dailyDate: string;
+}) {
+  const p = def.palette;
+  const deco = def.decorations;
+  const dayData = days.find(d => d.date === dailyDate);
+  const casts = dayData?.casts ?? [];
+  const count = casts.length;
+
+  const cols = count <= 2 ? count || 1 : count <= 4 ? 2 : count <= 9 ? 3 : 4;
+  const gap = deco.cellGap + 4;
+  const availW = def.size.w - PADDING * 2;
+  const availH = def.size.h - PADDING * 2 - 140;
+  const cellW = Math.floor((availW - gap * (cols - 1)) / cols);
+  const rows = Math.ceil(count / cols) || 1;
+  const cellH = Math.min(Math.floor((availH - gap * (rows - 1)) / rows), cellW * 1.35);
+  const photoSize = Math.min(cellW - 24, cellH - 80, 200);
+
+  if (count === 0) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: p.dayLabel,
+          fontSize: 28,
+        }}
+      >
+        この日の出勤予定はありません
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap,
+        alignContent: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {casts.map((c, i) => (
+        <div
+          key={i}
+          style={{
+            width: cellW,
+            height: cellH,
+            backgroundColor: p.cellBg,
+            border: `2px solid ${p.cellBorder}`,
+            borderRadius: deco.cornerRadius + 4,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 8,
+            boxSizing: 'border-box',
+          }}
+        >
+          {c.photoUrl ? (
+            <img
+              src={c.photoUrl}
+              alt=""
+              style={{
+                width: photoSize,
+                height: photoSize,
+                borderRadius: photoSize / 2,
+                objectFit: 'cover',
+                border: `3px solid ${p.accent}`,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: photoSize,
+                height: photoSize,
+                borderRadius: photoSize / 2,
+                backgroundColor: DEFAULT_AVATAR_COLOR,
+                border: `3px solid ${p.accent}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: photoSize * 0.4,
+                color: '#FFFFFF',
+              }}
+            >
+              ♪
+            </div>
+          )}
+          <div
+            style={{
+              marginTop: 8,
+              fontSize: Math.min(24, cellW * 0.14),
+              fontWeight: 700,
+              color: p.castName,
+              textAlign: 'center',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+              maxWidth: cellW - 16,
+            }}
+          >
+            {c.name}
+          </div>
+          <div
+            style={{
+              marginTop: 2,
+              fontSize: Math.min(16, cellW * 0.09),
+              color: p.timeText,
+              textAlign: 'center',
+            }}
+          >
+            {c.start}〜{c.end}
+          </div>
         </div>
       ))}
     </div>
