@@ -238,9 +238,9 @@ export function AdminSettings({
               style={{ width: 18, height: 18 }}
             />
             <span>
-              <strong>回数券・チェキ券管理</strong>
+              <strong>回数券・クーポン券管理</strong>
               <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
-                回数券やチェキ券の発行・使用回数の管理ができます。
+                回数券やクーポン券の発行・使用回数の管理ができます。
               </span>
             </span>
           </label>

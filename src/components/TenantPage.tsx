@@ -61,6 +61,7 @@ export function TenantPage() {
     );
   }
 
+  const totalSeats = seatTypes.reduce((sum, st) => sum + (st.capacity ?? 1), 0);
   const noWindowToday = windows.length === 0;
   const hasOtherOpenDate = nextDate !== null && nextDate !== selectedDate;
 
@@ -124,6 +125,7 @@ export function TenantPage() {
         reservations={reservations}
         casts={casts}
         shifts={shifts}
+        totalSeats={totalSeats}
         onPickSlot={(slot, setMinutes) => {
           setEditTarget(null);
           setSelectedSlot({ slot, setMinutes });

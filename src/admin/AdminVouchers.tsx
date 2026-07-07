@@ -5,7 +5,7 @@ import { addVoucher, deleteVoucher, fetchVouchers, updateVoucher, useVoucher } f
 
 const VOUCHER_TYPES: { value: string; label: string }[] = [
   { value: 'ticket', label: '回数券' },
-  { value: 'cheki', label: 'チェキ券' },
+  { value: 'cheki', label: 'クーポン券' },
   { value: 'other', label: 'その他' },
 ];
 
@@ -159,7 +159,7 @@ export function AdminVouchers({ tenant }: { tenant: KyTenant }) {
 
   return (
     <div>
-      <h2 className="admin-page-title">回数券・チェキ券管理</h2>
+      <h2 className="admin-page-title">回数券・クーポン券管理</h2>
 
       <form className="admin-card" onSubmit={handleSubmit}>
         <div className="admin-section-title" style={{ margin: '0 0 8px' }}>

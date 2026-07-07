@@ -48,6 +48,7 @@ export interface KyExpense {
   category: string;
   amount: number;
   memo: string;
+  receipt_url: string | null;
 }
 
 /** 席種・席料（§29）。 */
@@ -56,6 +57,7 @@ export interface KySeatType {
   tenant_id: string;
   name: string;
   seat_fee: number;
+  capacity: number;
   sort_order: number;
   is_active: boolean;
 }
@@ -283,7 +285,7 @@ export interface KyBottleKeep {
   created_at: string;
 }
 
-/** 回数券/チェキ券（ky_vouchers）。 */
+/** 回数券/クーポン券（ky_vouchers）。 */
 export type KyVoucherType = 'ticket' | 'cheki' | 'other';
 
 export interface KyVoucher {

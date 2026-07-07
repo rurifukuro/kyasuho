@@ -136,7 +136,6 @@ export async function addWindow(input: {
   date: string;
   openFrom: string;
   closeAt: string | null;
-  seats: number;
   setMinutes: number;
 }): Promise<void> {
   const { error } = await supabase.from('ky_unlock_windows').insert({
@@ -144,7 +143,7 @@ export async function addWindow(input: {
     date: input.date,
     open_from: input.openFrom,
     close_at: input.closeAt,
-    seats: input.seats,
+    seats: 0,
     set_minutes: input.setMinutes,
   });
   if (error) throw error;
@@ -770,6 +769,7 @@ export async function addSeatType(
   tenantId: string,
   name: string,
   seatFee: number,
+  capacity: number,
 ): Promise<KySeatType> {
   const { data: maxRow } = await supabase
     .from('ky_seat_types')
@@ -782,7 +782,7 @@ export async function addSeatType(
 
   const { data, error } = await supabase
     .from('ky_seat_types')
-    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, sort_order: nextOrder })
+    .insert({ tenant_id: tenantId, name, seat_fee: seatFee, capacity, sort_order: nextOrder })
     .select()
     .single();
   if (error) throw error;
@@ -791,7 +791,7 @@ export async function addSeatType(
 
 export async function updateSeatType(
   id: string,
-  fields: Partial<{ name: string; seat_fee: number; sort_order: number; is_active: boolean }>,
+  fields: Partial<{ name: string; seat_fee: number; capacity: number; sort_order: number; is_active: boolean }>,
 ): Promise<void> {
   const { error } = await supabase.from('ky_seat_types').update(fields).eq('id', id);
   if (error) throw error;
@@ -835,7 +835,7 @@ export async function fetchExpenses(
 ): Promise<KyExpense[]> {
   const { data, error } = await supabase
     .from('ky_expenses')
-    .select('id, tenant_id, date, category, amount, memo')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url')
     .eq('tenant_id', tenantId)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -854,7 +854,7 @@ export async function addExpense(
   const { data, error } = await supabase
     .from('ky_expenses')
     .insert({ tenant_id: tenantId, date, category, amount, memo })
-    .select('id, tenant_id, date, category, amount, memo')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url')
     .single();
   if (error) throw error;
   return data as KyExpense;
@@ -862,6 +862,85 @@ export async function addExpense(
 
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await supabase.from('ky_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+const RECEIPT_BUCKET = 'ky-receipts';
+
+export async function uploadReceipt(
+  tenantId: string,
+  expenseId: string,
+  file: File,
+): Promise<string> {
+  const path = `${tenantId}/${expenseId}.jpg`;
+  const { error } = await supabase.storage
+    .from(RECEIPT_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage.from(RECEIPT_BUCKET).getPublicUrl(path);
+  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+  const { error: dbErr } = await supabase
+    .from('ky_expenses')
+    .update({ receipt_url: publicUrl })
+    .eq('id', expenseId);
+  if (dbErr) throw dbErr;
+
+  return publicUrl;
+}
+
+export async function deleteReceipt(
+  tenantId: string,
+  expenseId: string,
+): Promise<void> {
+  const path = `${tenantId}/${expenseId}.jpg`;
+  await supabase.storage.from(RECEIPT_BUCKET).remove([path]);
+  const { error } = await supabase
+    .from('ky_expenses')
+    .update({ receipt_url: null })
+    .eq('id', expenseId);
+  if (error) throw error;
+}
+
+// ---- カスタム経費カテゴリ (D) ----
+
+export interface KyExpenseCategory {
+  id: string;
+  tenant_id: string;
+  key: string;
+  label: string;
+  sort_order: number;
+}
+
+export async function fetchCustomExpenseCategories(
+  tenantId: string,
+): Promise<KyExpenseCategory[]> {
+  const { data, error } = await supabase
+    .from('ky_expense_categories')
+    .select('id, tenant_id, key, label, sort_order')
+    .eq('tenant_id', tenantId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data as KyExpenseCategory[] | null) ?? [];
+}
+
+export async function addCustomExpenseCategory(
+  tenantId: string,
+  key: string,
+  label: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_expense_categories')
+    .insert({ tenant_id: tenantId, key, label });
+  if (error) throw error;
+}
+
+export async function deleteCustomExpenseCategory(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_expense_categories')
+    .delete()
+    .eq('id', id);
   if (error) throw error;
 }
 
@@ -1155,7 +1234,7 @@ export async function deleteBottleKeep(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// ---- 回数券・チェキ券（ky_vouchers） ----
+// ---- 回数券・クーポン券（ky_vouchers） ----
 
 export async function fetchVouchers(tenantId: string): Promise<KyVoucher[]> {
   const { data, error } = await supabase

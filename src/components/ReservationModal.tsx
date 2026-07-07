@@ -73,6 +73,10 @@ export function ReservationModal({
       setError('この時間は受付していません。');
       return;
     }
+    if (res?.error === 'duplicate_contact') {
+      setError('同じ連絡先でこの時間帯に既に予約があります。');
+      return;
+    }
     if (res?.id && res.seat_no != null) {
       setResult({ id: res.id, seatNo: res.seat_no });
     }
