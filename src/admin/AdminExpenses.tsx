@@ -35,14 +35,14 @@ function currentYearMonth(): string {
 }
 
 function shiftMonth(ym: string, delta: number): string {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
+  const parts = ym.split('-').map(Number) as [number, number];
+  const d = new Date(parts[0], parts[1] - 1 + delta, 1);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 
 function monthRange(ym: string): { start: string; end: string } {
-  const [y, m] = ym.split('-').map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
+  const parts = ym.split('-').map(Number) as [number, number];
+  const lastDay = new Date(parts[0], parts[1], 0).getDate();
   return { start: `${ym}-01`, end: `${ym}-${pad2(lastDay)}` };
 }
 
