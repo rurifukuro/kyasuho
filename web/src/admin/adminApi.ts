@@ -1080,6 +1080,24 @@ export async function updateTenantFlags(
   if (error) throw error;
 }
 
+// ---- テナントプロフィール更新 ----
+
+export async function updateTenantProfile(
+  tenantId: string,
+  fields: Partial<{
+    name: string;
+    genre: string;
+    business_info: { address?: string; openHours?: string; tel?: string; note?: string };
+    sns_links: { platform: string; url: string }[];
+    prefecture: string;
+    area: string;
+    ranking_opt_in: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_tenants').update(fields).eq('id', tenantId);
+  if (error) throw error;
+}
+
 // ---- ボトルキープ（ky_bottle_keeps） ----
 
 export async function fetchBottleKeeps(tenantId: string): Promise<KyBottleKeep[]> {

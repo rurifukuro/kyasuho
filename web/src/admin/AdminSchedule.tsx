@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyTenant, KyUnlockWindow } from '../lib/types';
+import type { KyTenant, KyUnlockWindow, KySeatType } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
-import { addWindow, fetchWindows, removeWindow } from './adminApi';
+import {
+  addWindow,
+  fetchWindows,
+  removeWindow,
+  fetchSeatTypes,
+  addSeatType,
+  updateSeatType,
+  deleteSeatType,
+} from './adminApi';
 
 function fmtTime(value: string): string {
   return value.slice(0, 5);
@@ -29,6 +37,14 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
   const [addError, setAddError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // 席種管理
+  const [seatTypes, setSeatTypes] = useState<KySeatType[]>([]);
+  const [stName, setStName] = useState('');
+  const [stFee, setStFee] = useState('0');
+  const [stEditId, setStEditId] = useState<string | null>(null);
+  const [stBusy, setStBusy] = useState(false);
+  const [stError, setStError] = useState<string | null>(null);
+
   const publicUrl = `${window.location.origin}${window.location.pathname}#/${tenant.slug}`;
 
   const load = useCallback(async () => {
@@ -48,6 +64,84 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadSeatTypes = useCallback(async () => {
+    try {
+      const data = await fetchSeatTypes(tenant.id);
+      setSeatTypes(data);
+    } catch (e) {
+      console.warn('[kyasuho] fetchSeatTypes failed:', e);
+    }
+  }, [tenant.id]);
+
+  useEffect(() => {
+    void loadSeatTypes();
+  }, [loadSeatTypes]);
+
+  const handleStSave = async (e: FormEvent) => {
+    e.preventDefault();
+    const fee = parseInt(stFee, 10);
+    if (!stName.trim()) {
+      setStError('席種名を入力してください。');
+      return;
+    }
+    if (isNaN(fee) || fee < 0) {
+      setStError('席料は0以上で入力してください。');
+      return;
+    }
+    setStBusy(true);
+    setStError(null);
+    try {
+      if (stEditId) {
+        await updateSeatType(stEditId, { name: stName.trim(), seat_fee: fee });
+      } else {
+        await addSeatType(tenant.id, stName.trim(), fee);
+      }
+      setStName('');
+      setStFee('0');
+      setStEditId(null);
+      await loadSeatTypes();
+    } catch (err) {
+      console.warn('[kyasuho] seatType save failed:', err);
+      setStError('保存に失敗しました。');
+    } finally {
+      setStBusy(false);
+    }
+  };
+
+  const handleStDelete = async (st: KySeatType) => {
+    if (!window.confirm(`席種「${st.name}」を削除しますか？`)) return;
+    try {
+      await deleteSeatType(st.id);
+      await loadSeatTypes();
+    } catch (e) {
+      console.warn('[kyasuho] deleteSeatType failed:', e);
+      window.alert('削除に失敗しました。');
+    }
+  };
+
+  const handleStToggle = async (st: KySeatType) => {
+    try {
+      await updateSeatType(st.id, { is_active: !st.is_active });
+      await loadSeatTypes();
+    } catch (e) {
+      console.warn('[kyasuho] toggleSeatType failed:', e);
+    }
+  };
+
+  const startStEdit = (st: KySeatType) => {
+    setStEditId(st.id);
+    setStName(st.name);
+    setStFee(String(st.seat_fee));
+    setStError(null);
+  };
+
+  const cancelStEdit = () => {
+    setStEditId(null);
+    setStName('');
+    setStFee('0');
+    setStError(null);
+  };
 
   const handleAdd = async (e: FormEvent) => {
     e.preventDefault();
@@ -250,6 +344,98 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
                       className="admin-btn danger"
                       disabled={busyId === row.id}
                       onClick={() => void handleRemove(row)}
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 席種・席料管理 */}
+      <h3 className="admin-section-title" style={{ marginTop: 32 }}>席種・席料</h3>
+
+      <form className="admin-card" onSubmit={handleStSave}>
+        <div className="admin-form-row">
+          <div className="admin-field">
+            <label htmlFor="st-name">席種名</label>
+            <input
+              id="st-name"
+              type="text"
+              className="w-md"
+              value={stName}
+              onChange={(e) => setStName(e.target.value)}
+              placeholder="例：カウンター、VIP、テーブル"
+              required
+            />
+          </div>
+          <div className="admin-field">
+            <label htmlFor="st-fee">席料（円・0で無料）</label>
+            <input
+              id="st-fee"
+              type="number"
+              className="w-sm"
+              min={0}
+              value={stFee}
+              onChange={(e) => setStFee(e.target.value)}
+              required
+            />
+          </div>
+          <button type="submit" className="admin-btn primary" disabled={stBusy}>
+            {stBusy ? '保存中…' : stEditId ? '更新' : '席種を追加'}
+          </button>
+          {stEditId && (
+            <button type="button" className="admin-btn" onClick={cancelStEdit}>
+              キャンセル
+            </button>
+          )}
+        </div>
+        {stError ? <p className="admin-error">{stError}</p> : null}
+      </form>
+
+      {seatTypes.length === 0 ? (
+        <div className="admin-empty">席種が登録されていません。席種を追加すると、予約時にお客様が選択できるようになります。</div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>席種名</th>
+                <th className="num">席料</th>
+                <th>状態</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seatTypes.map((st) => (
+                <tr key={st.id} style={st.is_active ? undefined : { opacity: 0.5 }}>
+                  <td>{st.name}</td>
+                  <td className="num">{st.seat_fee > 0 ? `¥${st.seat_fee.toLocaleString('ja-JP')}` : '無料'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className={`admin-btn ${st.is_active ? '' : 'danger'}`}
+                      onClick={() => void handleStToggle(st)}
+                    >
+                      {st.is_active ? '有効' : '無効'}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="admin-btn"
+                      onClick={() => startStEdit(st)}
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      className="admin-btn danger"
+                      style={{ marginLeft: 4 }}
+                      onClick={() => void handleStDelete(st)}
                     >
                       削除
                     </button>
