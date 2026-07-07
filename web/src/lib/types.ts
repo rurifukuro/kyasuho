@@ -48,6 +48,7 @@ export interface KyExpense {
   category: string;
   amount: number;
   memo: string;
+  receipt_url: string | null;
 }
 
 /** 席種・席料（§29）。 */

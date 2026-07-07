@@ -8,12 +8,17 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  ActionSheetIOS,
+  Platform,
+  Modal,
+  Image,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FormModalShell } from '../../components/common/FormModalShell';
 import { AnchoredDropdown } from '../../components/AnchoredDropdown';
 import type { DropOption } from '../../components/AnchoredDropdown';
 import * as expenseService from '../../services/expenses';
+import * as receiptService from '../../services/receipts';
 import { shareCsv } from '../../utils/csv';
 import { formatYen, todayStr, monthDates } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
@@ -41,6 +46,8 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   const dates = useMemo(() => monthDates(yearMonth), [yearMonth]);
   const startDate = dates[0];
@@ -98,6 +105,67 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
       ]);
     },
     [load, t],
+  );
+
+  const handleReceiptAction = useCallback(
+    (exp: Expense) => {
+      if (exp.receiptUrl) {
+        setViewingReceipt(exp.receiptUrl);
+        return;
+      }
+      const options = [t('expense.takePhoto'), t('expense.chooseFromGallery'), t('common.cancel')];
+      const doAttach = async (source: 'camera' | 'gallery') => {
+        setReceiptBusyId(exp.id);
+        try {
+          const fn = source === 'camera'
+            ? receiptService.takeReceiptPhoto
+            : receiptService.pickReceiptFromGallery;
+          await fn(tenant.id, exp.id);
+          await load();
+        } catch (e: unknown) {
+          Alert.alert(t('common.error'), String(e));
+        } finally {
+          setReceiptBusyId(null);
+        }
+      };
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          { options, cancelButtonIndex: 2 },
+          (idx) => { if (idx === 0) void doAttach('camera'); else if (idx === 1) void doAttach('gallery'); },
+        );
+      } else {
+        Alert.alert(t('expense.attachReceipt'), '', [
+          { text: options[0], onPress: () => void doAttach('camera') },
+          { text: options[1], onPress: () => void doAttach('gallery') },
+          { text: options[2], style: 'cancel' },
+        ]);
+      }
+    },
+    [tenant.id, load, t],
+  );
+
+  const handleDeleteReceipt = useCallback(
+    (exp: Expense) => {
+      Alert.alert(t('expense.deleteReceipt'), t('expense.deleteReceiptConfirm'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: async () => {
+            setReceiptBusyId(exp.id);
+            try {
+              await receiptService.deleteReceipt(tenant.id, exp.id);
+              await load();
+            } catch (e: unknown) {
+              Alert.alert(t('common.error'), String(e));
+            } finally {
+              setReceiptBusyId(null);
+            }
+          },
+        },
+      ]);
+    },
+    [tenant.id, load, t],
   );
 
   const handleCsvExport = useCallback(async () => {
@@ -172,6 +240,21 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
                   {formatYen(item.amount)}
                 </Text>
                 <TouchableOpacity
+                  onPress={() => handleReceiptAction(item)}
+                  disabled={receiptBusyId === item.id}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {receiptBusyId === item.id ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name={item.receiptUrl ? 'file-image' : 'camera-plus-outline'}
+                      size={20}
+                      color={item.receiptUrl ? theme.primary : '#999'}
+                    />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
                   onPress={() => handleDelete(item)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
@@ -196,6 +279,32 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
           }}
         />
       )}
+
+      <Modal visible={!!viewingReceipt} transparent animationType="fade" onRequestClose={() => setViewingReceipt(null)}>
+        <View style={es.receiptOverlay}>
+          <TouchableOpacity style={es.receiptClose} onPress={() => setViewingReceipt(null)}>
+            <MaterialCommunityIcons name="close-circle" size={32} color="#fff" />
+          </TouchableOpacity>
+          {viewingReceipt ? (
+            <Image source={{ uri: viewingReceipt }} style={es.receiptImage} resizeMode="contain" />
+          ) : null}
+          <View style={es.receiptActions}>
+            <TouchableOpacity
+              style={[es.receiptActionBtn, { backgroundColor: '#dc2626' }]}
+              onPress={() => {
+                const exp = expenses.find((e) => e.receiptUrl === viewingReceipt);
+                if (exp) {
+                  setViewingReceipt(null);
+                  handleDeleteReceipt(exp);
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="delete-outline" size={18} color="#fff" />
+              <Text style={es.receiptActionText}>{t('expense.deleteReceipt')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -332,4 +441,10 @@ const es = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },
   submitButton: { marginTop: 20, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   submitText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  receiptOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  receiptClose: { position: 'absolute', top: 50, right: 20, zIndex: 10 },
+  receiptImage: { width: '90%', height: '70%' },
+  receiptActions: { position: 'absolute', bottom: 50, flexDirection: 'row', gap: 12 },
+  receiptActionBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, gap: 6 },
+  receiptActionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

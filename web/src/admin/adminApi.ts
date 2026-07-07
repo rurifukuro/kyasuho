@@ -835,7 +835,7 @@ export async function fetchExpenses(
 ): Promise<KyExpense[]> {
   const { data, error } = await supabase
     .from('ky_expenses')
-    .select('id, tenant_id, date, category, amount, memo')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url')
     .eq('tenant_id', tenantId)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -854,7 +854,7 @@ export async function addExpense(
   const { data, error } = await supabase
     .from('ky_expenses')
     .insert({ tenant_id: tenantId, date, category, amount, memo })
-    .select('id, tenant_id, date, category, amount, memo')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url')
     .single();
   if (error) throw error;
   return data as KyExpense;
@@ -862,6 +862,44 @@ export async function addExpense(
 
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await supabase.from('ky_expenses').delete().eq('id', id);
+  if (error) throw error;
+}
+
+const RECEIPT_BUCKET = 'ky-receipts';
+
+export async function uploadReceipt(
+  tenantId: string,
+  expenseId: string,
+  file: File,
+): Promise<string> {
+  const path = `${tenantId}/${expenseId}.jpg`;
+  const { error } = await supabase.storage
+    .from(RECEIPT_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (error) throw error;
+
+  const { data: urlData } = supabase.storage.from(RECEIPT_BUCKET).getPublicUrl(path);
+  const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+  const { error: dbErr } = await supabase
+    .from('ky_expenses')
+    .update({ receipt_url: publicUrl })
+    .eq('id', expenseId);
+  if (dbErr) throw dbErr;
+
+  return publicUrl;
+}
+
+export async function deleteReceipt(
+  tenantId: string,
+  expenseId: string,
+): Promise<void> {
+  const path = `${tenantId}/${expenseId}.jpg`;
+  await supabase.storage.from(RECEIPT_BUCKET).remove([path]);
+  const { error } = await supabase
+    .from('ky_expenses')
+    .update({ receipt_url: null })
+    .eq('id', expenseId);
   if (error) throw error;
 }
 

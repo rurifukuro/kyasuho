@@ -184,6 +184,7 @@ export type Expense = {
   category: ExpenseCategory;
   amount: number;
   memo: string;
+  receiptUrl: string | null;
 };
 
 /** 席種・席料（§29）。 */

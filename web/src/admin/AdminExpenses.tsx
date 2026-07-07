@@ -4,9 +4,11 @@ import type { KyExpense, KyTenant } from '../lib/types';
 import {
   addExpense,
   deleteExpense,
+  deleteReceipt,
   fetchExpenses,
   fetchMonthlySalesTotal,
   fetchMonthlyPayrollTotal,
+  uploadReceipt,
 } from './adminApi';
 
 const CATEGORIES: { key: string; label: string }[] = [
@@ -64,6 +66,8 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
   const [formMemo, setFormMemo] = useState('');
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [receiptBusyId, setReceiptBusyId] = useState<string | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
 
   const { start, end } = useMemo(() => monthRange(yearMonth), [yearMonth]);
 
@@ -146,6 +150,37 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
       }
     },
     [loadData],
+  );
+
+  const handleReceiptUpload = useCallback(
+    async (exp: KyExpense, file: File) => {
+      setReceiptBusyId(exp.id);
+      try {
+        await uploadReceipt(tenant.id, exp.id, file);
+        await loadData();
+      } catch (e) {
+        alert(`アップロード失敗: ${String(e)}`);
+      } finally {
+        setReceiptBusyId(null);
+      }
+    },
+    [tenant.id, loadData],
+  );
+
+  const handleReceiptDelete = useCallback(
+    async (exp: KyExpense) => {
+      if (!confirm('この領収書画像を削除しますか？')) return;
+      setReceiptBusyId(exp.id);
+      try {
+        await deleteReceipt(tenant.id, exp.id);
+        await loadData();
+      } catch (e) {
+        alert(`削除失敗: ${String(e)}`);
+      } finally {
+        setReceiptBusyId(null);
+      }
+    },
+    [tenant.id, loadData],
   );
 
   const handleCsvExport = useCallback(() => {
@@ -354,6 +389,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
                     <th>カテゴリ</th>
                     <th>金額</th>
                     <th>メモ</th>
+                    <th>領収書</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -364,6 +400,44 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
                       <td>{categoryLabel(exp.category)}</td>
                       <td style={{ textAlign: 'right' }}>{formatYen(exp.amount)}</td>
                       <td>{exp.memo || '—'}</td>
+                      <td>
+                        {receiptBusyId === exp.id ? (
+                          <span style={{ fontSize: 12, color: '#6b7280' }}>処理中…</span>
+                        ) : exp.receipt_url ? (
+                          <div className="admin-btn-row">
+                            <button
+                              type="button"
+                              className="admin-btn"
+                              style={{ fontSize: 12, padding: '2px 8px' }}
+                              onClick={() => setViewingReceipt(exp.receipt_url)}
+                            >
+                              表示
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn danger"
+                              style={{ fontSize: 12, padding: '2px 8px' }}
+                              onClick={() => void handleReceiptDelete(exp)}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        ) : (
+                          <label className="admin-btn" style={{ fontSize: 12, padding: '2px 8px', cursor: 'pointer' }}>
+                            添付
+                            <input
+                              type="file"
+                              accept="image/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) void handleReceiptUpload(exp, file);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
+                      </td>
                       <td>
                         <button
                           type="button"
@@ -380,6 +454,34 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
             </div>
           )}
         </>
+      )}
+
+      {viewingReceipt && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+          }}
+          onClick={() => setViewingReceipt(null)}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+            <button
+              type="button"
+              onClick={() => setViewingReceipt(null)}
+              style={{
+                position: 'absolute', top: -12, right: -12, border: 'none', background: '#fff',
+                borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 16, lineHeight: '28px',
+              }}
+            >
+              ✕
+            </button>
+            <img
+              src={viewingReceipt}
+              alt="領収書"
+              style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8 }}
+            />
+          </div>
+        </div>
       )}
     </>
   );
