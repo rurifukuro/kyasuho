@@ -206,6 +206,8 @@ export async function deleteOrderItem(itemId: string): Promise<void> {
 }
 
 // ── 会計確定（closeOrder）＝§25-3 ステップ6・§25-4 売上自動集計・§32-2 集約ポイント ──
+// FIN-3（§33-1）: subtotal はサーバー RPC ky_close_order が sum(price*qty) で再計算。
+// クライアント計算値は表示用のみ＝改ざんクライアント対策。
 
 export type CloseOrderInput = {
   subtotal: number;
@@ -227,22 +229,22 @@ export async function closeOrder(
   orderId: string,
   tenantId: string,
   input: CloseOrderInput,
-  items: OrderItem[],
+  _items: OrderItem[],
 ): Promise<StampResult> {
-  const { error: closeErr } = await supabase
-    .from('ky_orders')
-    .update({
-      status: 'closed',
-      closed_at: new Date().toISOString(),
-      subtotal: input.subtotal,
-      deposit: input.deposit,
-      change: input.change,
-      payment_method: input.paymentMethod,
-      note: input.note ?? '',
-      customer_id: input.customerId ?? null,
-    })
-    .eq('id', orderId);
-  if (closeErr) throw closeErr;
+  const { data, error: rpcErr } = await supabase.rpc('ky_close_order', {
+    p_order_id: orderId,
+    p_tenant_id: tenantId,
+    p_deposit: input.deposit,
+    p_change: input.change,
+    p_payment_method: input.paymentMethod,
+    p_note: input.note ?? '',
+    p_customer_id: input.customerId ?? null,
+  });
+  if (rpcErr) throw rpcErr;
+  const result = data as { ok: boolean; error?: string; subtotal?: number } | null;
+  if (!result?.ok) {
+    throw new Error(result?.error ?? 'close_order_failed');
+  }
 
   const bizDateRes = await supabase
     .from('ky_orders')

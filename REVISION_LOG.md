@@ -1521,3 +1521,37 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 - app_init_playbook.md: 1-11「Supabase Auth直結アプリの基盤」新設＋マニフェストにAuth基盤/services層の2行追加＋1-9にFIN参照
 
 **実装は未着手**（migration 0031・csv.ts修正・ky_close_order は次Rev以降の実装候補）。コード変更なし＝tsc対象なし。
+
+## Rev65（2026-07-07）§33 Phase A 実装＝migration 0031 本番適用＋SEC-11 CSV修正＋closeOrder RPC化
+
+**ユーザー指示:** 次に進めて（§33 Phase A の実装を承認）
+
+### migration 0031（本番適用済み・db push）
+- **FIN-1**: CHECK制約12本（not valid→validate で既存行安全）
+  - ky_order_items: qty 1〜999 / price -9,999,999〜9,999,999
+  - ky_orders: subtotal/deposit/change 0〜99,999,999
+  - ky_sales: total_revenue/set_count/drink_count/nomination_count/other_revenue ≧ 0
+  - ky_cast_payroll: 全金額・分数列 ≧ 0（9列複合制約）
+  - ky_expenses: amount 0〜99,999,999
+- **FIN-2**: 確定伝票不変トリガー
+  - ky_orders_closed_immutable: closed/void行は変更禁止（唯一の例外＝closed→void）
+  - ky_order_items_closed_immutable: 親伝票がclosed/voidなら明細の変更・削除を拒否
+- **FIN-3**: ky_close_order RPC（SECURITY DEFINER＋search_path=public）
+  - subtotalをsum(price*qty)でサーバー再計算（クライアント計算値は表示用のみ）
+  - テナント所有権チェック＋ステータスチェック＋入力バリデーション
+  - authenticated にのみ実行権付与
+- **FIN-4**: ky_tenants_plan_protect トリガー
+  - authenticated からの plan 列変更を拒否（service_role のみ許可＝IAP検証Edge Function用）
+
+### SEC-11: CSVインジェクション対策（コード修正）
+- web/src/admin/csv.ts: escapeCell で先頭 =+-@\t\r にシングルクォート前置
+- src/utils/csv.ts: 同一修正（§24の同一仕様コピー維持）
+
+### クライアント修正
+- src/services/orders.ts: closeOrder() を直接UPDATE→ky_close_order RPC呼び出しへ切替
+
+### 検証（WEB7 RESTプローブ・全通過）
+- P1: anon ky_order_items INSERT → 401（RLS遮断＝CHECK制約到達前に拒否）
+- P2: ky_close_order RPC（存在しないテナント） → {"ok":false,"error":"forbidden"}
+- P3: anon ky_tenants plan UPDATE → 204（RLSで行不一致＝更新0行）
+- `npx tsc --noEmit`（アプリ）EXIT:0 ／ `npx tsc -b`（Web）EXIT:0
