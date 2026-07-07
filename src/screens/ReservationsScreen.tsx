@@ -68,6 +68,7 @@ export function ReservationsScreen() {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailTarget, setDetailTarget] = useState<Reservation | null>(null);
+  const [noShowCounts, setNoShowCounts] = useState<Map<string, number>>(new Map());
 
   const loadReservations = useCallback(async () => {
     if (!tenant) return;
@@ -75,6 +76,15 @@ export function ReservationsScreen() {
     try {
       const data = await reservationService.fetchReservations(tenant.id, selectedDate);
       setReservations(data);
+      const contacts = [...new Set(data.map((r) => r.contact).filter(Boolean))];
+      const counts = new Map<string, number>();
+      await Promise.all(
+        contacts.map(async (c) => {
+          const n = await reservationService.countNoShowByContact(tenant.id, c);
+          if (n > 0) counts.set(c, n);
+        }),
+      );
+      setNoShowCounts(counts);
     } catch (e: unknown) {
       console.warn('[kyasuho] fetchReservations:', e);
     } finally {
@@ -207,9 +217,18 @@ export function ReservationsScreen() {
                     </View>
                   )}
                 </View>
-                <Text style={[s.cardName, { color: theme.text }]}>
-                  {r.customerName}{r.partySize > 1 ? ` (${r.partySize}${t('reservation.people')})` : ''}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[s.cardName, { color: theme.text }]}>
+                    {r.customerName}{r.partySize > 1 ? ` (${r.partySize}${t('reservation.people')})` : ''}
+                  </Text>
+                  {r.contact && (noShowCounts.get(r.contact) ?? 0) > 0 && (
+                    <View style={{ backgroundColor: '#FEE2E2', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>
+                        {t('reservation.noShowCount', { count: String(noShowCounts.get(r.contact)) })}
+                      </Text>
+                    </View>
+                  )}
+                </View>
                 {r.contact ? <Text style={[s.cardSub, { color: theme.subtext }]}>{r.contact}</Text> : null}
                 {r.note ? <Text style={[s.cardNote, { color: theme.subtext }]}>{r.note}</Text> : null}
                 <Text style={[s.cardStatus, { color: si.color }]}>{t(`reservation.status.${r.status}` as TKey)}</Text>
@@ -233,6 +252,7 @@ export function ReservationsScreen() {
           onClose={() => setDetailTarget(null)}
           onStatusChange={handleStatusChange}
           onDelete={handleDelete}
+          noShowCount={detailTarget.contact ? (noShowCounts.get(detailTarget.contact) ?? 0) : 0}
           theme={theme}
           t={t}
         />
@@ -258,11 +278,12 @@ type DetailProps = {
   onClose: () => void;
   onStatusChange: (id: string, status: ReservationStatus) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  noShowCount: number;
   theme: ThemeColor;
   t: TFunc;
 };
 
-function DetailModal({ reservation: r, onClose, onStatusChange, onDelete, theme, t }: DetailProps) {
+function DetailModal({ reservation: r, onClose, onStatusChange, onDelete, noShowCount, theme, t }: DetailProps) {
   const statusActions: { status: ReservationStatus; label: TKey; icon: string; color: string }[] = [
     { status: 'checked_in', label: 'reservation.action.checkIn', icon: 'check-circle', color: '#22C55E' },
     { status: 'no_show', label: 'reservation.action.noShow', icon: 'alert-circle', color: '#EF4444' },
@@ -278,6 +299,14 @@ function DetailModal({ reservation: r, onClose, onStatusChange, onDelete, theme,
         <InfoRow icon="clock-outline" label={t('reservation.slot')} value={r.slot} theme={theme} />
         <InfoRow icon="account" label={t('reservation.customerName')} value={r.customerName} theme={theme} />
         {r.contact ? <InfoRow icon="phone" label={t('reservation.contact')} value={r.contact} theme={theme} /> : null}
+        {noShowCount > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+            <MaterialCommunityIcons name="alert-circle" size={18} color="#DC2626" />
+            <Text style={{ color: '#DC2626', fontSize: 13, fontWeight: '600', flex: 1 }}>
+              {t('reservation.noShowWarning', { count: String(noShowCount) })}
+            </Text>
+          </View>
+        )}
         <InfoRow icon="account-group" label={t('reservation.partySize')} value={`${r.partySize}${t('reservation.people')}`} theme={theme} />
         {r.seatNo != null && <InfoRow icon="seat" label={t('reservation.seats')} value={t('reservation.seatNo', { no: String(r.seatNo) })} theme={theme} />}
         {r.note ? <InfoRow icon="note-text" label={t('reservation.note')} value={r.note} theme={theme} /> : null}

@@ -94,6 +94,27 @@ export async function adminMakeReservation(input: {
   return data as MakeReservationResult;
 }
 
+export async function countNoShowByContacts(
+  tenantId: string,
+  contacts: string[],
+): Promise<Map<string, number>> {
+  const unique = [...new Set(contacts.filter((c) => c.trim()))];
+  const map = new Map<string, number>();
+  if (unique.length === 0) return map;
+  const { data, error } = await supabase
+    .from('ky_reservations')
+    .select('contact')
+    .eq('tenant_id', tenantId)
+    .in('contact', unique)
+    .eq('status', 'no_show');
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const c = (row as { contact: string }).contact;
+    map.set(c, (map.get(c) ?? 0) + 1);
+  }
+  return map;
+}
+
 // ---- 受付枠 ----
 
 export async function fetchWindows(tenantId: string, date: string): Promise<KyUnlockWindow[]> {

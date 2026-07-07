@@ -92,3 +92,18 @@ export async function deleteReservation(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
+
+export async function countNoShowByContact(
+  tenantId: string,
+  contact: string,
+): Promise<number> {
+  if (!contact.trim()) return 0;
+  const { count, error } = await supabase
+    .from('ky_reservations')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('contact', contact)
+    .eq('status', 'no_show');
+  if (error) throw error;
+  return count ?? 0;
+}

@@ -552,5 +552,8 @@
   "register.stampRewardReached": { "ja": "スタンプが{count}個に達しました！\n特典：{reward}" },
 
   "checkout.rewardReady": { "ja": "特典達成！" },
-  "checkout.stampRemaining": { "ja": "あと{count}個で特典" }
+  "checkout.stampRemaining": { "ja": "あと{count}個で特典" },
+
+  "reservation.noShowCount": { "ja": "無断{count}回" },
+  "reservation.noShowWarning": { "ja": "この連絡先は過去に{count}回の無断キャンセル履歴があります" }
 }
