@@ -1,6 +1,6 @@
 # きゃすりん 仕様書（SPEC）
 
-- 作成日: 2026-07-03 ／ 最終改訂: 2026-07-06 第5次（**会計時の割引・クーポン§25-7＝店舗独自キャンペーン対応＋姉妹アプリのキャスト個人ランキングを不実装へ§32**。同日第4次＝初月無料トライアル§14＋姉妹アプリ（お客様向け）構想とスタンプ/クーポン・ランキング集計の仕込み§32＋第3次棚卸しの◯/△を実装計画へ組込み§19の㉚〜㊲。同日第3次＝シフト表拡張＝デイリー出勤表§22-2・店舗テンプレ取込§22-3・プレビュー固定§22-4＋SaaS機能ネット調査棚卸し§26-3。同日第2次＝ユーザー10項目指示の反映＝レジお客様名/一時保存（§25-3）・経費/確定申告補助（§27）・入力UX/表示/用語是正（§28）・席種/席料（§29）・キャスト写真2種（§30）・シフト表SNS投稿（§31）・棚卸し§26-2追加。同日第1次＝オーダー管理§3-K/§25・§26新設）
+- 作成日: 2026-07-03 ／ 最終改訂: 2026-07-07 第6次（**金融・セキュリティ強化設計§33新設＝FIN-1〜8／SEC-11〜13・Phase A〜D・設計のみ実装は別Rev**）。前回: 2026-07-06 第5次（**会計時の割引・クーポン§25-7＝店舗独自キャンペーン対応＋姉妹アプリのキャスト個人ランキングを不実装へ§32**。同日第4次＝初月無料トライアル§14＋姉妹アプリ（お客様向け）構想とスタンプ/クーポン・ランキング集計の仕込み§32＋第3次棚卸しの◯/△を実装計画へ組込み§19の㉚〜㊲。同日第3次＝シフト表拡張＝デイリー出勤表§22-2・店舗テンプレ取込§22-3・プレビュー固定§22-4＋SaaS機能ネット調査棚卸し§26-3。同日第2次＝ユーザー10項目指示の反映＝レジお客様名/一時保存（§25-3）・経費/確定申告補助（§27）・入力UX/表示/用語是正（§28）・席種/席料（§29）・キャスト写真2種（§30）・シフト表SNS投稿（§31）・棚卸し§26-2追加。同日第1次＝オーダー管理§3-K/§25・§26新設）
 - ステータス: **実装進行中（Rev25まで完了＝MVP実装順序1〜17全部＋キャストアカウント基盤（2系統ログイン・招待コード・ロール分岐・パスワードリセット・T13〜T18 UI）。次フェーズ＝§19の18〜27）**
 - ベースアプリ: **concafe-yoyaku**（予約ロジック・客側Web）＋ **とれはんっ！/レジさぽっ！**（UI共有部品・UGC 4要件・i18n・IAP）を流用
 - アプリID（ASC）: 6787006154 ／ Bundle ID: `com.kyasuho.app`（ロック済・R1で変更不可）
@@ -1213,6 +1213,62 @@ total_pay      = base_pay + nomination_back + drink_back + other_back − deduct
   3. **公開層の分離**：姉妹アプリに他店の生データを見せるRLS穴は作らない。**日次バッチ（Edge Function）が opt-in 店だけを集計した公開スコアテーブル（例 `ky_ranking_scores`）を生成**し、姉妹アプリはそれだけを読む＝**生の売上額は公開しない**（順位・正規化スコアのみ）
   4. **キャスト（女の子）ランキングは実装しない**（2026-07-06ユーザー決定）：個人の評価・売上順位の公開は誹謗中傷・本人同意の論点が重いため、公開ランキングは**店舗単位のみ**。弁護士確認❸は店舗ランキング（売上データ外部利用の店舗同意・口コミUGC）に限定
 - 実装タイミング：①②は migration 1本＋プロフィール欄追加＝軽量なので㉚として早めに実施可。③④は姉妹アプリ着手時（バッチと公開スキーマは姉妹アプリの要件が固まってから）
+
+---
+
+## §33 金融・セキュリティ強化設計（2026-07-07 第6次・設計のみ＝実装は別Rev）
+
+> Rev63 セキュリティ監査（S1〜S12＝migration 0030 適用済）の続編。**お金と信用に関わる層**を対象に、
+> 実コード調査で確認した4つの弱点を根拠として、フェーズ別の強化設計を定める。
+> **本節は設計であり未実装**。実装候補は migration 0031 以降＋コード修正としてフェーズ順に着手する。
+
+### 33-0. 設計根拠（2026-07-07 実コード調査で確認した事実）
+
+| # | 事実 | 場所 | リスク |
+|---|---|---|---|
+| 根拠1 | CSV出力の `escapeCell` が先頭 `= + - @` を無害化していない（`"` 囲みのみ） | `web/src/admin/csv.ts`／`src/utils/csv.ts`（同一仕様） | **CSVインジェクション**＝客名・メモ等に `=HYPERLINK(...)` 等を仕込まれると、店がExcelで開いた瞬間に式が実行される（税金/経費/伝票CSVすべて） |
+| 根拠2 | 金銭テーブル（ky_orders / ky_order_items / ky_sales / ky_cast_payroll / ky_expenses）に金額・数量の CHECK 制約が無い | migrations 0009/0013 ほか | 不正・バグ由来の**負数や桁違い金額がDBに入る**＝集計・給与・税務CSVが静かに壊れる |
+| 根拠3 | キャスト銀行口座情報が平文 text（bank_name / bank_branch / account_type / account_number / account_holder_name） | `0012_ky_cast_profile.sql` ky_cast_personal_info | 漏えい時の被害が最大級のPII。現状はRLS（本人＋オーナーread）のみで**保存時暗号化・マスキングなし** |
+| 根拠4 | `ky_tenants.plan` がオーナーの RLS 全操作ポリシー配下＝クライアントから直 UPDATE 可能 | 0001（RLS）＋0009（plan列） | IAP ON 後は**自称 'pro' 化＝課金バイパス**が anon キー＋自分の JWT だけで成立する |
+
+### 33-1. Phase A（MVP前に実装＝migration 0031 候補＋コード修正）
+
+- **FIN-1 金銭CHECK制約**（migration 0031）：
+  - `ky_order_items`: `qty between 1 and 999`／`price between -9999999 and 9999999`（**discount は負が正規**＝§25-7。負を許すのは category='discount' のみとする CHECK が理想形）
+  - `ky_orders`: `subtotal >= 0`／`deposit >= 0`／`change >= 0`（上限 99,999,999）
+  - `ky_sales`: 各金額・件数列 `>= 0`／`ky_cast_payroll`: 各金額・分数列 `>= 0`（deductions は正の控除額）／`ky_expenses.amount between 0 and 99999999`
+  - 適用は `alter table ... add constraint ... check ... not valid` → `validate constraint`（既存行を壊さず段階適用）
+- **FIN-2 確定伝票の不変性**（migration 0031）：
+  - `ky_orders` BEFORE UPDATE トリガー：`closed`/`void` の行は原則変更禁止。許可する遷移は **closed → void（会計取消）のみ**（S4 の `ky_casts_self_update_guard` と同型の列ガード方式）
+  - `ky_order_items` BEFORE UPDATE/DELETE トリガー：親伝票が `closed`/`void` なら明細の変更・削除を拒否（void 化は親の状態変更で表現し、明細は監査のため残す）
+- **FIN-3 会計確定のサーバー再計算**：`closeOrder()`（§32-2 で単一関数化済みの経路）を RPC `ky_close_order` 化し、**subtotal はサーバーが `sum(price*qty)` で再計算**。クライアント計算値は表示用のみ（改ざんクライアント対策）
+- **FIN-4 plan列のクライアント更新禁止**（migration 0031）：`ky_tenants` BEFORE UPDATE トリガーで authenticated からの `plan` 変更を拒否（**service_role のみ変更可**）。IAP ON 前に入れておくことで、課金導線実装時の抜け穴を構造的に塞ぐ
+- **SEC-11 CSVインジェクション対策**（コード修正・両CSVモジュール同時）：`escapeCell` で**セル先頭が `= + - @ \t \r` の場合はシングルクォート `'` を前置**（Excel/Google Sheets 共通の式実行防止定石）→ その上で従来の `"` 囲み。`web/src/admin/csv.ts` と `src/utils/csv.ts` は同一仕様コピーを維持（§24）
+- **FIN-7先行分（軽量）**：`account_number` は UI で**下4桁以外マスク表示**・**CSV/エクスポートに含めない**（暗号化本体は Phase C）
+
+### 33-2. Phase B（IAP課金ON時・フラグONの前提条件）
+
+- **FIN-5 レシートのサーバー検証**：Edge Function `ky-iap-verify`（App Store Server API / Google Play Developer API で購入を検証）→ **service_role が `ky_tenants.plan` を更新**する唯一の経路とする。クライアント自己申告での plan 更新は FIN-4 が恒久的に拒否
+- **FIN-6 監査ログ `ky_audit_log`**：金銭テーブル（ky_orders / ky_sales / ky_cast_payroll / ky_payroll_settings / ky_expenses）＋ plan 変更の UPDATE/DELETE をトリガーが `old/new` JSONB で自動記録。**オーナーは read のみ・UPDATE/DELETE 不可**（RLSで書込はトリガー経由に限定）＝店内の記録改ざん抑止と紛争時の証跡
+
+### 33-3. Phase C（本番Supabase分離時＝相乗り解消と同時）
+
+- **FIN-7 銀行口座情報の保存時暗号化**：Supabase Vault／pgsodium で `account_number`（最低限）を暗号化列へ移行。復号はオーナーの給与振込画面のみ。列レベルGRANTの棚卸し（S1方式）も同時に実施
+- **SEC-12 Auth強化**：Leaked Password Protection を ON（Auth設定）・パスワード最低長引き上げ・**オーナーアカウントの MFA（TOTP）** を任意→推奨導線で提供
+- **SEC-13 バックアップ/PITR**：本番プロジェクトは Pro プラン＋ **PITR 有効化**。金銭データ（ky_sales / ky_cast_payroll / ky_expenses）は日次エクスポートを別系統で保全
+- ky-receipts バケット private 化＋署名URL移行（Rev63 監査の残債・SEC-5 準拠）
+
+### 33-4. Phase D（将来・客側決済導入時＝弁護士確認❷がゲート）
+
+- **FIN-8 資金非預かり原則**：客側決済を入れる場合も**きゃすりんは資金を預からない**構造（Stripe Connect の Direct charges 型＝店舗アカウントへ直接決済・プラットフォームは手数料のみ）を第一候補とする＝資金決済法（前受金・為替取引）の適用回避方針。**導入判断そのものが弁護士確認❷通過後**（§7・§16）
+- カード情報はきゃすりんのサーバー・DBに一切触れさせない（Stripe Elements 等のトークン化＝PCI DSS SAQ-A 範囲に留める）
+
+### 33-5. 実装順序と完了条件
+
+1. Phase A＝migration 0031＋csv.ts×2＋`ky_close_order` RPC → WEB7 準拠（適用→RESTプローブ再検証）→ 1Rev1コミット
+2. Phase B＝IAP_ENABLED=true にする Rev の**前提ゲート**として §14 横断ゲートに組込み
+3. Phase C＝本番分離チェックリスト（saas_init_playbook）に組込み済み
+4. 各 Phase 完了時に REVISION_LOG へ「§33 Phase X 通過」と明記
 
 ---
 

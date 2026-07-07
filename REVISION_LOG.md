@@ -1502,3 +1502,22 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 - P6・P7: PIN照合/キャンセルRPC正常応答／P8: make_reservation 存在しないテナント → not_unlocked（挿入なし）
 - P9: ky-receipts anon 列挙 → 空配列（遮断確認）
 - `npx tsc -b`（web）EXIT:0／`npx tsc --noEmit`（アプリ）EXIT:0
+
+## Rev64（2026-07-07）金融・セキュリティ強化設計＝SPEC §33新設（設計のみ・実装なし）
+
+**ユーザー指示:** フェーブルが使えるうちに金融関係・セキュリティ関係を高める部分の設計をし、計画書・制作手順書へ反映。
+
+### SPEC.md
+- **§33新設**: 金融・セキュリティ強化設計（FIN-1〜8／SEC-11〜13・Phase A〜D）
+  - 設計根拠4点（実コード調査で確認）: ①CSVインジェクション未対策（csv.ts×2の escapeCell が先頭=+-@未処理）②金銭テーブルにCHECK制約なし ③キャスト銀行口座が平文text（0012）④ky_tenants.plan がクライアント直UPDATE可＝IAP ON後の課金バイパス
+  - Phase A（MVP前＝migration 0031候補）: FIN-1金銭CHECK／FIN-2確定伝票不変トリガー／FIN-3 ky_close_order RPCでsubtotalサーバー再計算／FIN-4 plan列クライアント更新禁止／SEC-11 CSV式インジェクション無害化／口座番号マスク先行
+  - Phase B（IAP ON時）: FIN-5 ky-iap-verifyレシートサーバー検証／FIN-6 ky_audit_log
+  - Phase C（本番分離時）: FIN-7口座暗号化(Vault/pgsodium)／SEC-12 Auth強化(Leaked Password Protection・MFA)／SEC-13 PITR＋日次エクスポート／ky-receipts private化
+  - Phase D（将来決済）: FIN-8資金非預かり（Stripe Connect Direct charges型・弁護士確認❷ゲート）
+- 冒頭改訂履歴を第6次へ更新
+
+### 手順書反映（メモリ側・バックアップ .bak_20260707_fin）
+- saas_init_playbook.md: SEC-11〜14追加＋💰FIN-1〜8金銭データ標準セクション新設＋本番分離チェックリストに強化回収項目
+- app_init_playbook.md: 1-11「Supabase Auth直結アプリの基盤」新設＋マニフェストにAuth基盤/services層の2行追加＋1-9にFIN参照
+
+**実装は未着手**（migration 0031・csv.ts修正・ky_close_order は次Rev以降の実装候補）。コード変更なし＝tsc対象なし。
