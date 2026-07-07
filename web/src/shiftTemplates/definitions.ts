@@ -58,6 +58,20 @@ export type ShiftTemplateDefinition = {
   logoSlot: boolean; // 店ロゴ挿入枠
 };
 
+/** 店舗テンプレート配置情報（§22-3: AI解析 or 手動指定） */
+export type ShiftPlacement = {
+  gridArea: { x: number; y: number; w: number; h: number }; // 相対座標 0-1
+  titleArea: { x: number; y: number; w: number; h: number };
+  cols: number;
+  rows: number;
+  hasHeaderRow: boolean;
+  cellBg: string;
+  cellInset: number; // セル境界からの内側余白px（グリッド線を残す）
+  textColor: string;
+  timeColor: string;
+  accentColor: string;
+};
+
 /** モチーフ→描画文字（BMPテキスト記号・両プラットフォームで描画可能なもの） */
 export const MOTIF_CHARS: Record<Exclude<ShiftMotif, 'none'>, string> = {
   stars: '★',

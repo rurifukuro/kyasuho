@@ -10,6 +10,7 @@ import type { KyCast, KyShift, KyShiftTemplate, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
 import {
   addShiftTemplate,
+  analyzeShiftImage,
   fetchCastList,
   fetchShiftTemplateList,
   fetchShiftsByMonth,
@@ -20,6 +21,7 @@ import {
 import type {
   ShiftLayout,
   ShiftMotif,
+  ShiftPlacement,
   ShiftTemplateCategory,
   ShiftTemplateDefinition,
 } from '../shiftTemplates/definitions';
@@ -117,9 +119,12 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [favName, setFavName] = useState('');
   const [favBusy, setFavBusy] = useState(false);
 
-  // 店舗テンプレ背景（§22-3）
+  // 店舗テンプレ背景＋AI配置解析（§22-3）
   const [bgImageUrl, setBgImageUrl] = useState<string | null>(null);
   const [bgUploading, setBgUploading] = useState(false);
+  const [placement, setPlacement] = useState<ShiftPlacement | null>(null);
+  const [analyzeBusy, setAnalyzeBusy] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
@@ -259,6 +264,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       const isAi = base.category === 'ai';
       const cs = isAi ? { ...ov, aspect, ai: extractAiDesign(base) } : { ...ov, aspect };
       if (bgImageUrl) (cs as Record<string, unknown>)['bgImageUrl'] = bgImageUrl;
+      if (placement) (cs as Record<string, unknown>)['placement'] = placement;
       const tplKey = bgImageUrl ? 'shop' : isAi ? 'ai' : base.id;
       await addShiftTemplate({
         tenantId: tenant.id,
@@ -280,6 +286,11 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     const parsed = parseCustomSettings(fav.custom_settings);
     const savedBg = typeof fav.custom_settings['bgImageUrl'] === 'string' ? fav.custom_settings['bgImageUrl'] : null;
     setBgImageUrl(savedBg);
+    setPlacement(
+      savedBg && fav.custom_settings['placement'] && typeof fav.custom_settings['placement'] === 'object'
+        ? fav.custom_settings['placement'] as ShiftPlacement
+        : null,
+    );
     if (fav.template_key === 'ai') {
       const def = buildAiDefinition(fav.custom_settings['ai'], `ai-${Date.now()}`);
       setAiDef(def);
@@ -301,6 +312,72 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setTemplateId(baseDef.id);
     setOv(parsed.ov);
     setAspect(parsed.aspect);
+  };
+
+  const handleAnalyze = async () => {
+    if (!bgImageUrl || analyzeBusy) return;
+    setAnalyzeBusy(true);
+    setAnalyzeError(null);
+    try {
+      const raw = await analyzeShiftImage(bgImageUrl) as {
+        placement?: {
+          type?: string;
+          gridArea?: { x?: number; y?: number; w?: number; h?: number };
+          titleArea?: { x?: number; y?: number; w?: number; h?: number };
+          cols?: number;
+          rows?: number;
+          hasHeaderRow?: boolean;
+          cellBg?: string;
+          textColor?: string;
+          timeColor?: string;
+          accentColor?: string;
+        };
+      };
+      const p = raw?.placement;
+      if (!p || !p.gridArea || !p.titleArea) {
+        setAnalyzeError('AIが構造を検出できませんでした。別の画像をお試しください。');
+        return;
+      }
+      const clamp = (v: unknown, lo: number, hi: number, fallback: number): number => {
+        const n = typeof v === 'number' ? v : fallback;
+        return Math.max(lo, Math.min(hi, n));
+      };
+      const result: ShiftPlacement = {
+        gridArea: {
+          x: clamp(p.gridArea.x, 0, 1, 0),
+          y: clamp(p.gridArea.y, 0, 1, 0),
+          w: clamp(p.gridArea.w, 0.1, 1, 1),
+          h: clamp(p.gridArea.h, 0.1, 1, 1),
+        },
+        titleArea: {
+          x: clamp(p.titleArea.x, 0, 1, 0),
+          y: clamp(p.titleArea.y, 0, 1, 0),
+          w: clamp(p.titleArea.w, 0.05, 1, 0.3),
+          h: clamp(p.titleArea.h, 0.02, 1, 0.1),
+        },
+        cols: clamp(p.cols, 1, 14, 7),
+        rows: clamp(p.rows, 1, 10, 5),
+        hasHeaderRow: p.hasHeaderRow ?? true,
+        cellBg: typeof p.cellBg === 'string' ? p.cellBg : '#FFFFFF',
+        cellInset: 2,
+        textColor: typeof p.textColor === 'string' ? p.textColor : '#333333',
+        timeColor: typeof p.timeColor === 'string' ? p.timeColor : '#666666',
+        accentColor: typeof p.accentColor === 'string' ? p.accentColor : '#E91E63',
+      };
+      setPlacement(result);
+    } catch (e) {
+      console.warn('[kyasuho] analyzeShiftImage failed:', e);
+      const msg = e instanceof Error ? e.message : '';
+      setAnalyzeError(
+        msg === 'rate_limit'
+          ? '本日のAI解析回数の上限に達しました。明日またお試しください。'
+          : msg === 'global_limit'
+            ? 'ただいま混み合っています。時間をおいてお試しください。'
+            : 'AI解析に失敗しました。しばらくしてからもう一度お試しください。',
+      );
+    } finally {
+      setAnalyzeBusy(false);
+    }
   };
 
   const handleDeleteFavorite = async (fav: KyShiftTemplate) => {
@@ -404,7 +481,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} />
+              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} />
             </div>
           </div>
           <p className="admin-note">
@@ -608,7 +685,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               店舗テンプレート
             </div>
             <p className="admin-note" style={{ marginTop: 0 }}>
-              お店のオリジナル画像を背景に敷いて、シフトデータを重ねます。
+              お店の既存シフト表画像をアップロードし、AIで構造を解析してデータを重ねます。
             </p>
             <div className="admin-form-row">
               <input
@@ -619,6 +696,8 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   setBgUploading(true);
+                  setPlacement(null);
+                  setAnalyzeError(null);
                   try {
                     const url = await uploadShiftBackground(tenant.id, file);
                     setBgImageUrl(url);
@@ -631,15 +710,34 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                 }}
               />
               {bgImageUrl ? (
-                <button type="button" className="admin-btn" onClick={() => setBgImageUrl(null)}>
-                  背景を解除
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="admin-btn primary"
+                    disabled={analyzeBusy}
+                    onClick={() => void handleAnalyze()}
+                  >
+                    {analyzeBusy ? '解析中…' : 'AIで解析'}
+                  </button>
+                  <button type="button" className="admin-btn" onClick={() => { setBgImageUrl(null); setPlacement(null); }}>
+                    解除
+                  </button>
+                </>
               ) : null}
             </div>
-            {bgImageUrl ? (
+            {analyzeError ? <p className="admin-error">{analyzeError}</p> : null}
+            {bgImageUrl && !placement ? (
               <p className="admin-note" style={{ marginTop: 4 }}>
-                背景画像を設定中。テンプレートの配色は上から重ねて表示されます。
+                画像をアップロードしました。「AIで解析」を押すと、シフト表の構造を自動検出してデータを配置します。
               </p>
+            ) : null}
+            {placement ? (
+              <div style={{ marginTop: 8 }}>
+                <p className="admin-note" style={{ marginTop: 0 }}>
+                  AIが構造を検出しました。下のスライダーで微調整できます。
+                </p>
+                <PlacementEditor placement={placement} onChange={setPlacement} />
+              </div>
             ) : null}
           </div>
 
@@ -761,6 +859,75 @@ function buildWebPostText(
   lines.push('');
   lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
   return lines.join('\n');
+}
+
+function PlacementEditor({
+  placement: pl,
+  onChange,
+}: {
+  placement: ShiftPlacement;
+  onChange: (p: ShiftPlacement) => void;
+}) {
+  const setGrid = (key: keyof ShiftPlacement['gridArea'], v: number) =>
+    onChange({ ...pl, gridArea: { ...pl.gridArea, [key]: v } });
+  const setTitle = (key: keyof ShiftPlacement['titleArea'], v: number) =>
+    onChange({ ...pl, titleArea: { ...pl.titleArea, [key]: v } });
+
+  return (
+    <div className="placement-editor">
+      <div className="admin-section-title" style={{ margin: '0 0 6px', fontSize: 13 }}>
+        グリッド領域
+      </div>
+      <div className="placement-slider-grid">
+        <label>X <input type="range" min="0" max="100" value={Math.round(pl.gridArea.x * 100)} onChange={(e) => setGrid('x', Number(e.target.value) / 100)} /> {Math.round(pl.gridArea.x * 100)}%</label>
+        <label>Y <input type="range" min="0" max="100" value={Math.round(pl.gridArea.y * 100)} onChange={(e) => setGrid('y', Number(e.target.value) / 100)} /> {Math.round(pl.gridArea.y * 100)}%</label>
+        <label>幅 <input type="range" min="10" max="100" value={Math.round(pl.gridArea.w * 100)} onChange={(e) => setGrid('w', Number(e.target.value) / 100)} /> {Math.round(pl.gridArea.w * 100)}%</label>
+        <label>高さ <input type="range" min="10" max="100" value={Math.round(pl.gridArea.h * 100)} onChange={(e) => setGrid('h', Number(e.target.value) / 100)} /> {Math.round(pl.gridArea.h * 100)}%</label>
+      </div>
+      <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
+        タイトル領域
+      </div>
+      <div className="placement-slider-grid">
+        <label>X <input type="range" min="0" max="100" value={Math.round(pl.titleArea.x * 100)} onChange={(e) => setTitle('x', Number(e.target.value) / 100)} /> {Math.round(pl.titleArea.x * 100)}%</label>
+        <label>Y <input type="range" min="0" max="100" value={Math.round(pl.titleArea.y * 100)} onChange={(e) => setTitle('y', Number(e.target.value) / 100)} /> {Math.round(pl.titleArea.y * 100)}%</label>
+        <label>幅 <input type="range" min="5" max="100" value={Math.round(pl.titleArea.w * 100)} onChange={(e) => setTitle('w', Number(e.target.value) / 100)} /> {Math.round(pl.titleArea.w * 100)}%</label>
+        <label>高さ <input type="range" min="2" max="100" value={Math.round(pl.titleArea.h * 100)} onChange={(e) => setTitle('h', Number(e.target.value) / 100)} /> {Math.round(pl.titleArea.h * 100)}%</label>
+      </div>
+      <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
+        行列・ヘッダー
+      </div>
+      <div className="placement-slider-grid">
+        <label>列数 <input type="range" min="1" max="14" value={pl.cols} onChange={(e) => onChange({ ...pl, cols: Number(e.target.value) })} /> {pl.cols}</label>
+        <label>行数 <input type="range" min="1" max="10" value={pl.rows} onChange={(e) => onChange({ ...pl, rows: Number(e.target.value) })} /> {pl.rows}</label>
+        <label>余白 <input type="range" min="0" max="10" value={pl.cellInset} onChange={(e) => onChange({ ...pl, cellInset: Number(e.target.value) })} /> {pl.cellInset}px</label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={pl.hasHeaderRow} onChange={(e) => onChange({ ...pl, hasHeaderRow: e.target.checked })} />
+          ヘッダー行あり
+        </label>
+      </div>
+      <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
+        配色
+      </div>
+      <div className="shift-color-row">
+        <label className="shift-color-item">
+          セル背景
+          <input type="color" value={pl.cellBg} onChange={(e) => onChange({ ...pl, cellBg: e.target.value })} />
+        </label>
+        <label className="shift-color-item">
+          テキスト
+          <input type="color" value={pl.textColor} onChange={(e) => onChange({ ...pl, textColor: e.target.value })} />
+        </label>
+        <label className="shift-color-item">
+          時間
+          <input type="color" value={pl.timeColor} onChange={(e) => onChange({ ...pl, timeColor: e.target.value })} />
+        </label>
+        <label className="shift-color-item">
+          アクセント
+          <input type="color" value={pl.accentColor} onChange={(e) => onChange({ ...pl, accentColor: e.target.value })} />
+        </label>
+      </div>
+    </div>
+  );
 }
 
 function buildDailyPostText(

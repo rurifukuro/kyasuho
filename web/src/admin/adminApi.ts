@@ -1087,6 +1087,25 @@ export async function uploadShiftBackground(
   return urlData.publicUrl;
 }
 
+export async function analyzeShiftImage(imageUrl: string): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('ky-shift-analyze', {
+    body: { image_url: imageUrl },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        code = ((await ctx.json()) as { error?: string }).error ?? '';
+      }
+    } catch { /* ignore */ }
+    throw new Error(code || error.message);
+  }
+  const placement = (data as { placement?: unknown } | null)?.placement;
+  if (placement === undefined || placement === null) throw new Error('bad_ai_output');
+  return placement;
+}
+
 // ---- イベント（ky_events・§19-㉞） ----
 
 export async function fetchEvents(tenantId: string): Promise<KyEvent[]> {
