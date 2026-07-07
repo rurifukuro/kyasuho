@@ -11,7 +11,7 @@ export function useReservations(tenantId: string | undefined, date: string) {
     setLoading(true);
     const { data } = await supabase
       .from('ky_reservations')
-      .select('id, tenant_id, date, slot, set_minutes, seat_no, customer_name, status')
+      .select('id, tenant_id, date, slot, set_minutes, seat_no, status')
       .eq('tenant_id', tenantId)
       .eq('date', date)
       .in('status', ['reserved', 'checked_in'])

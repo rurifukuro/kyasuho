@@ -70,11 +70,15 @@ function extractJsonObject(text: string): string | null {
   return text.slice(start, end + 1);
 }
 
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB上限（メモリ・API費用の防御）
+
 async function fetchImageAsBase64(url: string): Promise<{ base64: string; mediaType: string }> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`image fetch failed: ${res.status}`);
   const ct = res.headers.get('content-type') ?? 'image/jpeg';
+  if (!ct.startsWith('image/')) throw new Error(`not an image: ${ct}`);
   const buf = await res.arrayBuffer();
+  if (buf.byteLength > MAX_IMAGE_BYTES) throw new Error(`image too large: ${buf.byteLength}`);
   const bytes = new Uint8Array(buf);
   let binary = '';
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
@@ -131,6 +135,13 @@ Deno.serve(async (req: Request) => {
   if (!tenantRes.ok) return json(500, { error: 'server_error' });
   const tenants = (await tenantRes.json()) as Array<{ id: string }>;
   if (!tenants[0]) return json(403, { error: 'forbidden' });
+
+  // ── SSRF防止: 取得先を自テナントのシフト背景バケットに限定 ──
+  // uploadShiftBackground（adminApi.ts）が発行する公開URLだけを受け付ける。
+  const allowedPrefix = `${SUPABASE_URL}/storage/v1/object/public/ky-shift-backgrounds/${tenants[0].id}/`;
+  if (!imageUrl.startsWith(allowedPrefix)) {
+    return json(400, { error: 'bad_request' });
+  }
 
   // ── レート制限 ──
   const slotRes = await fetch(`${SUPABASE_URL}/rest/v1/rpc/reserve_ky_ai_slot`, {

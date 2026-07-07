@@ -1468,3 +1468,37 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 ### 検証
 - `npx tsc -b` EXIT:0
 - ブラウザ検証: Day12「みさき 17-24」（旧「17-0」→修正済み）、Day15 全14名表示確認
+
+---
+
+## Rev63（2026-07-07）セキュリティ監査＋堅牢化（S1〜S12・migration 0030）
+
+全設計横断監査（migration 0001〜0029・Edge Function 2本・アプリ/管理Web/客Webクライアント層）で発見した脆弱性12件の修正。
+
+### DB（supabase/migrations/0030_security_hardening.sql・本番適用済み）
+- **S1**: ky_reservations の anon 読取を列レベルGRANTで制限（id/tenant_id/date/slot/set_minutes/seat_no/status のみ・customer_name/contact のPII収集を遮断）
+- **S2**: ky_reservation_pins_admin_delete を自テナント予約に限定（テナント越境削除の穴）
+- **S3**: ky_pin_attempts 新設＋PIN総当たり対策（15分5回失敗ロック）を ky_verify_reservation_pin / ky_cancel_reservation に実装（reason/error に too_many_attempts 追加）
+- **S4**: ky_casts_self_update_guard BEFORE UPDATE トリガー新設（キャスト本人は name/name_kana/bio/photo_url/sns_links/accepts_nomination のみ更新可・tenant_id/user_id/sort_order 改変を遮断）
+- **S5**: ky-cast-photos の書込ポリシーを自テナントフォルダ限定に（他店フォルダへの書込穴）
+- **S6**: ky-receipts の公開読取ポリシー廃止→オーナー限定＋書込フォルダスコープ（anon列挙を遮断。バケット自体は0026でpublic=TRUE＝URL直指定はUUID2つ必要で推測不能。本番分離時に private＋署名URL化＝SQL内コメント明記）
+- **S7**: ky_seat_types / ky_events の anon 読取に is_suspended=false 条件追加
+- **S8**: ky_make_reservation v4（slot形式regex・氏名必須/100字・contact200字・note1000字・party_size 1〜99・停止テナント拒否・cast_id/seat_type_id の自テナント所属チェック）
+- **S9**: ky_redeem_cast_invite に set search_path=public（SECURITY DEFINER堅牢化）
+- **S10**: ky_delete_account v2（ky_ai_usage＋Storage 3バケットの残骸削除を追加）
+- 適用方法: `supabase migration repair`（0005〜0029を履歴登録）→ `supabase db push`（0030のみ・dry-run確認済み）
+
+### Edge Function（supabase/functions/ky-shift-analyze/index.ts・再デプロイ済み）
+- **S11**: SSRF防止＝取得先URLを自テナントの ky-shift-backgrounds 公開URLプレフィックスに限定＋8MB上限＋image/* content-type チェック
+
+### 客Web
+- **S12**: useReservations.ts の select から customer_name 除去（S1と対）
+- types.ts: KyReservation から customer_name 分離（管理Web用は KyReservationFull）・too_many_attempts 型追加
+- ReservationEditModal.tsx: 試行回数上限エラーの表示追加
+
+### 検証（WEB7 RESTプローブ・全通過）
+- P1: anon `select=customer_name` → 401/42501（遮断確認）／P2: 許可列 → 200
+- P3: ky_pin_attempts anon → 401／P4・P5: seat_types/events anon → 200
+- P6・P7: PIN照合/キャンセルRPC正常応答／P8: make_reservation 存在しないテナント → not_unlocked（挿入なし）
+- P9: ky-receipts anon 列挙 → 空配列（遮断確認）
+- `npx tsc -b`（web）EXIT:0／`npx tsc --noEmit`（アプリ）EXIT:0
