@@ -72,6 +72,13 @@ export default function AdminApp() {
     void loadTenant();
   }, [loadTenant]);
 
+  const handleTenantUpdate = useCallback(
+    (patch: Partial<KyTenant>) => {
+      setTenant((prev) => (prev ? { ...prev, ...patch } : prev));
+    },
+    [],
+  );
+
   if (!authReady) {
     return <div className="loading">読み込み中…</div>;
   }
@@ -103,13 +110,6 @@ export default function AdminApp() {
       </div>
     );
   }
-
-  const handleTenantUpdate = useCallback(
-    (patch: Partial<KyTenant>) => {
-      setTenant((prev) => (prev ? { ...prev, ...patch } : prev));
-    },
-    [],
-  );
 
   return (
     <Routes>
