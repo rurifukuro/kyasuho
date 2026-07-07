@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
   KyAttendance,
+  KyBottleKeep,
   KyCast,
   KyCastInvite,
   KyCastPayroll,
@@ -19,6 +20,7 @@ import type {
   KyStampSettings,
   KyTenant,
   KyUnlockWindow,
+  KyVoucher,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -32,7 +34,7 @@ export async function fetchOwnTenant(): Promise<KyTenant | null> {
   if (!uid) return null;
   const { data, error } = await supabase
     .from('ky_tenants')
-    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended')
+    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended, enable_bottle_keep, enable_vouchers')
     .eq('owner_user_id', uid)
     .maybeSingle();
   if (error) throw error;
@@ -1066,4 +1068,139 @@ export async function fetchPublicEvents(tenantId: string): Promise<KyEvent[]> {
     .order('event_date', { ascending: true });
   if (error) throw error;
   return (data ?? []) as KyEvent[];
+}
+
+// ---- テナント機能フラグ更新（§19-㊲） ----
+
+export async function updateTenantFlags(
+  tenantId: string,
+  flags: Partial<{ enable_bottle_keep: boolean; enable_vouchers: boolean }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_tenants').update(flags).eq('id', tenantId);
+  if (error) throw error;
+}
+
+// ---- ボトルキープ（ky_bottle_keeps） ----
+
+export async function fetchBottleKeeps(tenantId: string): Promise<KyBottleKeep[]> {
+  const { data, error } = await supabase
+    .from('ky_bottle_keeps')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('is_active', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyBottleKeep[];
+}
+
+export async function addBottleKeep(
+  tenantId: string,
+  input: {
+    customerName: string;
+    itemName: string;
+    startDate: string;
+    expiryDate: string | null;
+    remaining: string;
+    note: string;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').insert({
+    tenant_id: tenantId,
+    customer_name: input.customerName,
+    item_name: input.itemName,
+    start_date: input.startDate,
+    expiry_date: input.expiryDate || null,
+    remaining: input.remaining,
+    note: input.note,
+  });
+  if (error) throw error;
+}
+
+export async function updateBottleKeep(
+  id: string,
+  fields: Partial<{
+    customer_name: string;
+    item_name: string;
+    start_date: string;
+    expiry_date: string | null;
+    remaining: string;
+    note: string;
+    is_active: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteBottleKeep(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_bottle_keeps').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---- 回数券・チェキ券（ky_vouchers） ----
+
+export async function fetchVouchers(tenantId: string): Promise<KyVoucher[]> {
+  const { data, error } = await supabase
+    .from('ky_vouchers')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('is_active', { ascending: false })
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as KyVoucher[];
+}
+
+export async function addVoucher(
+  tenantId: string,
+  input: {
+    voucherType: string;
+    name: string;
+    customerName: string;
+    totalCount: number;
+    expiryDate: string | null;
+    note: string;
+  },
+): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').insert({
+    tenant_id: tenantId,
+    voucher_type: input.voucherType,
+    name: input.name,
+    customer_name: input.customerName,
+    total_count: input.totalCount,
+    remaining_count: input.totalCount,
+    expiry_date: input.expiryDate || null,
+    note: input.note,
+  });
+  if (error) throw error;
+}
+
+export async function updateVoucher(
+  id: string,
+  fields: Partial<{
+    voucher_type: string;
+    name: string;
+    customer_name: string;
+    total_count: number;
+    remaining_count: number;
+    expiry_date: string | null;
+    note: string;
+    is_active: boolean;
+  }>,
+): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+export async function useVoucher(id: string, currentRemaining: number): Promise<void> {
+  if (currentRemaining <= 0) return;
+  const { error } = await supabase
+    .from('ky_vouchers')
+    .update({ remaining_count: currentRemaining - 1 })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteVoucher(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_vouchers').delete().eq('id', id);
+  if (error) throw error;
 }

@@ -47,6 +47,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         area: (data.area ?? '') as string,
         rankingOptIn: (data.ranking_opt_in ?? false) as boolean,
         isSuspended: data.is_suspended as boolean,
+        enableBottleKeep: (data.enable_bottle_keep ?? false) as boolean,
+        enableVouchers: (data.enable_vouchers ?? false) as boolean,
       });
     }
     setLoading(false);

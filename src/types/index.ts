@@ -125,6 +125,8 @@ export type Tenant = {
   area: string;
   rankingOptIn: boolean;
   isSuspended: boolean;
+  enableBottleKeep: boolean;
+  enableVouchers: boolean;
 };
 
 /** キャスト（コンカフェの出演者）。 */
@@ -435,6 +437,38 @@ export type StampSettings = {
   rewardThreshold: number;
   rewardDescription: string;
   isActive: boolean;
+};
+
+/** ボトルキープ（ky_bottle_keeps）。 */
+export type BottleKeep = {
+  id: string;
+  tenantId: string;
+  customerName: string;
+  itemName: string;
+  startDate: string;
+  expiryDate: string | null;
+  remaining: string;
+  note: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+/** 回数券/チェキ券種別。 */
+export type VoucherType = 'ticket' | 'cheki' | 'other';
+
+/** 回数券/チェキ券（ky_vouchers）。 */
+export type Voucher = {
+  id: string;
+  tenantId: string;
+  voucherType: VoucherType;
+  name: string;
+  customerName: string;
+  totalCount: number;
+  remainingCount: number;
+  expiryDate: string | null;
+  note: string;
+  isActive: boolean;
+  createdAt: string;
 };
 
 /** 店舗イベント（ky_events）。 */

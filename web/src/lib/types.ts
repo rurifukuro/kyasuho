@@ -14,6 +14,8 @@ export interface KyTenant {
   area: string;
   ranking_opt_in: boolean;
   is_suspended: boolean;
+  enable_bottle_keep: boolean;
+  enable_vouchers: boolean;
 }
 
 export interface KyUnlockWindow {
@@ -264,6 +266,37 @@ export interface KyEvent {
   end_time: string | null;
   event_type: string;
   is_public: boolean;
+  created_at: string;
+}
+
+/** ボトルキープ（ky_bottle_keeps）。 */
+export interface KyBottleKeep {
+  id: string;
+  tenant_id: string;
+  customer_name: string;
+  item_name: string;
+  start_date: string;
+  expiry_date: string | null;
+  remaining: string;
+  note: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+/** 回数券/チェキ券（ky_vouchers）。 */
+export type KyVoucherType = 'ticket' | 'cheki' | 'other';
+
+export interface KyVoucher {
+  id: string;
+  tenant_id: string;
+  voucher_type: KyVoucherType;
+  name: string;
+  customer_name: string;
+  total_count: number;
+  remaining_count: number;
+  expiry_date: string | null;
+  note: string;
+  is_active: boolean;
   created_at: string;
 }
 
