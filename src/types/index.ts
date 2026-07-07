@@ -436,3 +436,17 @@ export type StampSettings = {
   rewardDescription: string;
   isActive: boolean;
 };
+
+/** 店舗イベント（ky_events）。 */
+export type StoreEvent = {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  eventDate: string;
+  startTime: string | null;
+  endTime: string | null;
+  eventType: string;
+  isPublic: boolean;
+  createdAt: string;
+};

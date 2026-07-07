@@ -411,6 +411,16 @@ body {
 }
 .pin-notice { font-size: 0.75rem !important; color: var(--danger) !important; }
 
+/* Events */
+.events-section { margin: 1rem 0; }
+.event-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.event-card { display: flex; gap: 0.75rem; padding: 0.75rem; border-radius: 10px; background: var(--card-bg, #f8f8fa); border: 1px solid var(--border, #e5e5ea); }
+.event-date { font-weight: 700; font-size: 0.85rem; white-space: nowrap; min-width: 5rem; color: var(--primary, #5856d6); }
+.event-body { flex: 1; }
+.event-title { font-weight: 600; font-size: 0.9rem; }
+.event-time { font-size: 0.8rem; color: #888; }
+.event-desc { font-size: 0.8rem; color: #666; margin-top: 0.25rem; }
+
 /* Footer */
 .page-footer {
   text-align: center;

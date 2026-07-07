@@ -5,6 +5,7 @@ import type {
   KyCastInvite,
   KyCastPayroll,
   KyCustomer,
+  KyEvent,
   KyExpense,
   KyMenuItem,
   KyOrder,
@@ -1003,4 +1004,66 @@ export async function uploadShiftBackground(
     .from('ky-shift-backgrounds')
     .getPublicUrl(path);
   return urlData.publicUrl;
+}
+
+// ---- イベント（ky_events・§19-㉞） ----
+
+export async function fetchEvents(tenantId: string): Promise<KyEvent[]> {
+  const { data, error } = await supabase
+    .from('ky_events')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('event_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as KyEvent[];
+}
+
+export async function addEvent(
+  tenantId: string,
+  input: { title: string; description: string; eventDate: string; startTime: string | null; endTime: string | null; eventType: string; isPublic: boolean },
+): Promise<void> {
+  const { error } = await supabase.from('ky_events').insert({
+    tenant_id: tenantId,
+    title: input.title,
+    description: input.description,
+    event_date: input.eventDate,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    event_type: input.eventType,
+    is_public: input.isPublic,
+  });
+  if (error) throw error;
+}
+
+export async function updateEvent(
+  id: string,
+  input: { title: string; description: string; eventDate: string; startTime: string | null; endTime: string | null; eventType: string; isPublic: boolean },
+): Promise<void> {
+  const { error } = await supabase.from('ky_events').update({
+    title: input.title,
+    description: input.description,
+    event_date: input.eventDate,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    event_type: input.eventType,
+    is_public: input.isPublic,
+  }).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  const { error } = await supabase.from('ky_events').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchPublicEvents(tenantId: string): Promise<KyEvent[]> {
+  const { data, error } = await supabase
+    .from('ky_events')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('is_public', true)
+    .gte('event_date', new Date().toISOString().slice(0, 10))
+    .order('event_date', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as KyEvent[];
 }

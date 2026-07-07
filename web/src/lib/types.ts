@@ -253,6 +253,20 @@ export interface KyStampSettings {
   is_active: boolean;
 }
 
+/** 店舗イベント（ky_events）。 */
+export interface KyEvent {
+  id: string;
+  tenant_id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  event_type: string;
+  is_public: boolean;
+  created_at: string;
+}
+
 export type DayStatus = 'available' | 'low' | 'full';
 
 export interface MakeReservationResult {

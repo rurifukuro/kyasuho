@@ -4,6 +4,7 @@ import { useTenant } from '../hooks/useTenant';
 import { useUnlockWindows, useNextOpenDate } from '../hooks/useUnlockWindows';
 import { useReservations } from '../hooks/useReservations';
 import { useCasts, useSeatTypes, useShifts } from '../hooks/useCasts';
+import { usePublicEvents } from '../hooks/usePublicEvents';
 import { formatDate } from '../lib/timeUtils';
 import { Calendar } from './Calendar';
 import { TimeSlotList } from './TimeSlotList';
@@ -27,6 +28,7 @@ export function TenantPage() {
   const { casts } = useCasts(tenant?.id);
   const { seatTypes } = useSeatTypes(tenant?.id);
   const { shifts } = useShifts(tenant?.id, selectedDate);
+  const { events } = usePublicEvents(tenant?.id);
 
   useEffect(() => {
     if (!userPicked.current && nextDate && nextDate !== selectedDate) {
@@ -77,6 +79,29 @@ export function TenantPage() {
         selectedDate={selectedDate}
         onSelectDate={handlePickDate}
       />
+
+      {events.length > 0 && (
+        <div className="events-section">
+          <h3 className="section-title">イベント情報</h3>
+          <div className="event-list">
+            {events.map((ev) => (
+              <div key={ev.id} className="event-card">
+                <div className="event-date">{ev.event_date.replace(/-/g, '/')}</div>
+                <div className="event-body">
+                  <div className="event-title">{ev.title}</div>
+                  {ev.start_time && (
+                    <div className="event-time">
+                      {ev.start_time.slice(0, 5)}
+                      {ev.end_time ? `〜${ev.end_time.slice(0, 5)}` : ''}
+                    </div>
+                  )}
+                  {ev.description && <div className="event-desc">{ev.description}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {noWindowToday && !nextLoading && (
         <div className="notice-banner">
