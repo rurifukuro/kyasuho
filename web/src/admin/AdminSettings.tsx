@@ -1,7 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyTenant } from '../lib/types';
-import { updateTenantFlags, updateTenantProfile } from './adminApi';
+import {
+  fetchReminderSettings,
+  updateTenantFlags,
+  updateTenantProfile,
+  upsertReminderSettings,
+} from './adminApi';
 import { lookupPostalCode } from '../lib/postalLookup';
 import { resolveArea } from '../lib/areaDict';
 
@@ -241,6 +246,9 @@ export function AdminSettings({
         </div>
       </div>
 
+      {/* シフト提出リマインダー */}
+      <ShiftReminderSection tenantId={tenant.id} />
+
       {/* オプション機能 */}
       <h3 className="admin-section-title" style={{ marginTop: 24 }}>オプション機能</h3>
       <div className="admin-card">
@@ -283,5 +291,189 @@ export function AdminSettings({
         </div>
       </div>
     </div>
+  );
+}
+
+function calcNextDeadline(deadlineDay: number): { label: string; remindDate: (daysBefore: number) => string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const thisMonth = new Date(y, m, deadlineDay);
+  const deadline = now <= thisMonth ? thisMonth : new Date(m === 11 ? y + 1 : y, (m + 1) % 12, deadlineDay);
+  const target = new Date(deadline.getFullYear(), deadline.getMonth() + 1, 1);
+  const label = `${deadline.getMonth() + 1}/${deadline.getDate()}（${target.getFullYear()}年${target.getMonth() + 1}月分）`;
+  return {
+    label,
+    remindDate: (daysBefore: number) => {
+      const d = new Date(deadline);
+      d.setDate(d.getDate() - daysBefore);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    },
+  };
+}
+
+function ShiftReminderSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [enabled, setEnabled] = useState(false);
+  const [deadlineDay, setDeadlineDay] = useState(20);
+  const [remindDaysBefore, setRemindDaysBefore] = useState(3);
+  const [repeatDaily, setRepeatDaily] = useState(false);
+  const [remindHour, setRemindHour] = useState(12);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchReminderSettings(tenantId)
+      .then((s) => {
+        if (s) {
+          setEnabled(s.enabled);
+          setDeadlineDay(s.deadline_day);
+          setRemindDaysBefore(s.remind_days_before);
+          setRepeatDaily(s.repeat_daily);
+          setRemindHour(s.remind_hour);
+        }
+      })
+      .catch((e) => console.warn('[kyasuho] fetchReminderSettings:', e))
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await upsertReminderSettings(tenantId, {
+        enabled,
+        deadline_day: deadlineDay,
+        remind_days_before: remindDaysBefore,
+        repeat_daily: repeatDaily,
+        remind_hour: remindHour,
+      });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (e) {
+      console.warn('[kyasuho] upsertReminderSettings:', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, enabled, deadlineDay, remindDaysBefore, repeatDaily, remindHour]);
+
+  const { label: deadlineLabel, remindDate } = calcNextDeadline(deadlineDay);
+  const remindDateLabel = remindDate(remindDaysBefore);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>シフト提出リマインダー</h3>
+      <div className="admin-card">
+        {loading ? (
+          <div className="admin-empty">読み込み中…</div>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>
+                <strong>リマインダー通知を有効にする</strong>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  提出期限前に未提出のキャストへ自動でプッシュ通知が届きます。
+                </span>
+              </span>
+            </label>
+
+            {enabled && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="admin-field">
+                  <label htmlFor="rem-deadline">提出期限（毎月）</label>
+                  <select
+                    id="rem-deadline"
+                    value={deadlineDay}
+                    onChange={(e) => setDeadlineDay(Number(e.target.value))}
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>毎月 {d}日</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="rem-before">通知タイミング</label>
+                  <select
+                    id="rem-before"
+                    value={remindDaysBefore}
+                    onChange={(e) => setRemindDaysBefore(Number(e.target.value))}
+                  >
+                    <option value={0}>期限当日</option>
+                    {Array.from({ length: 27 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>期限の {d}日前</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="rem-hour">通知時刻</label>
+                  <select
+                    id="rem-hour"
+                    value={remindHour}
+                    onChange={(e) => setRemindHour(Number(e.target.value))}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                      <option key={h} value={h}>{h}:00</option>
+                    ))}
+                  </select>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={repeatDaily}
+                    onChange={(e) => setRepeatDaily(e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>
+                    <strong>毎日再通知</strong>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      初回通知日から期限日まで毎日通知
+                    </span>
+                  </span>
+                </label>
+
+                <div className="admin-card" style={{ gridColumn: 'span 2', background: 'var(--bg-secondary, #f9fafb)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>次回の通知予定</div>
+                  <div style={{ fontSize: 14 }}>
+                    次回の期限: <strong>{deadlineLabel}</strong>
+                  </div>
+                  <div style={{ fontSize: 14, color: 'var(--color-primary, #6366f1)' }}>
+                    通知予定: <strong>
+                      {remindDateLabel}
+                      {repeatDaily ? ` 〜 ${deadlineDay}日` : ''}
+                      {` ${remindHour}:00`}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? '保存中…' : 'リマインダー設定を保存'}
+              </button>
+              {msg && (
+                <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+                  {msg}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

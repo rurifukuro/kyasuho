@@ -16,6 +16,7 @@ import type {
   KySales,
   KySeatType,
   KyShift,
+  KyShiftReminderSettings,
   KyShiftRequest,
   KyShiftSubmission,
   KyShiftTemplate,
@@ -1392,5 +1393,39 @@ export async function rejectShiftRequest(requestId: string): Promise<void> {
     .from('ky_shift_requests')
     .update({ status: 'rejected' })
     .eq('id', requestId);
+  if (error) throw error;
+}
+
+export async function fetchReminderSettings(
+  tenantId: string,
+): Promise<KyShiftReminderSettings | null> {
+  const { data, error } = await supabase
+    .from('ky_shift_reminder_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as KyShiftReminderSettings | null) ?? null;
+}
+
+export async function upsertReminderSettings(
+  tenantId: string,
+  settings: {
+    enabled: boolean;
+    deadline_day: number;
+    remind_days_before: number;
+    repeat_daily: boolean;
+    remind_hour: number;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_shift_reminder_settings')
+    .upsert(
+      {
+        tenant_id: tenantId,
+        ...settings,
+      },
+      { onConflict: 'tenant_id' },
+    );
   if (error) throw error;
 }

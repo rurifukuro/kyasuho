@@ -1,5 +1,5 @@
 import { supabase } from '../config/supabase';
-import type { ShiftRequest, ShiftSubmission, CastShiftDefault } from '../types';
+import type { ShiftRequest, ShiftSubmission, CastShiftDefault, ShiftReminderSettings } from '../types';
 
 type ShiftRequestRow = {
   id: string;
@@ -231,5 +231,66 @@ export async function rejectShiftRequest(requestId: string): Promise<void> {
     .from('ky_shift_requests')
     .update({ status: 'rejected' })
     .eq('id', requestId);
+  if (error) throw error;
+}
+
+type ReminderSettingsRow = {
+  tenant_id: string;
+  enabled: boolean;
+  period_type: string;
+  deadline_day: number;
+  remind_days_before: number;
+  repeat_daily: boolean;
+  remind_hour: number;
+  updated_at: string;
+};
+
+function rowToReminderSettings(r: ReminderSettingsRow): ShiftReminderSettings {
+  return {
+    tenantId: r.tenant_id,
+    enabled: r.enabled,
+    periodType: r.period_type,
+    deadlineDay: r.deadline_day,
+    remindDaysBefore: r.remind_days_before,
+    repeatDaily: r.repeat_daily,
+    remindHour: r.remind_hour,
+    updatedAt: r.updated_at,
+  };
+}
+
+export async function fetchReminderSettings(
+  tenantId: string,
+): Promise<ShiftReminderSettings | null> {
+  const { data } = await supabase
+    .from('ky_shift_reminder_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  return data ? rowToReminderSettings(data as ReminderSettingsRow) : null;
+}
+
+export async function upsertReminderSettings(
+  tenantId: string,
+  settings: {
+    enabled: boolean;
+    deadlineDay: number;
+    remindDaysBefore: number;
+    repeatDaily: boolean;
+    remindHour: number;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_shift_reminder_settings')
+    .upsert(
+      {
+        tenant_id: tenantId,
+        enabled: settings.enabled,
+        deadline_day: settings.deadlineDay,
+        remind_days_before: settings.remindDaysBefore,
+        repeat_daily: settings.repeatDaily,
+        remind_hour: settings.remindHour,
+      },
+      { onConflict: 'tenant_id' },
+    );
   if (error) throw error;
 }

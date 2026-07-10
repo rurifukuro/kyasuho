@@ -21,6 +21,7 @@ import DeleteAccountModal from '../components/DeleteAccountModal';
 import StoreProfileModal from '../components/StoreProfileModal';
 import PcWorkModal from '../components/PcWorkModal';
 import CustomerListModal from '../components/CustomerListModal';
+import { ShiftReminderModal } from '../components/ShiftReminderModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -37,6 +38,7 @@ export function SettingsScreen() {
   const [showPcWork, setShowPcWork] = useState(false);
   const [showContact, setShowContact] = useState(false);
   const [showCustomers, setShowCustomers] = useState(false);
+  const [showShiftReminder, setShowShiftReminder] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -67,6 +69,21 @@ export function SettingsScreen() {
               <Text style={[s.rowSub, { color: theme.subtext }]}>
                 {tenant?.genre || t('settings.storeGenrePlaceholder')}
               </Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* シフト */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionShift')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowShiftReminder(true)}>
+            <MaterialCommunityIcons name="bell-ring-outline" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('shiftReminder.title')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.shiftReminderSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -198,6 +215,15 @@ export function SettingsScreen() {
       <StoreProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
       <PcWorkModal visible={showPcWork} onClose={() => setShowPcWork(false)} />
       <CustomerListModal visible={showCustomers} onClose={() => setShowCustomers(false)} />
+      {tenant && (
+        <ShiftReminderModal
+          visible={showShiftReminder}
+          onClose={() => setShowShiftReminder(false)}
+          theme={theme}
+          t={t}
+          tenantId={tenant.id}
+        />
+      )}
     </View>
   );
 }
