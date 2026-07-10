@@ -86,6 +86,8 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
   const headerFont = FONT_STACKS[def.fonts.header];
   const bodyFont = FONT_STACKS[def.fonts.body];
+  const isBand = deco.headerStyle === 'ribbon' || deco.headerStyle === 'banner';
+  const isBanner = deco.headerStyle === 'banner';
 
   const rootStyle: CSSProperties = {
     position: 'relative',
@@ -143,6 +145,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
         </>
       ) : null}
 
+      {/* 外周フレーム装飾（Rev76・店舗テンプレ背景時は背景側のデザインを尊重して非表示） */}
+      {!bgImageUrl ? <FrameLayer def={def} /> : null}
+
       {/* ヘッダー */}
       <div style={{ position: 'relative', textAlign: 'center', paddingBottom: 28 }}>
         {logoUrl ? (
@@ -159,21 +164,28 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
           <span
             style={{
               display: 'inline-block',
+              position: 'relative',
               fontFamily: headerFont,
               fontSize: 56,
               fontWeight: 700,
-              color: deco.headerStyle === 'ribbon' ? '#FFFFFF' : p.headerText,
-              backgroundColor: deco.headerStyle === 'ribbon' ? p.accent : undefined,
-              paddingTop: deco.headerStyle === 'ribbon' ? 8 : undefined,
-              paddingRight: deco.headerStyle === 'ribbon' ? 48 : undefined,
-              paddingBottom: deco.headerStyle === 'ribbon' ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
-              paddingLeft: deco.headerStyle === 'ribbon' ? 48 : undefined,
+              color: isBand ? '#FFFFFF' : p.headerText,
+              backgroundColor: isBand ? p.accent : undefined,
+              paddingTop: isBand ? 8 : undefined,
+              paddingRight: isBand ? 48 : undefined,
+              paddingBottom: isBand ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
+              paddingLeft: isBand ? 48 : undefined,
               borderRadius: deco.headerStyle === 'ribbon' ? deco.cornerRadius + 6 : undefined,
               borderBottom:
                 deco.headerStyle === 'underline' ? `5px solid ${p.accent}` : undefined,
               lineHeight: 1.25,
             }}
           >
+            {isBanner ? (
+              <>
+                <span style={bannerTailStyle(p.accent, 'left')} />
+                <span style={bannerTailStyle(p.accent, 'right')} />
+              </>
+            ) : null}
             {motif ? (
               <span style={{ fontSize: 34, verticalAlign: 'middle', marginRight: 20 }}>
                 {motif}
@@ -209,6 +221,146 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
         <WeekRows def={def} days={days} />
       )}
     </div>
+  );
+}
+
+// ── banner見出し（Rev76）: 両端に切込みテールが付く帯 ──
+
+/** 帯の実高さ = fontSize56 × lineHeight1.25 + 縦padding8×2 */
+const BANNER_BAND_H = 86;
+
+function bannerTailStyle(accent: string, side: 'left' | 'right'): CSSProperties {
+  const style: CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: BANNER_BAND_H / 2,
+    borderBottomWidth: BANNER_BAND_H / 2,
+    borderTopColor: accent,
+    borderBottomColor: accent,
+    opacity: 0.85,
+  };
+  if (side === 'left') {
+    style.left = -34; // 帯と2px重ねて継ぎ目を消す（テール全幅36）
+    style.borderRightWidth = 22;
+    style.borderRightColor = accent;
+    style.borderLeftWidth = 14;
+    style.borderLeftColor = 'transparent'; // 透明側が切込みになる
+  } else {
+    style.right = -34;
+    style.borderLeftWidth = 22;
+    style.borderLeftColor = accent;
+    style.borderRightWidth = 14;
+    style.borderRightColor = 'transparent';
+  }
+  return style;
+}
+
+// ── 外周フレーム装飾（Rev76・frame: ShiftFrameStyle） ──
+
+function FrameLayer({ def }: { def: ShiftTemplateDefinition }) {
+  const frame = def.decorations.frame ?? 'none';
+  if (frame === 'none') return null;
+  const accent = def.palette.accent;
+  const radius = def.decorations.cornerRadius;
+  const base: CSSProperties = { position: 'absolute', pointerEvents: 'none' };
+
+  if (frame === 'double') {
+    return (
+      <>
+        <div
+          style={{
+            ...base,
+            top: 12,
+            left: 12,
+            right: 12,
+            bottom: 12,
+            border: `3px solid ${accent}`,
+            borderRadius: radius + 8,
+            opacity: 0.8,
+          }}
+        />
+        <div
+          style={{
+            ...base,
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: 20,
+            border: `1px solid ${accent}`,
+            borderRadius: radius + 4,
+            opacity: 0.55,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (frame === 'dashed') {
+    return (
+      <div
+        style={{
+          ...base,
+          top: 14,
+          left: 14,
+          right: 14,
+          bottom: 14,
+          border: `3px dashed ${accent}`,
+          borderRadius: radius + 6,
+          opacity: 0.7,
+        }}
+      />
+    );
+  }
+
+  if (frame === 'lace') {
+    // 上下端に半円スカラップ（円の半分をルートの overflow:hidden で切ってレース風にする）
+    const dots = Array.from({ length: Math.ceil(def.size.w / 44) }, (_, i) => i);
+    const row = (edge: 'top' | 'bottom') => (
+      <div
+        style={{
+          ...base,
+          ...(edge === 'top' ? { top: -16 } : { bottom: -16 }),
+          left: 0,
+          right: 0,
+          height: 32,
+          display: 'flex',
+          justifyContent: 'space-around',
+        }}
+      >
+        {dots.map((i) => (
+          <div
+            key={i}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: accent, opacity: 0.3 }}
+          />
+        ))}
+      </div>
+    );
+    return (
+      <>
+        {row('top')}
+        {row('bottom')}
+      </>
+    );
+  }
+
+  // corner-motif: 四隅にモチーフ文字（motif未指定テンプレは装飾記号にフォールバック）
+  const m = def.decorations.motif;
+  const ch = m && m !== 'none' ? MOTIF_CHARS[m] : '❖';
+  const corner = (pos: CSSProperties, key: string) => (
+    <div key={key} style={{ ...base, ...pos, fontSize: 60, lineHeight: 1, color: accent, opacity: 0.55 }}>
+      {ch}
+    </div>
+  );
+  return (
+    <>
+      {corner({ top: 14, left: 18 }, 'tl')}
+      {corner({ top: 14, right: 18 }, 'tr')}
+      {corner({ bottom: 14, left: 18 }, 'bl')}
+      {corner({ bottom: 14, right: 18 }, 'br')}
+    </>
   );
 }
 

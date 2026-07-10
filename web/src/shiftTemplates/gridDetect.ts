@@ -67,7 +67,7 @@ function otsuThreshold(gray: Uint8Array): number {
 }
 
 // 二値化: 「インク＝罫線・文字側（少数派クラス）」が true になるマスクを作る。
-// ダーク背景×明色罫線のテンプレ（20種中6種）は極性を反転して扱う。
+// ダーク背景×明色罫線のテンプレ（40種中13種）は極性を反転して扱う。
 function toInkMask(gray: Uint8Array): Uint8Array {
   const t = otsuThreshold(gray);
   let darkCount = 0;

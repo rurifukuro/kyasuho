@@ -1,6 +1,6 @@
 // web/src/admin/AdminShiftImage.tsx — シフト表画像生成（SPEC §3-I／§22・Web=主戦場）
 //
-// テンプレギャラリー（20種）→ プレビュー → カスタマイズ（色・モチーフ・レイアウト・サイズ）
+// テンプレギャラリー（40種）→ プレビュー → カスタマイズ（色・モチーフ・レイアウト・サイズ）
 // → PNGダウンロード（html-to-image・等倍オフスクリーンノードをキャプチャ）
 // → お気に入り保存（ky_shift_templates.custom_settings に上書き差分を保存）
 
@@ -63,7 +63,19 @@ type ShiftOverrides = {
   layout?: ShiftLayout;
 };
 
-const MOTIF_OPTIONS: ShiftMotif[] = ['none', 'stars', 'hearts', 'flowers', 'sakura', 'lightning'];
+const MOTIF_OPTIONS: ShiftMotif[] = [
+  'none',
+  'stars',
+  'hearts',
+  'flowers',
+  'sakura',
+  'lightning',
+  'ribbon',
+  'cross',
+  'moon',
+  'crown',
+  'snow',
+];
 
 function currentMonth(): string {
   return formatDate(new Date()).slice(0, 7);
@@ -502,7 +514,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
-              テンプレート（20種）
+              テンプレート（{SHIFT_TEMPLATES.length}種）
             </div>
             {GROUPED.map(([cat, list]) => (
               <div key={cat}>

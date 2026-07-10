@@ -8,6 +8,7 @@
 
 import React from 'react';
 import { Image, Platform, Text, View } from 'react-native';
+import type { ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ShiftFontKey, ShiftTemplateDefinition } from './definitions';
 import { MOTIF_CHARS } from './definitions';
@@ -55,8 +56,10 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
   const bodyFont = FONT_FAMILIES[def.fonts.body];
 
   const isRibbon = deco.headerStyle === 'ribbon';
+  const isBanner = deco.headerStyle === 'banner';
+  const isBand = isRibbon || isBanner; // 帯系（白文字×アクセント背景）
   const isUnderline = deco.headerStyle === 'underline';
-  const titleColor = isRibbon ? '#FFFFFF' : p.headerText;
+  const titleColor = isBand ? '#FFFFFF' : p.headerText;
 
   return (
     <View
@@ -110,6 +113,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
         </>
       ) : null}
 
+      {/* 外周フレーム装飾（Rev76） */}
+      <FrameLayer def={def} />
+
       {/* ヘッダー */}
       <View style={{ position: 'relative', alignItems: 'center', paddingBottom: 28 }}>
         {logoUrl ? (
@@ -136,14 +142,14 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
             marginTop: 10,
             flexDirection: 'row',
             alignItems: 'center',
-            ...(isRibbon
+            ...(isBand
               ? {
                   backgroundColor: p.accent,
                   paddingVertical: 8,
                   paddingHorizontal: 48,
-                  borderRadius: deco.cornerRadius + 6,
                 }
               : {}),
+            ...(isRibbon ? { borderRadius: deco.cornerRadius + 6 } : {}),
             ...(isUnderline
               ? {
                   borderBottomWidth: 5,
@@ -153,6 +159,12 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
               : {}),
           }}
         >
+          {isBanner ? (
+            <>
+              <View style={bannerTailStyle(p.accent, 'left')} />
+              <View style={bannerTailStyle(p.accent, 'right')} />
+            </>
+          ) : null}
           {motif ? (
             <Text style={{ fontSize: 34, lineHeight: 40, marginRight: 20, color: titleColor }}>
               {motif}
@@ -184,6 +196,158 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
         <WeekRows def={def} days={days} bodyFont={bodyFont} />
       )}
     </View>
+  );
+}
+
+// ── banner見出し（Rev76）: 両端に切込みテールが付く帯（Webレンダラーと同寸） ──
+
+/** 帯の実高さ = タイトルlineHeight70 + 縦padding8×2 */
+const BANNER_BAND_H = 86;
+
+function bannerTailStyle(accent: string, side: 'left' | 'right'): ViewStyle {
+  const base: ViewStyle = {
+    position: 'absolute',
+    top: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: BANNER_BAND_H / 2,
+    borderBottomWidth: BANNER_BAND_H / 2,
+    borderTopColor: accent,
+    borderBottomColor: accent,
+    opacity: 0.85,
+  };
+  if (side === 'left') {
+    base.left = -34; // 帯と2px重ねて継ぎ目を消す（テール全幅36）
+    base.borderRightWidth = 22;
+    base.borderRightColor = accent;
+    base.borderLeftWidth = 14;
+    base.borderLeftColor = 'transparent'; // 透明側が切込みになる
+  } else {
+    base.right = -34;
+    base.borderLeftWidth = 22;
+    base.borderLeftColor = accent;
+    base.borderRightWidth = 14;
+    base.borderRightColor = 'transparent';
+  }
+  return base;
+}
+
+// ── 外周フレーム装飾（Rev76・frame: ShiftFrameStyle・Webレンダラーと同寸） ──
+
+type CornerPos = { top?: number; bottom?: number; left?: number; right?: number };
+
+function FrameLayer({ def }: { def: ShiftTemplateDefinition }) {
+  const frame = def.decorations.frame ?? 'none';
+  if (frame === 'none') return null;
+  const accent = def.palette.accent;
+  const radius = def.decorations.cornerRadius;
+
+  if (frame === 'double') {
+    return (
+      <>
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            right: 12,
+            bottom: 12,
+            borderWidth: 3,
+            borderColor: accent,
+            borderRadius: radius + 8,
+            opacity: 0.8,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: 20,
+            borderWidth: 1,
+            borderColor: accent,
+            borderRadius: radius + 4,
+            opacity: 0.55,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (frame === 'dashed') {
+    return (
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 14,
+          left: 14,
+          right: 14,
+          bottom: 14,
+          borderWidth: 3,
+          borderStyle: 'dashed',
+          borderColor: accent,
+          borderRadius: radius + 6,
+          opacity: 0.7,
+        }}
+      />
+    );
+  }
+
+  if (frame === 'lace') {
+    // 上下端に半円スカラップ（円の半分をルートの overflow:hidden で切ってレース風にする）
+    const dots = Array.from({ length: Math.ceil(def.size.w / 44) }, (_, i) => i);
+    const row = (edge: 'top' | 'bottom') => (
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          ...(edge === 'top' ? { top: -16 } : { bottom: -16 }),
+          left: 0,
+          right: 0,
+          height: 32,
+          flexDirection: 'row',
+          justifyContent: 'space-around',
+        }}
+      >
+        {dots.map((i) => (
+          <View
+            key={i}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: accent, opacity: 0.3 }}
+          />
+        ))}
+      </View>
+    );
+    return (
+      <>
+        {row('top')}
+        {row('bottom')}
+      </>
+    );
+  }
+
+  // corner-motif: 四隅にモチーフ文字（motif未指定テンプレは装飾記号にフォールバック）
+  const m = def.decorations.motif;
+  const ch = m && m !== 'none' ? MOTIF_CHARS[m] : '❖';
+  const corner = (pos: CornerPos, key: string) => (
+    <Text
+      key={key}
+      style={{ position: 'absolute', ...pos, fontSize: 60, lineHeight: 62, color: accent, opacity: 0.55 }}
+    >
+      {ch}
+    </Text>
+  );
+  return (
+    <>
+      {corner({ top: 14, left: 18 }, 'tl')}
+      {corner({ top: 14, right: 18 }, 'tr')}
+      {corner({ bottom: 14, left: 18 }, 'bl')}
+      {corner({ bottom: 14, right: 18 }, 'br')}
+    </>
   );
 }
 
