@@ -496,3 +496,49 @@ export type StoreEvent = {
   isPublic: boolean;
   createdAt: string;
 };
+
+export type ShiftRequestStatus = 'requested' | 'approved' | 'rejected';
+
+export type ShiftRequestTimeSource = 'default' | 'custom';
+
+export type ShiftRequest = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  date: string;
+  startAt: string;
+  endAt: string;
+  note: string;
+  timeSource: ShiftRequestTimeSource;
+  status: ShiftRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ShiftSubmission = {
+  id: string;
+  tenantId: string;
+  castId: string;
+  periodStart: string;
+  periodEnd: string;
+  submittedAt: string;
+};
+
+export type CastShiftDefault = {
+  tenantId: string;
+  castId: string;
+  startAt: string;
+  endAt: string;
+  updatedAt: string;
+};
+
+export type ShiftReminderSettings = {
+  tenantId: string;
+  enabled: boolean;
+  periodType: string;
+  deadlineDay: number;
+  remindDaysBefore: number;
+  repeatDaily: boolean;
+  remindHour: number;
+  updatedAt: string;
+};

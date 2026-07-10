@@ -320,3 +320,39 @@ export interface CancelResult {
   ok: boolean;
   error?: 'not_found' | 'pin_mismatch' | 'not_cancellable' | 'too_many_attempts';
 }
+
+export type KyShiftRequestStatus = 'requested' | 'approved' | 'rejected';
+
+export interface KyShiftRequest {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  date: string;
+  start_at: string;
+  end_at: string;
+  note: string;
+  time_source: 'default' | 'custom';
+  status: KyShiftRequestStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KyShiftSubmission {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  period_start: string;
+  period_end: string;
+  submitted_at: string;
+}
+
+export interface KyShiftReminderSettings {
+  tenant_id: string;
+  enabled: boolean;
+  period_type: string;
+  deadline_day: number;
+  remind_days_before: number;
+  repeat_daily: boolean;
+  remind_hour: number;
+  updated_at: string;
+}

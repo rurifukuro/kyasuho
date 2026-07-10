@@ -1909,3 +1909,28 @@ SPEC §36（Rev75設計）の実装。郵便番号入力→zipcloud API検索→
   - 非管理者ログインで「ページが見つかりません」表示
   - ky_revenue_eventsへのUPDATE/DELETEがトリガーで拒否されること
   - ky_dev_revenue_monthly RPCがanonで403/authenticatedで結果（空配列）返却
+
+## Rev83（2026-07-10）§38 シフト提出リマインダーDB基盤（5テーブル＋型定義）
+
+### 背景
+§38「キャストシフト提出リマインダー」のDB基盤を先行実装。テーブル5本＋RLS＋型定義を仕込み、UIとEdge Functionの実装に備える。
+
+### 変更
+- **migration 0034新設** `0034_ky_shift_submissions.sql`:
+  - `ky_shift_requests`（シフト希望枠・キャスト提出→オーナー承認/却下。time_source='default'|'custom'。RLS=キャスト本人SELECT/INSERT/DELETE(requestedのみ)＋オーナーSELECT/UPDATE）
+  - `ky_shift_submissions`（提出宣言・UNIQUE(tenant_id, cast_id, period_start)。全休=0日選択も提出可。RLS=キャスト本人SELECT/INSERT/UPDATE＋オーナーSELECT）
+  - `ky_cast_shift_defaults`（基本出勤時間・複合PK(tenant_id, cast_id)。提出時にこの値を希望行へ実体化。RLS=キャスト本人all＋オーナーSELECT）
+  - `ky_shift_reminder_settings`（リマインダー設定・テナント1行。enabled/deadline_day(1-28)/remind_days_before(0-27)/repeat_daily/remind_hour(0-23)。RLS=オーナーall）
+  - `ky_notification_log`（通知送信記録・UNIQUE(tenant_id, cast_id, kind, period_start, remind_date)で二重送信防止。kind='shift_reminder'|'shift_reminder_manual'。RLS=オーナーSELECT）
+- **アプリ型定義 types/index.ts**: ShiftRequest/ShiftSubmission/CastShiftDefault/ShiftReminderSettings型追加
+- **Web型定義 lib/types.ts**: KyShiftRequest/KyShiftSubmission/KyShiftReminderSettings型追加
+- **SPEC §38-5・§19-44にDB基盤実装済みRev83マーク**
+
+### 検証
+- Web型検査: `npx tsc -b` EXIT:0
+- アプリ型検査: `npx tsc --noEmit` EXIT:0
+- migration 0034はSQL構文として正。本番適用後の検証推奨:
+  - RLS: キャストが他人分のshift_requestsをSELECT不可
+  - RLS: オーナーがshift_requestsのstatusをUPDATE可
+  - UNIQUE: 同一期間の重複提出がdedup
+  - 次Rev以降: キャスト提出UI（CastHome拡張）＋オーナー承認UI＋設定UI＋Edge Function
