@@ -1933,4 +1933,59 @@ SPEC §36（Rev75設計）の実装。郵便番号入力→zipcloud API検索→
   - RLS: キャストが他人分のshift_requestsをSELECT不可
   - RLS: オーナーがshift_requestsのstatusをUPDATE可
   - UNIQUE: 同一期間の重複提出がdedup
-  - 次Rev以降: キャスト提出UI（CastHome拡張）＋オーナー承認UI＋設定UI＋Edge Function
+  - 次Rev以降: 設定UI＋Edge Function
+
+---
+
+## Rev84（2026-07-10）§38 キャスト提出UI＋オーナー承認UI（§38-1-2実装）
+
+Rev83のDB基盤に対応するUI一式＝キャスト側のシフト提出画面（カレンダータップ＋基本出勤時間＋日別時間編集）＋オーナー側のシフト希望受信箱＋提出状況リスト。SPEC §39-41の新設仕様書も同梱。
+
+### キャスト側（CastHomeScreen拡張）
+- **シフト提出セクション**（画面先頭に追加）：
+  - 基本出勤時間カード（0〜29時・15分刻みステッパー＋保存→ky_cast_shift_defaults upsert）
+  - 未設定ガード（基本時間未設定中はカレンダータップ無効＋警告テキスト）
+  - 翌月カレンダーグリッド（日付タップ＝出勤希望ON/OFFトグル・ON日はaccent色＋時間チップ）
+  - ✎編集ボタン→ShiftTimeEditModal（FormModalShell＝MODAL-SAFE・個別時間設定＋基本時間に戻すボタン）
+  - 承認済み日は✅ロック表示（タップ不可）
+  - DB書込は提出ボタン時に一括（途中でやめても半端な希望が残らない）
+  - 提出確認ダイアログ（日数・個別時間日数の要約）
+  - 再提出＝status='requested'のみ差替え（approved/rejected不変）
+- **`src/services/shiftRequests.ts`**（新規）：fetchShiftDefaults/upsertShiftDefaults/fetchShiftRequests/fetchSubmission/submitShiftRequests/fetchTenantShiftRequests/fetchTenantSubmissions/approveShiftRequest/rejectShiftRequest
+- **`src/components/ShiftTimeEditModal.tsx`**（新規）：日別時間編集モーダル
+
+### オーナー側（CastsScreen拡張）
+- ヘッダーに「シフト希望」ボタン追加→ShiftRequestsView（サブ画面）
+- **提出状況リスト**：キャスト×期間で 提出済み✅／未提出❌／アプリ未連携⚠️ の3値バッジ
+- **未処理希望リスト**：キャスト名・日付・時間・基本/個別バッジ＋承認（✓→ky_shifts作成）／却下（✗）ボタン
+- **処理済みリスト**：承認/却下のステータス表示
+
+### 管理Web側（adminApi拡張）
+- `fetchTenantShiftRequests`/`fetchTenantSubmissions`/`approveShiftRequest`/`rejectShiftRequest` 追加
+- approveはky_shifts既存行をdelete→insertで上書き（UNIQUE制約なしのため）
+
+### SPEC §39-41 新設仕様書（第11次ユーザー指示分・設計のみ）
+- §39: メニュー別キャストバック刷新（back_rate/back_amount列追加・drink_back_rate廃止→default_back_rate）
+- §40: シフト表強化パック第2弾（イベント日強調§40-1・デイリー複数枚§40-2・X投稿テンプレ§40-3）
+- §41: ポイント・景品設定
+
+### i18n
+- `shiftSubmit.*` 13キー＋`shiftRequest.*` 14キー追加
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0（G1・G2）
+- Web `npx tsc -b` EXIT:0
+
+## Rev84（2026-07-10）§39〜§41新設＝メニュー別バック刷新・シフト表強化・ポイント景品設定（設計のみ）
+
+### 背景
+ユーザー指示（第11次・5項目パック）: ①キャストバック計算をメニュー毎の割合/固定入力に刷新（店全体ドリンクバック固定金額は廃止→基本バック割合を新設・未設定メニューはこれで計算） ②月間/デイリーシフト表でイベント日を強調表示 ③デイリーシフト表は9名以上で2枚目出力 ④シフト表X投稿ボタンにマンスリー/デイリー別の編集可能テンプレート（参考ポスト踏襲＝出勤時間毎にキャスト名＋アカウントを並べる） ⑤ポイント管理画面の有無確認→無いので「何円で何pt」「何ptで何の景品」の店側設定を新設。**設計のみ・実装はしない**セッション。
+
+### 変更（SPEC.mdのみ・コード変更なし）
+- **§39新設「キャストバック計算の刷新」**: ky_menu_items.back_rate/back_amount（相互排他CHECK）＋ky_payroll_settings.default_back_rate新設・drink_back_rate廃止（挙動不変の移行migration＝cast_drink全メニューへ旧値コピー）・優先順位=メニュー固定→メニュー割合→基本割合（nominationはフォールバック対象外＝指名バック二重取り防止）・ky_order_items.back_eachをcloseOrder RPCで確定時スナップショット（FIN-2/FIN-3思想）・給与drink_back→menu_back化
+- **§40新設「シフト表強化パック」**: 40-1=ky_event_days＋palette.eventAccent拡張（既存40種は省略互換）・月間セル太枠＋ラベル帯/デイリーはヘッダー直下バナー／40-2=デイリー1枚最大8名・9名以上はceil(n/8)枚自動分割＋ページ表記・開始時刻→name_kana安定ソート／40-3=ky_tenants.sns_post_templates(jsonb)＝マンスリー/デイリー別プレースホルダテンプレ・既定は出勤時間毎グルーピング＋キャスト名＋@ハンドル自動抽出・編集モーダル（チップ挿入/ライブプレビュー/既定に戻す）＋字数カウンタ
+- **§41新設「ポイント・景品（クーポン）設定」**: 現状ポイント管理画面は無い→新設。ky_point_settings（yen_per_point）/ky_point_rewards（景品カタログ）/ky_point_transactions（append-only台帳・FIN思想）。設定UI＋カタログCRUDは姉妹アプリ前でも実装可・会計連動の自動付与/使用はcustomer_ref導入（§32-2＝§19㊱）と同時。スタンプはポイント制に包含
+- **ポインタ編集12件**: §3-F/§3-K/§3-I/§10（ky_menu_items・ky_payroll_settings）/§23計算式/§23給与CSV/§25-5/§31-2/§22-2/§19㊱/§19に㊺㊻㊼追加
+
+### 検証
+- ドキュメントのみの変更＝tsc/エミュ検証対象なし。§39-5/§40-4/§41-4に実装Rev時の検証手順を明記
