@@ -74,6 +74,7 @@
 - PINで予約確認・変更・キャンセル
 - ◯ 生誕祭/周年イベントの特設予約枠表示
 - **アプリ不要**（客はWebだけ・提供者だけアプリ）
+- **【2026-07-10・§34】UI再設計＝concafe-yoyakuの台帳型タイムライン（席×縦時間・厳守）＋予約ポップアップ＋ご注文予定＋店舗テーマ設定（カラー/背景写真）。既存機能の削除禁止（§34-5）**
 
 ### E. 通知・リマインダー ◯（一部★）
 - ★ 予約が入ったら提供者へプッシュ通知（expo-notifications）
@@ -290,6 +291,7 @@ BottomTabNavigator（オーナーロール・6タブ＝2026-07-06にレジ追加
 
 - concafe-yoyaku の `CustomerPage`/`Calendar`/`ReservationModal`/PIN編集をマルチテナント化（URLの `<店slug>` から tenant を解決）
 - **アプリ不要**（客はWebのみ）。GitHub Pages（HashRouter・VITE_BASE_PATH）＝レジさぽっ！買い手Web/concafe-yoyakuと同じデプロイ形
+- **【2026-07-10・§34】デザイン/UXは concafe-yoyaku へ寄せる再設計を計画化（台帳型タイムライン厳守・ポップアップ・テーマ設定）。詳細＝§34・実装順序＝§19の㊴**
 
 ### 9-3. 提供者管理Web（PC・§3-J）【2026-07-05追加】
 
@@ -738,6 +740,7 @@ web/src/
 36. **スタンプ・クーポン**（#42のスタンプ部分＝2026-07-06ユーザー決定で計画入り。姉妹アプリと同時期に実装＝§32-2。会計連動自動加算・クーポン確認ポップアップ）
 37. **ボトルキープ管理／回数券・チェキ券**（#41・#42残り＝△のまま将来枠。回数券系の参入判断はユーザー相談継続）
 38. **シフト表取込2モード化＋セル個別微調整**（モードA廃止・空テンプレ(B)決定論グリッド検出・任意画像背景(C)可読性ガード＝§22-5。**モードB/C実装済みRev67**。残=ShiftPlacementV2境界配列＋境界線ドラッグ/セル個別オフセット）
+39. **客Web予約ページ再設計**（concafe-yoyaku UI移植＝台帳型タイムライン厳守＋予約ポップアップ＋ご注文予定＋店舗テーマ設定（カラー/背景写真）＝§34。**既存機能の削除禁止＝§34-5保全ゲート必須**。分割=(a)テーマ→(b)タイムライン＋ポップアップ→(c)注文予定＋RPC v2）
 
 ---
 
@@ -1361,6 +1364,80 @@ total_pay      = base_pay + nomination_back + drink_back + other_back − deduct
 2. Phase B＝IAP_ENABLED=true にする Rev の**前提ゲート**として §14 横断ゲートに組込み
 3. Phase C＝本番分離チェックリスト（saas_init_playbook）に組込み済み
 4. 各 Phase 完了時に REVISION_LOG へ「§33 Phase X 通過」と明記
+
+---
+
+## §34 客Web予約ページ再設計＝concafe-yoyaku UI移植＋店舗テーマ設定（2026-07-10 第7次・設計のみ＝実装は別Rev）
+
+### 34-0. 経緯と原則（2026-07-10ユーザー指示）
+
+Rev12は concafe-yoyaku の「予約ロジック」だけを移植し、デザイン/UX（台帳型タイムライン・リッチな予約ポップアップ・背景写真テーマ）は未移植だったことを確認（現行客Web＝スロットグリッド簡易UI・ピンク無地）。本章はその是正の詳細設計。
+
+- **原則①**: concafe-yoyaku 客ページ（https://rurifukuro.github.io/concafe-yoyaku/#/）の機能・デザイン・UIをきゃすりん客Webへ持ってくる
+- **原則②（絶対）**: きゃすりん側に元からある機能は**絶対に削除しない**（保全リスト＝§34-5）
+- **原則③（厳守）**: 「**席ごとに縦に時間を並べる**」台帳型タイムラインのデザインを厳守。時間をタップすると表示されるポップアップも参考にする
+- **原則④**: お店側でカラーや写真の設定ができるようにする（テーマ設定＝§34-3）
+
+### 34-1. 台帳型タイムライン（CustomerTimeline 移植・厳守）
+
+移植元: `concafe-yoyaku/src/components/customer/CustomerTimeline.tsx`
+
+**移植する構造（concafe実装そのまま）**:
+- 横軸＝席列（席 1〜N。各列 `width: 100/N %`・`left: idx/N×100%`）、縦軸＝時間（`PX_PER_MINUTE=1.5`・`TOTAL_HEIGHT=営業分数×1.5`）
+- 1時間毎の水平グリッド線＋左端に時刻ラベル
+- **解禁帯＝タップ可能ゾーン**（「＋タップで予約」表示）。タップY→分変換 `minute = windowStart + y/PX_PER_MINUTE` → TIME_STEPへスナップ → `windowEnd − setMinutes` へクランプ（1セットが必ず収まる位置に丸める）
+- **予約ブロック＝absolute配置**（`top = start×PPM`・`height = sets×setMinutes×PPM`）。**レーンの子ではなくキャンバス直下に独立配置**＝iOS Safariのpointer-events継承バグ回避（WEB10・concafe実装と同じ構造を踏襲）
+- 自分の予約ブロックはタップ→変更/キャンセル（既存ReservationEditModal）。**他人の予約は匿名ブロック（「予約済み」のみ・名前等は非表示）**
+
+**きゃすりん適合（concafeの固定値→動的化）**:
+- 営業時間帯: concafeは17:00〜25:00固定 → 当日の解禁ウィンドウの `min(start)〜max(end)` から動的算出（HH:MM→分変換はtimeUtils・日跨ぎは24時超の分オフセットで表現）
+- セット長: 窓ごとの `set_minutes`（40分固定にしない）。クランプ・ブロック高さ計算は該当窓の値を使う
+- 席数N: Σ `ky_seat_types.capacity`（席種未設定テナントは受付設定の席数）。列ヘッダーは「席種名＋番号」（例: カウンター1）
+- TIME_STEP: 現行 `getAvailableSlots` のスロット刻みと同一＝**空き判定ロジックは不変・見せ方を座標化するだけ**
+- 現行スロットグリッド（TimeSlotList）は台帳型に**置換**（機能としての「空き枠一覧」は台帳型自体が全枠可視のため喪失なし）。**出勤キャストチップはタイムライン上部に維持**
+
+### 34-2. 時間タップポップアップ（ReservationModal 移植）
+
+移植元: `concafe-yoyaku/src/components/customer/ReservationModal.tsx`。きゃすりん既存ReservationModalへ統合する（**既存項目＝名前/連絡先/人数/指名キャスト/席種/要望/PINは全て維持**）。
+
+- 開始時刻select: タップした窓の**全時刻**を列挙（タップ位置より前の時刻も選択可）
+- セット数select: 各選択肢に時間範囲ラベル（例「2セット（19:00〜20:20）」）
+- 席種select: 席料/セット表示（§29）＋席種note
+- 「**当日にメニューを決める**」チェックボックス
+- **ご注文予定（事前オーダー）**: `ky_menu_items` をカテゴリ別セクション＋数量ステッパーで表示。対象カテゴリ＝ `nomination`（指名）/`cast_drink`（キャストドリンク♥）/`drink`/`food`/`cheki`/`other`。`set`/`extension`/`discount` は対象外（セット料金は席種×セット数・延長は店内・割引は会計時＝§25-7）。`needs_cast` カテゴリは出勤キャストから対象キャストを選択
+- **会計目安カード**: セット料金（席料×セット数）＋ご注文予定合計＝小計、サービス料別合計（現金x%／現金以外y%＝テナント設定 `business_info.serviceCharge`・未設定なら小計まで）。「※目安です。当日のご会計と異なる場合があります」注記。**目安はクライアント表示のみ＝確定金額は伝票（サーバー）が正**（FIN-3の建て付けを崩さない）
+- 1セット1オーダー警告: `business_info.orderPolicy.minOrdersPerSet`（任意設定・未設定なら非表示）
+- 排他: 既存 `ky_make_reservation` のadvisory lock維持
+
+**データ設計（非破壊・後方互換）**:
+- RPC v2: `p_orders(jsonb)`・`p_menu_undecided(boolean)` を**null可の追加引数**として拡張
+- 予約への注文予定スナップショット: `ky_reservations.preorder (jsonb null)` ＝ `[{menu_item_id, category, name, price, qty, cast_id?}]`（名称・価格をコピー保存＝価格改定に耐えるスナップショット原則）
+- チェックイン時に§25伝票へ**プリフィル**（open時にpreorder明細を初期投入・needs_castはキャスト紐付け済み）。preorderは「予定」であり確定注文ではない＝会計は伝票が唯一の正
+
+### 34-3. 店舗テーマ設定（お店側でカラー・写真を設定＝原則④）
+
+- 設定値: `ky_tenants.business_info.theme (jsonb・migration不要)` ＝ `{ primaryColor, accentColor, bgImageUrl, cardOpacity }`
+- 背景写真: Storageバケット **`ky-tenant-assets`（新設）** の `{tenant_id}/bg.jpg`。RLS＝公開read・書込はテナントオーナーのみ（SEC-8フォルダスコープ）。アップロード時に長辺1600px・品質80へ縮小
+- 客ページ適用: TenantPage mount時にCSS変数（`--primary`/`--accent`等）をテナント値で上書き。背景は `cover/fixed`、コンテンツは**半透明白カード**（rgba白 0.75〜0.9＝concafeのbg.jpg方式を店舗別に一般化）で写真上でも可読性を担保。**テーマ未設定なら現行きゃすりんピンクのまま＝完全後方互換**
+- 管理UI: AdminSettingsに「**客ページデザイン**」セクション＝カラーピッカー2種＋背景画像アップロード/削除＋ライブプレビュー＋「既定に戻す」（アプリ側設定は後フェーズ可・管理Web先行）
+
+### 34-4. カレンダー・導線のconcafe化
+
+- 空き塗り分け（空きあり/残少/満席の3色）を既存Calendarへ適用・凡例表示
+- 次の予約可能日への自動フォーカス（ユーザーが日付を触ったら自動遷移しない＝userPicked ref方式）
+- notice-banner（店からのお知らせ帯・theme連動）
+- 既存の営業日判定・解禁前表示は不変
+
+### 34-5. 既存機能の保全チェックリスト（原則②＝絶対に削除しない）
+
+店名ヘッダー（ジャンル・営業案内）／イベント情報セクション（usePublicEvents）／出勤キャストチップ／キャスト指名（あいうえお順＝§28-1）／席種ドロップダウン＋席料表示（§29）／予約の確認・変更・キャンセル（PIN）／マルチテナントslug解決／HH:MM・窓ごとset_minutes・席数設定／Powered by きゃすりん／i18n
+
+**完了ゲート**: 実装Revで本リストを実HTTPで1項目ずつ照合し、REVISION_LOGに「§34保全リスト通過」と明記（WEB5）。
+
+### 34-6. 実装順序・検証
+
+- §19の**㊴**。推奨分割: (a) テーマ設定（独立・先行可）→ (b) 台帳タイムライン＋ポップアップUI → (c) ご注文予定＋RPC v2＋伝票プリフィル（⑱〜⑳オーダー基盤の完了が前提）
+- 検証: `npx tsc -b`／実HTTP実証（WEB5）／iPhone Safari実機タッチ（WEB10）／モバイル幅でモーダル収まり＋スクロール（WEB11）／§34-5保全ゲート
 
 ---
 
