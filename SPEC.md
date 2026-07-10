@@ -570,6 +570,7 @@ create policy public_read_casts on ky_casts
 - 権利の源泉は **`ky_tenants.plan`**（DB1箇所）。IAP購入→レシート検証→plan更新→アプリ/管理Web/客Web(バッジ表示)の三面が同じ列を参照
 - 管理Webの有料機能ゲートもアプリと同一境界（プラットフォームで差をつけない）。**購入導線はMVP後の設計論点**：Apple IAPで買った権利をWebで使うのは規約上問題なし。Web側にStripe等の独自決済を置くか（Appleアプリ内からWeb決済への誘導はNGなので、置く場合もアプリ内からはリンクしない）は課金ON化時に決定＝§6 TODOに含める
 - **【2026-07-10 更新・Rev68】カード決済（Web直販）＋銀行振込（年払い請求書）の詳細事前設計を `docs/BILLING_DESIGN.md` に策定**（Stripe採用・チャネル横断契約台帳 ky_billing_subscriptions・plan導出一本化・法規制整理・BILL-0〜4フェーズ）。スマホ新法（2025-12-18施行）対応後の日本では上記「アプリ内からWeb決済への誘導はNG」は**「リンクなしテキスト誘導=手数料0%・リンクアウト=15%で可」に更新**（詳細は BILLING_DESIGN §2-6・実装時に最新規約を再確認）
+- **【2026-07-10 追補・Rev69】課金の商品軸を「free/pro 2値」から「モジュール選択型（アラカルト）×契約期間（月/半年/年・長期割引）」へ拡張＝ユーザー決定（競合Dシステムの全部入り固定価格との差別化）**。①店舗が機能モジュール（shift/sales/register/attendance/expense/analytics/limits）を自由選択・**個数**で料金決定 ②半年≒8%OFF/年≒17%OFF目安（実額はユーザーゲート） ③チラシのクーポンコードでトライアル1ヶ月→2ヶ月延長（入力は管理Webのみ・アプリ内はテキスト誘導まで）。詳細= BILLING_DESIGN 第2部 §15〜§18。`ky_tenants.plan` は互換用の粗い値として残し**実体は entitlements（モジュール配列・service_roleのみ書込=FIN-4拡張）**。ゲート判定は `features.ts` の `isModuleEnabled()` 1関数に集約（GATE-1・Rev69で骨格実装済み・IAP_ENABLED=false の間は全モジュール有効=挙動不変）。⚠️本追補のトライアル方式（サーバーサイド一本化）は 2026-07-06 の「ASC Introductory Offer採用」決定の**差し替え提案＝未承認の仕様分岐**（BILLING_DESIGN §17-1）
 
 ### PRICE/R35準拠
 - 価格表示は `productsById[sku].localizedPrice`（配列順依存禁止＝ルールPRICE）

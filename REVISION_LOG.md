@@ -1633,3 +1633,22 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 ### 検証
 - 設計書のみ＝tsc・プローブ対象なし。SPEC §14/§33-4/FIN-1〜8・saas_init_playbook SEC/FIN標準・W19/R13/R30 との整合を目視確認。スマホ新法とStripe銀行振込はWeb検索で裏取り済み
 - 既知の記録ドリフト: 本ファイル内で Rev67 が Rev66 より前に位置（内容は正・順序のみ）＝次の整理Revで並び替え可
+
+---
+
+## Rev69（2026-07-10）BILLING_DESIGN 第2部＝モジュール選択型課金・長期契約割引・クーポン設計＋GATE-1骨格実装
+
+**ユーザー指示:** ①店舗側が利用したい機能を自由に選択できる ②選択した個数に応じて料金設定が変わる ③チラシ内コードでトライアル1ヶ月→2ヶ月延長（クーポンコードで決済できる仕組み）＝競合Dシステムとの明確な差別化。④半年・1年契約の割引も盛り込む。詳細設計＋必要なら現システム整備
+
+### docs/BILLING_DESIGN.md 第2部（§15〜§18）追補
+- **§15 モジュール選択型課金**: カタログ7種ドラフト（shift/sales/register/attendance/expense/analytics/limits・無料コア=予約基本）／料金=f(個数)の逓減カーブ＋全部入りキャップ／台帳に selected_modules・module_count・billing_interval 列追加／`ky_tenants.entitlements` jsonb 新設（FIN-4拡張=service_roleのみ書込）／recompute_tenant_entitlements へ発展／Stripe=quantity×graduated価格・IAP=個数×期間SKU（簡略9 SKU案を推奨）／入替=月1回・減=次回更新・増=即時（推奨案）
+- **§16 契約期間と長期割引**: 月/半年（≒8%OFF目安）/年（≒17%OFF目安=§14踏襲）。振込は「年のみ」→「半年or年の一括前受け」に緩和。期間変更は次回更新時のみ。割引はPrice単価に織込み（クーポン表現しない）
+- **§17 クーポンコード**: サーバーサイド・トライアル一本化（channel='promo'台帳行・全モジュール体験→終了時に必要分だけ選択=アラカルトの営業導線）／ky_coupon_campaigns＋ky_coupon_redemptions（shared/unique両対応・キャンペーン=チラシ版単位で効果測定）／ky-coupon-redeem（レート制限・ライフタイム1回・user_id照合で再トライアル防止・置換方式でスタック防止）／入力は管理Webのみ（アプリ内コード入力欄なし=3.1.1審査リスク回避）／トライアル終了後の自動課金なし（ダークパターン回避=チラシの安心材料）／⚠️ASC Introductory Offer決定（2026-07-06）の差し替え提案=**未承認の仕様分岐**
+- **§18**: BILLフェーズ更新（クーポンはBILL-1で決済より先に単体稼働可=チラシ施策を課金ONより先に打てる）・未決事項7点追加・Dシステム対比表・第1部との差分一覧
+
+### 現システム整備（挙動不変の骨格）
+- `src/config/features.ts`: MODULE_KEYS カタログ＋ModuleKey型＋Entitlements型＋**isModuleEnabled() ゲート関数**（GATE-1集約・IAP_ENABLED=false の間は常にtrue=全機能無料のまま）。目的=今後の新機能コードが最初からモジュールゲートを通る構造にし、二値plan前提コードをこれ以上生まない（現時点でコード内にplan比較ゼロを確認済み=転換コスト最小）
+- SPEC §14: Rev69追補注記（モジュール型への拡張・仕様分岐の明示）
+
+### 検証
+- `npx tsc --noEmit` EXIT:0。挙動変更なし（isModuleEnabled は未消費・IAP_ENABLED=false）。web側 plan/entitlement 参照ゼロを grep 確認
