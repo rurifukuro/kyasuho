@@ -35,6 +35,7 @@ export function ReservationEditModal({
     const res = data as VerifyPinResult | null;
     if (!res?.ok) {
       if (res?.reason === 'no_pin') setError('この予約には暗証番号が設定されていません');
+      else if (res?.reason === 'too_many_attempts') setError('試行回数が上限に達しました。15分ほど待ってからお試しください');
       else setError('暗証番号が一致しません');
       return;
     }
@@ -53,7 +54,8 @@ export function ReservationEditModal({
 
     const res = data as CancelResult | null;
     if (!res?.ok) {
-      setError('キャンセルに失敗しました');
+      if (res?.error === 'too_many_attempts') setError('試行回数が上限に達しました。15分ほど待ってからお試しください');
+      else setError('キャンセルに失敗しました');
       return;
     }
     setCancelled(true);

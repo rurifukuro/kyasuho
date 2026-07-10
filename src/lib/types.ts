@@ -98,13 +98,13 @@ export interface KyReservation {
   slot: string;
   set_minutes: number;
   seat_no: number;
-  customer_name: string;
   status: 'reserved' | 'checked_in' | 'cancelled' | 'no_show';
 }
 
-/** 管理Web用＝予約の全列（客Webの KyReservation は公開安全な列だけに絞っている）。 */
+/** 管理Web用＝予約の全列（客Webの KyReservation は anon の列レベルGRANTと同じ公開安全な列だけ）。 */
 export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   seat_no: number | null;
+  customer_name: string;
   contact: string;
   party_size: number;
   cast_id: string | null;
@@ -312,10 +312,10 @@ export interface MakeReservationResult {
 
 export interface VerifyPinResult {
   ok: boolean;
-  reason?: 'no_pin' | 'mismatch';
+  reason?: 'no_pin' | 'mismatch' | 'too_many_attempts';
 }
 
 export interface CancelResult {
   ok: boolean;
-  error?: 'not_found' | 'pin_mismatch' | 'not_cancellable';
+  error?: 'not_found' | 'pin_mismatch' | 'not_cancellable' | 'too_many_attempts';
 }

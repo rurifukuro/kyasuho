@@ -6,8 +6,25 @@
 // - アプリ側は同じ定義を RN View で描画（src/shiftTemplates/ 配下・定義はここからコピー同期）
 
 import type { CSSProperties } from 'react';
-import type { ShiftFontKey, ShiftTemplateDefinition } from './definitions';
+import type { ShiftFontKey, ShiftPlacement, ShiftTemplateDefinition } from './definitions';
 import { MOTIF_CHARS } from './definitions';
+
+function cellBgWithAlpha(hex: string, alpha?: number): string {
+  if (alpha === undefined || alpha >= 1) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  if (isNaN(r)) return hex;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function outlineStyle(color: string): string {
+  const lum = parseInt(color.slice(1, 3), 16) * 0.299
+    + parseInt(color.slice(3, 5), 16) * 0.587
+    + parseInt(color.slice(5, 7), 16) * 0.114;
+  const shadow = lum > 128 ? '#000000' : '#FFFFFF';
+  return `1px 1px 2px ${shadow}, -1px -1px 2px ${shadow}, 1px -1px 2px ${shadow}, -1px 1px 2px ${shadow}`;
+}
 import type { ShiftDayData } from './shiftData';
 import {
   WEEKDAY_LABELS,
@@ -29,6 +46,29 @@ export const FONT_STACKS: Record<ShiftFontKey, string> = {
 
 const PADDING = 48;
 
+/** 'HH:MM' → シンプル時間表記（参考シフト表準拠: 18:00→18, 18:30→18.5, 25:00→25） */
+function shortTime(hhmm: string): string {
+  const [h, m] = hhmm.split(':');
+  if (!h) return hhmm;
+  const hr = Number(h);
+  const mins = Number(m ?? 0);
+  if (mins === 30) return `${hr}.5`;
+  if (mins === 0) return `${hr}`;
+  return `${hr}:${m}`;
+}
+
+/** 開始-終了をシンプル表記（終了<開始なら+24=深夜帯: 00:00→24, 01:00→25） */
+function shortRange(start: string, end: string): string {
+  const s = shortTime(start);
+  let e = shortTime(end);
+  const sn = parseFloat(s);
+  const en = parseFloat(e);
+  if (!isNaN(sn) && !isNaN(en) && en <= sn) {
+    e = shortTime(`${Number(end.split(':')[0]) + 24}:${end.split(':')[1] ?? '00'}`);
+  }
+  return `${s}-${e}`;
+}
+
 type Props = {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
@@ -37,9 +77,10 @@ type Props = {
   logoUrl?: string | null;
   dailyDate?: string; // 'YYYY-MM-DD'（daily-lineup用）
   bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
+  placement?: ShiftPlacement | null; // §22-3: AI解析による配置情報
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement }: Props) {
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
@@ -123,11 +164,13 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
               fontWeight: 700,
               color: deco.headerStyle === 'ribbon' ? '#FFFFFF' : p.headerText,
               backgroundColor: deco.headerStyle === 'ribbon' ? p.accent : undefined,
-              padding: deco.headerStyle === 'ribbon' ? '8px 48px' : undefined,
+              paddingTop: deco.headerStyle === 'ribbon' ? 8 : undefined,
+              paddingRight: deco.headerStyle === 'ribbon' ? 48 : undefined,
+              paddingBottom: deco.headerStyle === 'ribbon' ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
+              paddingLeft: deco.headerStyle === 'ribbon' ? 48 : undefined,
               borderRadius: deco.headerStyle === 'ribbon' ? deco.cornerRadius + 6 : undefined,
               borderBottom:
                 deco.headerStyle === 'underline' ? `5px solid ${p.accent}` : undefined,
-              paddingBottom: deco.headerStyle === 'underline' ? 10 : undefined,
               lineHeight: 1.25,
             }}
           >
@@ -149,7 +192,16 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
       </div>
 
       {/* 本体 */}
-      {def.layout === 'daily-lineup' && dailyDate ? (
+      {placement && bgImageUrl ? (
+        <CustomPlacement
+          def={def}
+          days={days}
+          yearMonth={yearMonth}
+          storeName={storeName}
+          placement={placement}
+          dailyDate={dailyDate}
+        />
+      ) : def.layout === 'daily-lineup' && dailyDate ? (
         <DailyLineup def={def} days={days} dailyDate={dailyDate} />
       ) : def.layout === 'month-grid' ? (
         <MonthGrid def={def} days={days} yearMonth={yearMonth} />
@@ -179,11 +231,22 @@ function MonthGrid({
 
   const byDate = new Map(days.map((d) => [d.date, d.casts]));
 
-  // グリッド領域の実高さからセル1枚の高さ→表示できる人数を見積もる
-  // （ヘッダー約170 + 曜日行40 + padding[上下96] を除いた残り）
+  // 月内の最大キャスト数を算出 → フォントサイズを動的調整して全員表示
+  let maxCastCount = 0;
+  for (let d = 1; d <= total; d++) {
+    const date = `${yearMonth}-${String(d).padStart(2, '0')}`;
+    const cnt = byDate.get(date)?.length ?? 0;
+    if (cnt > maxCastCount) maxCastCount = cnt;
+  }
+
   const gridH = def.size.h - PADDING * 2 - 170 - 40;
   const cellH = gridH / weeks - deco.cellGap;
-  const maxPerCell = Math.max(1, Math.floor((cellH - 36) / 42));
+  // 日番号行(~22px) + パディング(12px) を引いた残りにキャスト行を詰める
+  const availH = cellH - 34;
+  // 1行あたりの高さ = 残り ÷ 最大人数（最低12px行高, 最大22px行高）
+  const lineH = maxCastCount > 0 ? Math.max(12, Math.min(22, availH / maxCastCount)) : 18;
+  // フォントサイズは行高の80%程度
+  const castFs = Math.max(9, Math.min(18, lineH * 0.8));
 
   const cells: (number | null)[] = [
     ...Array.from({ length: offset }, () => null),
@@ -233,8 +296,6 @@ function MonthGrid({
           }
           const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
           const casts = byDate.get(date) ?? [];
-          const shown = casts.slice(0, maxPerCell);
-          const rest = casts.length - shown.length;
           const wd = i % 7;
           return (
             <div
@@ -243,7 +304,7 @@ function MonthGrid({
                 backgroundColor: p.cellBg,
                 border: `1px solid ${p.cellBorder}`,
                 borderRadius: deco.cornerRadius,
-                padding: '6px 8px',
+                padding: '4px 5px',
                 overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
@@ -251,7 +312,7 @@ function MonthGrid({
             >
               <div
                 style={{
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: 700,
                   color: wd === 0 ? p.accent : p.dayLabel,
                   lineHeight: 1.2,
@@ -259,30 +320,24 @@ function MonthGrid({
               >
                 {day}
               </div>
-              {shown.map((c, j) => (
-                <div key={`${c.name}-${j}`} style={{ marginTop: 4, lineHeight: 1.15 }}>
-                  <div
-                    style={{
-                      fontSize: 19,
-                      fontWeight: 700,
-                      color: p.castName,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {c.name}
-                  </div>
-                  <div style={{ fontSize: 14, color: p.timeText, whiteSpace: 'nowrap' }}>
-                    {c.start}-{c.end}
-                  </div>
+              {casts.map((c, j) => (
+                <div
+                  key={`${c.name}-${j}`}
+                  style={{
+                    fontSize: castFs,
+                    lineHeight: `${lineH}px`,
+                    color: p.castName,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {c.name}{' '}
+                  <span style={{ color: p.timeText }}>
+                    {shortRange(c.start, c.end)}
+                  </span>
                 </div>
               ))}
-              {rest > 0 ? (
-                <div style={{ marginTop: 4, fontSize: 15, fontWeight: 700, color: p.accent }}>
-                  +{rest}人
-                </div>
-              ) : null}
             </div>
           );
         })}
@@ -514,7 +569,7 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
                           flexShrink: 0,
                         }}
                       >
-                        {c.start}-{c.end}
+                        {shortRange(c.start, c.end)}
                       </span>
                     </div>
                   ))}
@@ -687,7 +742,7 @@ function DailyLineup({
               textAlign: 'center',
             }}
           >
-            {c.start}〜{c.end}
+            {shortRange(c.start, c.end)}
           </div>
         </div>
       ))}
@@ -712,4 +767,328 @@ function DailyLineup({
       )}
     </div>
   );
+}
+
+// ── カスタム配置レンダラー（§22-3: 店舗テンプレート画像＋AI検出配置） ──
+
+function CustomPlacement({
+  def,
+  days,
+  yearMonth,
+  storeName,
+  placement: pl,
+  dailyDate,
+}: {
+  def: ShiftTemplateDefinition;
+  days: ShiftDayData[];
+  yearMonth: string;
+  storeName: string;
+  placement: ShiftPlacement;
+  dailyDate?: string;
+}) {
+  const W = def.size.w;
+  const H = def.size.h;
+  const inset = pl.cellInset;
+
+  const gridX = pl.gridArea.x * W;
+  const gridY = pl.gridArea.y * H;
+  const gridW = pl.gridArea.w * W;
+  const gridH = pl.gridArea.h * H;
+
+  const titleX = pl.titleArea.x * W;
+  const titleY = pl.titleArea.y * H;
+  const titleW = pl.titleArea.w * W;
+  const titleH = pl.titleArea.h * H;
+
+  const totalRows = pl.rows + (pl.hasHeaderRow ? 1 : 0);
+  const cellW = gridW / pl.cols;
+  const cellH = gridH / totalRows;
+
+  const dataRowStart = pl.hasHeaderRow ? 1 : 0;
+
+  const byDate = new Map(days.map((d) => [d.date, d.casts]));
+
+  const total = daysInMonth(yearMonth);
+  const offset = firstDayOffset(yearMonth);
+  const isDaily = dailyDate != null;
+  const dailyCasts = isDaily
+    ? (days.find((d) => d.date === dailyDate)?.casts ?? [])
+    : [];
+
+  const maxPerCell = Math.max(1, Math.floor((cellH - inset * 2 - 24) / 28));
+
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H }}>
+      {/* タイトル領域: 元テキストを覆い、新しいタイトルを描画 */}
+      <div
+        style={{
+          position: 'absolute',
+          left: titleX + inset,
+          top: titleY + inset,
+          width: titleW - inset * 2,
+          height: titleH - inset * 2,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            fontSize: Math.min(28, titleH * 0.35),
+            fontWeight: 700,
+            color: pl.accentColor,
+            letterSpacing: 3,
+            textShadow: pl.textOutline ? outlineStyle(pl.accentColor) : undefined,
+          }}
+        >
+          {storeName}
+        </div>
+        <div
+          style={{
+            fontSize: Math.min(22, titleH * 0.28),
+            fontWeight: 600,
+            color: pl.textColor,
+            marginTop: 4,
+            textShadow: pl.textOutline ? outlineStyle(pl.textColor) : undefined,
+          }}
+        >
+          {isDaily && dailyDate
+            ? `${dailyDateLabel(dailyDate)} 出勤キャスト`
+            : `${yearMonthLabel(yearMonth)} シフト表`}
+        </div>
+      </div>
+
+      {/* ヘッダー行（曜日ラベル） */}
+      {pl.hasHeaderRow && !isDaily
+        ? WEEKDAY_LABELS.map((w, ci) => (
+            <div
+              key={`hdr-${ci}`}
+              style={{
+                position: 'absolute',
+                left: gridX + ci * cellW + inset,
+                top: gridY + inset,
+                width: cellW - inset * 2,
+                height: cellH - inset * 2,
+                backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: Math.min(20, cellW * 0.12),
+                fontWeight: 700,
+                color: ci === 0 ? pl.accentColor : pl.textColor,
+                textShadow: pl.textOutline ? outlineStyle(ci === 0 ? pl.accentColor : pl.textColor) : undefined,
+              }}
+            >
+              {w}
+            </div>
+          ))
+        : null}
+
+      {/* データセル */}
+      {isDaily
+        ? renderDailyCells(dailyCasts, pl, gridX, gridY + (pl.hasHeaderRow ? cellH : 0), cellW, cellH, inset, maxPerCell)
+        : renderMonthlyCells(byDate, yearMonth, total, offset, pl, gridX, gridY + dataRowStart * cellH, cellW, cellH, inset, maxPerCell)}
+    </div>
+  );
+}
+
+function renderMonthlyCells(
+  byDate: Map<string, ShiftDayData['casts']>,
+  yearMonth: string,
+  total: number,
+  offset: number,
+  pl: ShiftPlacement,
+  startX: number,
+  startY: number,
+  cellW: number,
+  cellH: number,
+  inset: number,
+  maxPerCell: number,
+): React.JSX.Element[] {
+  const elements: React.JSX.Element[] = [];
+  for (let day = 1; day <= total; day++) {
+    const idx = offset + day - 1;
+    const col = idx % 7;
+    const row = Math.floor(idx / 7);
+    const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
+    const casts = byDate.get(date) ?? [];
+    const shown = casts.slice(0, maxPerCell);
+    const rest = casts.length - shown.length;
+    const x = startX + col * cellW + inset;
+    const y = startY + row * cellH + inset;
+    const w = cellW - inset * 2;
+    const h = cellH - inset * 2;
+    const nameFs = Math.min(15, w * 0.085);
+    const timeFs = Math.min(12, w * 0.065);
+
+    const txtShadow = pl.textOutline ? outlineStyle(pl.textColor) : undefined;
+    elements.push(
+      <div
+        key={date}
+        style={{
+          position: 'absolute',
+          left: x,
+          top: y,
+          width: w,
+          height: h,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          overflow: 'hidden',
+          padding: '3px 5px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div
+          style={{
+            fontSize: Math.min(18, w * 0.11),
+            fontWeight: 700,
+            color: col === 0 ? pl.accentColor : pl.textColor,
+            lineHeight: 1.2,
+            textShadow: pl.textOutline ? outlineStyle(col === 0 ? pl.accentColor : pl.textColor) : undefined,
+          }}
+        >
+          {day}
+        </div>
+        {shown.map((c, j) => (
+          <div key={`${c.name}-${j}`} style={{ lineHeight: 1.15 }}>
+            <span
+              style={{
+                fontSize: nameFs,
+                fontWeight: 700,
+                color: pl.textColor,
+                whiteSpace: 'nowrap',
+                textShadow: txtShadow,
+              }}
+            >
+              {c.name}
+            </span>
+            <span
+              style={{
+                fontSize: timeFs,
+                color: pl.timeColor,
+                marginLeft: 3,
+                whiteSpace: 'nowrap',
+                textShadow: pl.textOutline ? outlineStyle(pl.timeColor) : undefined,
+              }}
+            >
+              {shortRange(c.start, c.end)}
+            </span>
+          </div>
+        ))}
+        {rest > 0 ? (
+          <div style={{ fontSize: timeFs, fontWeight: 700, color: pl.accentColor, textShadow: pl.textOutline ? outlineStyle(pl.accentColor) : undefined }}>
+            +{rest}人
+          </div>
+        ) : null}
+      </div>,
+    );
+  }
+  return elements;
+}
+
+function renderDailyCells(
+  casts: ShiftDayData['casts'],
+  pl: ShiftPlacement,
+  startX: number,
+  startY: number,
+  cellW: number,
+  cellH: number,
+  inset: number,
+  _maxPerCell: number,
+): React.JSX.Element[] {
+  const elements: React.JSX.Element[] = [];
+  const totalSlots = pl.cols * pl.rows;
+  const shown = casts.slice(0, totalSlots);
+  const photoSize = Math.min(cellW - inset * 2 - 16, cellH - inset * 2 - 60, 180);
+
+  shown.forEach((c, i) => {
+    const col = i % pl.cols;
+    const row = Math.floor(i / pl.cols);
+    const x = startX + col * cellW + inset;
+    const y = startY + row * cellH + inset;
+    const w = cellW - inset * 2;
+    const h = cellH - inset * 2;
+
+    elements.push(
+      <div
+        key={`cast-${i}`}
+        style={{
+          position: 'absolute',
+          left: x,
+          top: y,
+          width: w,
+          height: h,
+          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+        }}
+      >
+        {c.photoUrl ? (
+          <img
+            src={c.photoUrl}
+            alt=""
+            style={{
+              width: photoSize,
+              height: photoSize,
+              borderRadius: photoSize / 2,
+              objectFit: 'cover',
+              border: `3px solid ${pl.accentColor}`,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: photoSize,
+              height: photoSize,
+              borderRadius: photoSize / 2,
+              backgroundColor: DEFAULT_AVATAR_COLOR,
+              border: `3px solid ${pl.accentColor}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: photoSize * 0.4,
+              color: '#FFFFFF',
+            }}
+          >
+            ♪
+          </div>
+        )}
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: Math.min(18, w * 0.12),
+            fontWeight: 700,
+            color: pl.textColor,
+            textAlign: 'center',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            maxWidth: w - 8,
+            textShadow: pl.textOutline ? outlineStyle(pl.textColor) : undefined,
+          }}
+        >
+          {c.name}
+        </div>
+        <div
+          style={{
+            marginTop: 2,
+            fontSize: Math.min(14, w * 0.09),
+            color: pl.timeColor,
+            textShadow: pl.textOutline ? outlineStyle(pl.timeColor) : undefined,
+          }}
+        >
+          {shortRange(c.start, c.end)}
+        </div>
+      </div>,
+    );
+  });
+
+  return elements;
 }

@@ -58,6 +58,40 @@ export type ShiftTemplateDefinition = {
   logoSlot: boolean; // 店ロゴ挿入枠
 };
 
+/** 店舗テンプレート配置情報（§22-3/§22-5） */
+export type ShiftPlacement = {
+  gridArea: { x: number; y: number; w: number; h: number }; // 相対座標 0-1
+  titleArea: { x: number; y: number; w: number; h: number };
+  cols: number;
+  rows: number;
+  hasHeaderRow: boolean;
+  cellBg: string;
+  cellInset: number;
+  textColor: string;
+  timeColor: string;
+  accentColor: string;
+  cellBgAlpha?: number;   // §22-5: セル背景の不透明度 0-1（モードC可読性ガード）
+  textOutline?: boolean;  // §22-5: 文字縁取り（背景画像上で文字を読みやすくする）
+};
+
+/** §22-5: モードC用の安全既定配置（グリッドを持たない任意画像背景） */
+export function defaultFreeformPlacement(): ShiftPlacement {
+  return {
+    gridArea: { x: 0.05, y: 0.2, w: 0.9, h: 0.72 },
+    titleArea: { x: 0.15, y: 0.03, w: 0.7, h: 0.12 },
+    cols: 7,
+    rows: 5,
+    hasHeaderRow: true,
+    cellBg: '#FFFFFF',
+    cellInset: 2,
+    textColor: '#1F2933',
+    timeColor: '#666666',
+    accentColor: '#E91E63',
+    cellBgAlpha: 0.82,
+    textOutline: true,
+  };
+}
+
 /** モチーフ→描画文字（BMPテキスト記号・両プラットフォームで描画可能なもの） */
 export const MOTIF_CHARS: Record<Exclude<ShiftMotif, 'none'>, string> = {
   stars: '★',

@@ -3,12 +3,16 @@
 // 列仕様・エスケープ・BOM・CRLF はアプリ側 src/utils/csv.ts と同一（§24）。
 // アプリはシェアシートで渡すが、Web は Blob + <a download> でブラウザダウンロードする点だけが違う。
 
-/** セルを CSV エスケープ（" 囲み・内部の " は "" へ）。 */
+/** セルを CSV エスケープ（" 囲み＋式インジェクション無害化・SEC-11）。 */
 function escapeCell(cell: string): string {
-  if (/[",\r\n]/.test(cell)) {
-    return `"${cell.replace(/"/g, '""')}"`;
+  let s = cell;
+  if (s.length > 0 && /^[=+\-@\t\r]/.test(s)) {
+    s = "'" + s;
   }
-  return cell;
+  if (/[",\r\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
 }
 
 /** UTF-8 BOM（U+FEFF）。ソース中の不可視文字を避けるためコードポイント指定で生成。 */
