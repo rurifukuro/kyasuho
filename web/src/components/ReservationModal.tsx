@@ -1,41 +1,71 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { KyCast, KySeatType, KyShift, MakeReservationResult } from '../lib/types';
-import { slotToMinutes } from '../lib/timeUtils';
+import type { KyCast, KyReservation, KySeatType, KyShift, MakeReservationResult } from '../lib/types';
+import { slotToMinutes, minutesToSlot, countAvailableSeats } from '../lib/timeUtils';
+
+const TIME_STEP = 10;
 
 interface ReservationModalProps {
   tenantId: string;
   date: string;
-  slot: string;
+  initialSlotMinutes: number;
+  windowStartMin: number;
+  windowEndMin: number;
   setMinutes: number;
   casts: KyCast[];
   shifts: KyShift[];
   seatTypes: KySeatType[];
+  reservations: KyReservation[];
+  totalSeats: number;
   onClose: () => void;
   onReserved: () => void;
 }
 
 export function ReservationModal({
-  tenantId, date, slot, setMinutes, casts, shifts, seatTypes, onClose, onReserved,
+  tenantId, date, initialSlotMinutes, windowStartMin, windowEndMin, setMinutes,
+  casts, shifts, seatTypes, reservations, totalSeats, onClose, onReserved,
 }: ReservationModalProps) {
+  const startOptions = useMemo(() => {
+    const opts: number[] = [];
+    for (let t = windowStartMin; t + setMinutes <= windowEndMin; t += TIME_STEP) {
+      opts.push(t);
+    }
+    return opts.length > 0 ? opts : [initialSlotMinutes];
+  }, [windowStartMin, windowEndMin, setMinutes, initialSlotMinutes]);
+
+  const [startTime, setStartTime] = useState(initialSlotMinutes);
+
+  useEffect(() => {
+    if (!startOptions.includes(startTime)) {
+      const below = startOptions.filter((t) => t <= initialSlotMinutes);
+      setStartTime(below.length > 0 ? below[below.length - 1]! : startOptions[0]!);
+    }
+  }, [startOptions, startTime, initialSlotMinutes]);
+
+  const maxSets = Math.max(1, Math.floor((windowEndMin - startTime) / setMinutes));
+  const [sets, setSets] = useState(1);
+  const effectiveSets = Math.min(sets, maxSets);
+  const endTime = startTime + effectiveSets * setMinutes;
+
+  const available = countAvailableSeats(startTime, endTime, reservations, totalSeats);
+
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [partySize, setPartySize] = useState(1);
-  const [castId, setCastId] = useState<string>('');
-  const [seatTypeId, setSeatTypeId] = useState<string>('');
+  const [castId, setCastId] = useState('');
+  const [seatTypeId, setSeatTypeId] = useState('');
   const [note, setNote] = useState('');
   const [pin, setPin] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ id: string; seatNo: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const slotMin = slotToMinutes(slot);
   const availableCasts = casts.filter(
     (c) => c.accepts_nomination && shifts.some((s) => {
       if (s.cast_id !== c.id) return false;
       const sStart = slotToMinutes(s.start_at);
       const sEnd = slotToMinutes(s.end_at);
-      return slotMin >= sStart && slotMin + setMinutes <= sEnd;
+      return startTime >= sStart && endTime <= sEnd;
     }),
   ).sort((a, b) => (a.name_kana || '').localeCompare(b.name_kana || '', 'ja'));
 
@@ -45,6 +75,7 @@ export function ReservationModal({
     setSubmitting(true);
     setError(null);
 
+    const slot = minutesToSlot(startTime);
     const { data, error: rpcError } = await supabase.rpc('ky_make_reservation', {
       p_tenant_id: tenantId,
       p_date: date,
@@ -92,7 +123,7 @@ export function ReservationModal({
         <div className="modal-content" onClick={(e) => e.stopPropagation()}>
           <h2>予約が完了しました</h2>
           <div className="confirm-box">
-            <p><strong>{date.replace(/-/g, '/')}</strong> {slot}〜</p>
+            <p><strong>{date.replace(/-/g, '/')}</strong> {minutesToSlot(startTime)}〜{minutesToSlot(endTime)}</p>
             <p>席番号: {result.seatNo}</p>
             {pin.length === 4 && (
               <div className="pin-display">
@@ -114,9 +145,39 @@ export function ReservationModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2>予約</h2>
-        <p className="modal-date">{date.replace(/-/g, '/')} {slot}〜（{setMinutes}分）</p>
+        <p className="modal-date">{date.replace(/-/g, '/')}</p>
 
         <form onSubmit={handleSubmit}>
+          <label>
+            開始時刻
+            <select
+              value={startTime}
+              onChange={(e) => { setStartTime(Number(e.target.value)); setSets(1); }}
+            >
+              {startOptions.map((t) => (
+                <option key={t} value={t}>{minutesToSlot(t)}</option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            セット数（1セット = {setMinutes}分）
+            <select
+              value={effectiveSets}
+              onChange={(e) => setSets(Number(e.target.value))}
+            >
+              {Array.from({ length: maxSets }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}セット（{minutesToSlot(startTime)}〜{minutesToSlot(startTime + n * setMinutes)}）
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {available <= 0 && (
+            <p className="error-msg">この時間帯は空席がありません。</p>
+          )}
+
           <label>
             お名前 <span className="required">*</span>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="予約者名" />
@@ -184,7 +245,7 @@ export function ReservationModal({
 
           <div className="modal-actions">
             <button type="button" className="btn-secondary" onClick={onClose}>キャンセル</button>
-            <button type="submit" className="btn-primary" disabled={submitting}>
+            <button type="submit" className="btn-primary" disabled={submitting || !name.trim() || available <= 0}>
               {submitting ? '送信中…' : '予約する'}
             </button>
           </div>
