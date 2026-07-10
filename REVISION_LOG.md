@@ -1881,3 +1881,31 @@ SPEC §36（Rev75設計）の実装。郵便番号入力→zipcloud API検索→
   - 異常系②: accepts_nomination=falseのcast_id → `cast_not_available`
   - 異常系③: 出勤がない日のcast_id → `cast_not_available`
   - 異常系④: cast_id=nullは従来通りスキップ（指名なし予約）
+
+## Rev82（2026-07-10）開発者売上・契約集計ダッシュボード基盤（§37先行実装）
+
+### 背景
+§37「リリース後に開発者（テイトさん）の売上・契約状況を集計するコード」を先行実装。課金機能OFF（IAPフラグ未有効化）の今でもDB基盤と画面を仕込み、リリース初日から記帳できる状態にする。契約一覧・MRR等のKPIは課金テーブル（ky_billing_subscriptions）実装時（BILL-1）に有効化。
+
+### 変更
+- **migration 0033新設** `0033_ky_dev_dashboard.sql`:
+  - `ky_platform_admins`テーブル（開発者アカウント・PK=user_id・SQL Editorでのみ行追加可＝権限昇格経路を作らない・RLS=自分のSELECTのみ）
+  - `ky_revenue_events`テーブル（入金イベント台帳・append-only・UNIQUE(channel, external_ref)で二重計上防止・amount_gross正負CHECK・UPDATE/DELETEトリガーで変更禁止＝FIN-2同型・RLS=service_roleのみ）
+  - `ky_assert_platform_admin()`ガード関数（SECURITY DEFINER・全開発者RPCの冒頭で呼ぶ）
+  - `ky_dev_revenue_monthly(p_from, p_to)` 集計RPC（月×チャネル別のgross/fee/net集計・開発者ガード付き）
+  - `ky_dev_kpis()` 基本KPI RPC（登録店舗数・直近30日売上・契約系は課金テーブル実装後に拡張＝暫定0値）
+  - 全RPCにrevoke from public/anon + grant to authenticated/service_role（42501の轍回避）
+- **Web `#/dev` ルート追加**: App.tsxにReact.lazy DevApp（客・店舗バンドル非搭載）
+- **DevApp.tsx新設**: Supabase認証＋ky_platform_admins存在確認ゲート（非管理者には「ページが見つかりません」表示＝開発者ページの存在を匂わせない・防御の本体はRPCガード）
+- **DevDashboard.tsx新設**: KPIカード4枚（登録店舗数/直近30日売上/有効契約数/MRR見込み）＋月次売上テーブル（チャネル別gross/fee/net＋見積フラグ）＋月ナビ＋CSV出力（SEC-11無害化済みcsv.ts流用）＋契約一覧プレースホルダー（BILL-1後に有効化）
+- **devApi.ts新設**: checkPlatformAdmin/fetchRevenueMonthly/fetchDevKpis
+- **admin.css**: dev-kpi-grid/dev-kpi-card/dev-month-navスタイル追加
+- **SPEC §37-6・§19-43に実装済みRev82マーク**
+
+### 検証
+- Web型検査: `npx tsc -b` EXIT:0
+- migration 0033はSQL構文として正。本番適用後の検証推奨:
+  - ky_platform_adminsにユーザー行追加（SQL Editor）→ `#/dev`アクセスでダッシュボード表示
+  - 非管理者ログインで「ページが見つかりません」表示
+  - ky_revenue_eventsへのUPDATE/DELETEがトリガーで拒否されること
+  - ky_dev_revenue_monthly RPCがanonで403/authenticatedで結果（空配列）返却
