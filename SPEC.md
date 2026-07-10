@@ -569,6 +569,7 @@ create policy public_read_casts on ky_casts
 
 - 権利の源泉は **`ky_tenants.plan`**（DB1箇所）。IAP購入→レシート検証→plan更新→アプリ/管理Web/客Web(バッジ表示)の三面が同じ列を参照
 - 管理Webの有料機能ゲートもアプリと同一境界（プラットフォームで差をつけない）。**購入導線はMVP後の設計論点**：Apple IAPで買った権利をWebで使うのは規約上問題なし。Web側にStripe等の独自決済を置くか（Appleアプリ内からWeb決済への誘導はNGなので、置く場合もアプリ内からはリンクしない）は課金ON化時に決定＝§6 TODOに含める
+- **【2026-07-10 更新・Rev68】カード決済（Web直販）＋銀行振込（年払い請求書）の詳細事前設計を `docs/BILLING_DESIGN.md` に策定**（Stripe採用・チャネル横断契約台帳 ky_billing_subscriptions・plan導出一本化・法規制整理・BILL-0〜4フェーズ）。スマホ新法（2025-12-18施行）対応後の日本では上記「アプリ内からWeb決済への誘導はNG」は**「リンクなしテキスト誘導=手数料0%・リンクアウト=15%で可」に更新**（詳細は BILLING_DESIGN §2-6・実装時に最新規約を再確認）
 
 ### PRICE/R35準拠
 - 価格表示は `productsById[sku].localizedPrice`（配列順依存禁止＝ルールPRICE）
@@ -1349,6 +1350,7 @@ total_pay      = base_pay + nomination_back + drink_back + other_back − deduct
 
 - **FIN-8 資金非預かり原則**：客側決済を入れる場合も**きゃすりんは資金を預からない**構造（Stripe Connect の Direct charges 型＝店舗アカウントへ直接決済・プラットフォームは手数料のみ）を第一候補とする＝資金決済法（前受金・為替取引）の適用回避方針。**導入判断そのものが弁護士確認❷通過後**（§7・§16）
 - カード情報はきゃすりんのサーバー・DBに一切触れさせない（Stripe Elements 等のトークン化＝PCI DSS SAQ-A 範囲に留める）
+- **【2026-07-10 追加・Rev68】店舗向けサブスクの直販（カード/銀行振込）は Phase D（客側決済）とは別論点＝自社役務対価の直接受領で資金決済法の枠外**（の整理・弁護士確認❷にB2B直販1項目を追加）。詳細設計は **`docs/BILLING_DESIGN.md`**（Stripe Billing/Checkout/Invoicing・銀行振込は年払いのみ・契約台帳＋recompute_tenant_plan で FIN-4/5/6 と接続）
 
 ### 33-5. 実装順序と完了条件
 

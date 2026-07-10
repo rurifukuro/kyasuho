@@ -1609,3 +1609,27 @@ SPEC §22-3「店舗独自テンプレートの取り込み」を実装。店舗
 
 ### 検証
 - 仕様書のみ＝tsc・プローブ対象なし。SPEC内の参照整合（§22-2/§22-3/§19㊳/WEB6）を目視確認
+
+---
+
+## Rev68（2026-07-10）課金・決済チャネル拡張の事前設計書＝docs/BILLING_DESIGN.md 新設（設計のみ・実装なし）
+
+**ユーザー指示:** 将来的に従来のAppleでのサブスク販売の他、普通にキャッシュカードや振り込みでのサービス販売を想定しています。これを実現するための設計書を出来るだけ詳細に事前設計しておいて欲しい。金融に関する事なのでしっかり検討してね
+
+### docs/BILLING_DESIGN.md 新設（全14章）
+- **販売チャネル4種**（Apple IAP／Google Play／Stripeカード／銀行振込=年払い請求書のみ）＋3原則（エンティトルメント単一源泉・1テナント1アクティブ契約・資金非預かり/カード情報非保持）
+- **法規制整理**: 資金決済法（自社役務対価=非該当の整理・弁護士確認❷にB2B直販1項目追加）／特商法（通販表記＋最終確認画面義務）／割販法（Stripe Checkout=非保持化・SAQ A）／消費税・インボイス（登録要否はユーザーゲート）／景表法／**スマホ新法（2025-12-18施行）**=リンクなしテキスト誘導0%・リンクアウト15%（Web検索で裏取り・実装時再確認ゲート付き）
+- **決済プロバイダ=Stripe正式採用**（Billing/Checkout/Invoicing/Customer Portal。銀行振込は日本開発のバーチャル口座＋自動消込1.5%。§33-4 Connect と同一基盤）
+- **DB設計**: ky_billing_subscriptions（チャネル横断契約台帳・部分ユニークで1テナント1契約強制）／ky_billing_customers／ky_payment_events（provider+event_id一意=Webhook冪等）／ky_billing_invoices＋RPC recompute_tenant_plan（service_roleのみ・FIN-4トリガーと整合）
+- **統一状態機械**（trialing/active/past_due/canceled/expired/incomplete）＋チャネル別イベントマッピング（Apple Server Notifications V2／Stripe Webhook／振込invoice.paid）＋grace設計
+- **Edge Function 7本の設計規約**（署名検証・冪等・順序逆転耐性=最新状態を引き直す・5xxリトライ委譲・金額はサーバー側Price ID固定）
+- **二重課金防止3層**（DB制約/導線抑止/Webhook最終防衛）＋チャネル移行手順・返金/解約ポリシー・経理（前受収益は台帳期間から按分可能な構造）
+- **実装フェーズ BILL-0〜4**＋未決事項一覧（価格/インボイス登録/特商法住所/Stripeアカウント開設=全てユーザー決定ゲート）
+
+### SPEC.md 更新
+- §14 三面共有: BILLING_DESIGN.md へのポインタ＋スマホ新法による「アプリ内からWeb決済誘導NG」記述の更新（テキスト誘導0%/リンクアウト15%で可）
+- §33-4: B2B直販は Phase D（客側決済）と別論点である旨＋設計書ポインタ追記
+
+### 検証
+- 設計書のみ＝tsc・プローブ対象なし。SPEC §14/§33-4/FIN-1〜8・saas_init_playbook SEC/FIN標準・W19/R13/R30 との整合を目視確認。スマホ新法とStripe銀行振込はWeb検索で裏取り済み
+- 既知の記録ドリフト: 本ファイル内で Rev67 が Rev66 より前に位置（内容は正・順序のみ）＝次の整理Revで並び替え可
