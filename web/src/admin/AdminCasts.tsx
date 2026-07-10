@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyCast, KyCastInvite, KyShift, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import { getTimeOptions } from '../lib/timeOptions';
 import type { KyPayrollSettings } from '../lib/types';
 import {
   addCast,
@@ -199,7 +200,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
       return;
     }
     if (shiftEnd <= shiftStart) {
-      setShiftFormError('終了時刻は開始時刻より後にしてください（日をまたぐ場合はアプリから登録してください）。');
+      setShiftFormError('退勤時刻は出勤時刻より後にしてください。');
       return;
     }
     setShiftBusy(true);
@@ -443,27 +444,31 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           </div>
           <div className="admin-field">
             <label htmlFor="shift-start">出勤</label>
-            <input
+            <select
               id="shift-start"
-              type="time"
               className="w-md"
-              step={600}
               value={shiftStart}
               onChange={(e) => setShiftStart(e.target.value)}
               required
-            />
+            >
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div className="admin-field">
             <label htmlFor="shift-end">退勤</label>
-            <input
+            <select
               id="shift-end"
-              type="time"
               className="w-md"
-              step={600}
               value={shiftEnd}
               onChange={(e) => setShiftEnd(e.target.value)}
               required
-            />
+            >
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <button type="submit" className="admin-btn primary" disabled={shiftBusy}>
             {shiftBusy ? '追加中…' : '出勤を追加'}

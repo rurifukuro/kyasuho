@@ -128,6 +128,7 @@ export function ReservationsScreen() {
         const key = msg === 'no_available_seat' ? t('reservation.errorNoSeat') :
                     msg === 'not_unlocked' ? t('reservation.errorNotUnlocked') :
                     msg === 'duplicate_contact' ? t('reservation.errorDuplicateContact') :
+                    msg === 'cast_not_available' ? t('reservation.errorCastNotAvailable') :
                     msg;
         Alert.alert(t('common.error'), key);
       }

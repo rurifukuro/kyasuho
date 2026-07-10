@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyTenant } from '../lib/types';
 import { updateTenantFlags, updateTenantProfile } from './adminApi';
+import { lookupPostalCode } from '../lib/postalLookup';
+import { resolveArea } from '../lib/areaDict';
 
 const PREFECTURES = [
   '', '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -34,6 +36,10 @@ export function AdminSettings({
   const [prefecture, setPrefecture] = useState(tenant.prefecture ?? '');
   const [area, setArea] = useState(tenant.area ?? '');
   const [rankingOptIn, setRankingOptIn] = useState(tenant.ranking_opt_in ?? false);
+
+  const [postalCode, setPostalCode] = useState(tenant.business_info?.postalCode ?? '');
+  const [postalBusy, setPostalBusy] = useState(false);
+  const [postalMsg, setPostalMsg] = useState<string | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
@@ -57,6 +63,26 @@ export function AdminSettings({
     }
   };
 
+  const handlePostalSearch = useCallback(async () => {
+    setPostalBusy(true);
+    setPostalMsg(null);
+    try {
+      const result = await lookupPostalCode(postalCode);
+      if (!result) {
+        setPostalMsg('見つかりませんでした。手入力してください。');
+        return;
+      }
+      setPrefecture(result.prefecture);
+      setAddress(result.city + result.town);
+      setArea(resolveArea(result.city, result.town));
+      setPostalMsg(null);
+    } catch {
+      setPostalMsg('検索に失敗しました。手入力してください。');
+    } finally {
+      setPostalBusy(false);
+    }
+  }, [postalCode]);
+
   const handleProfileSave = useCallback(async (e: FormEvent) => {
     e.preventDefault();
     setProfileBusy(true);
@@ -65,7 +91,7 @@ export function AdminSettings({
       const fields = {
         name: storeName.trim(),
         genre: genre.trim(),
-        business_info: { address: address.trim(), openHours: openHours.trim(), tel: tel.trim(), note: note.trim() },
+        business_info: { address: address.trim(), openHours: openHours.trim(), tel: tel.trim(), note: note.trim(), postalCode: postalCode.trim() || undefined },
         prefecture,
         area: area.trim(),
         ranking_opt_in: rankingOptIn,
@@ -80,7 +106,7 @@ export function AdminSettings({
     } finally {
       setProfileBusy(false);
     }
-  }, [tenant.id, storeName, genre, address, openHours, tel, note, prefecture, area, rankingOptIn, onTenantUpdate]);
+  }, [tenant.id, storeName, genre, address, openHours, tel, note, postalCode, prefecture, area, rankingOptIn, onTenantUpdate]);
 
   const handleSnsSave = useCallback(async () => {
     setSnsBusy(true);
@@ -127,9 +153,19 @@ export function AdminSettings({
             <label htmlFor="prof-genre">ジャンル</label>
             <input id="prof-genre" type="text" value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="例：コンカフェ、メイドカフェ" />
           </div>
+          <div className="admin-field">
+            <label htmlFor="prof-postal">郵便番号</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input id="prof-postal" type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="123-4567" style={{ width: 140 }} />
+              <button type="button" className="admin-btn" disabled={postalBusy} onClick={() => void handlePostalSearch()} style={{ whiteSpace: 'nowrap' }}>
+                {postalBusy ? '検索中…' : '住所検索'}
+              </button>
+            </div>
+            {postalMsg && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 4, display: 'block' }}>{postalMsg}</span>}
+          </div>
           <div className="admin-field" style={{ gridColumn: 'span 2' }}>
             <label htmlFor="prof-address">住所</label>
-            <input id="prof-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input id="prof-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="住所検索で自動入力されます" />
           </div>
           <div className="admin-field">
             <label htmlFor="prof-hours">営業時間</label>

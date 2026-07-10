@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
 import CalendarModal from '../components/CalendarModal';
 import * as profileService from '../services/castProfile';
+import { lookupPostalCode } from '../utils/postalLookup';
 import type { CastPersonalInfo, AccountType } from '../types';
 
 export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
@@ -35,6 +36,9 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
   const [furigana, setFurigana] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [postalBusy, setPostalBusy] = useState(false);
+  const [postalMsg, setPostalMsg] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -96,6 +100,23 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
     })();
     return () => { active = false; };
   }, [userId]);
+
+  const handlePostalSearch = useCallback(async () => {
+    setPostalBusy(true);
+    setPostalMsg('');
+    try {
+      const result = await lookupPostalCode(postalCode);
+      if (!result) {
+        setPostalMsg(t('personalInfo.postalNotFound'));
+        return;
+      }
+      setAddress(`〒${postalCode} ${result.prefecture}${result.city}${result.town}`);
+    } catch {
+      setPostalMsg(t('personalInfo.postalError'));
+    } finally {
+      setPostalBusy(false);
+    }
+  }, [postalCode, t]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -163,6 +184,27 @@ export function CastPersonalInfoScreen({ onBack }: { onBack: () => void }) {
             <Field label={t('personalInfo.furigana')} value={furigana} onChange={setFurigana} theme={theme} />
             <DatePickerField label={t('personalInfo.dateOfBirth')} value={dateOfBirth} onPress={() => setShowDobPicker(true)} theme={theme} />
             <Field label={t('personalInfo.gender')} value={gender} onChange={setGender} theme={theme} />
+            <View style={st.field}>
+              <Text style={[st.fieldLabel, { color: theme.text }]}>{t('personalInfo.postalCode')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TextInput
+                  style={[st.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card, width: 140 }]}
+                  value={postalCode}
+                  onChangeText={setPostalCode}
+                  placeholder="123-4567"
+                  placeholderTextColor={theme.subtext}
+                  keyboardType="number-pad"
+                />
+                <TouchableOpacity
+                  style={[st.postalSearchBtn, { backgroundColor: theme.primary, opacity: postalBusy ? 0.5 : 1 }]}
+                  onPress={handlePostalSearch}
+                  disabled={postalBusy}
+                >
+                  <Text style={st.postalSearchBtnText}>{postalBusy ? t('personalInfo.postalSearching') : t('personalInfo.postalSearch')}</Text>
+                </TouchableOpacity>
+              </View>
+              {postalMsg ? <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 4 }}>{postalMsg}</Text> : null}
+            </View>
             <Field label={t('personalInfo.address')} value={address} onChange={setAddress} theme={theme} multiline />
             <Field label={t('personalInfo.phone')} value={phone} onChange={setPhone} theme={theme} keyboardType="phone-pad" />
             <Field label={t('personalInfo.email')} value={email} onChange={setEmail} theme={theme} keyboardType="email-address" />
@@ -331,4 +373,6 @@ const st = StyleSheet.create({
   accountTypeBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1 },
   saveBtn: { marginTop: 28, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  postalSearchBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
+  postalSearchBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

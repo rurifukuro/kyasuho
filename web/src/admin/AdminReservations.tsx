@@ -183,6 +183,10 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
         setAddError('この日時に受付枠がありません。先に「受付設定」で枠を作成してください。');
         return;
       }
+      if (result.error === 'cast_not_available') {
+        setAddError('指名キャストはこの時間に出勤していないか、指名を受け付けていません。');
+        return;
+      }
       setAddName('');
       setAddContact('');
       setAddParty('1');

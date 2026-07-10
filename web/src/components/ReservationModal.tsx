@@ -77,6 +77,10 @@ export function ReservationModal({
       setError('同じ連絡先でこの時間帯に既に予約があります。');
       return;
     }
+    if (res?.error === 'cast_not_available') {
+      setError('指名キャストはこの時間に出勤していません。別のキャストまたは時間をお選びください。');
+      return;
+    }
     if (res?.id && res.seat_no != null) {
       setResult({ id: res.id, seatNo: res.seat_no });
     }

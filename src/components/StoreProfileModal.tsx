@@ -16,6 +16,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { useTenant } from '../context/TenantContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { guardFields } from '../utils/contentGuard';
+import { lookupPostalCode } from '../utils/postalLookup';
+import { resolveArea } from '../utils/areaDict';
 import type { TenantSnsLink } from '../types';
 
 const SNS_PLATFORMS = [
@@ -42,6 +44,9 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
   const [note, setNote] = useState('');
   const [prefecture, setPrefecture] = useState('');
   const [area, setArea] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [postalBusy, setPostalBusy] = useState(false);
+  const [postalMsg, setPostalMsg] = useState('');
   const [snsLinks, setSnsLinks] = useState<TenantSnsLink[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -55,9 +60,30 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
       setNote(tenant.businessInfo.note ?? '');
       setPrefecture(tenant.prefecture);
       setArea(tenant.area);
+      setPostalCode(tenant.businessInfo.postalCode ?? '');
+      setPostalMsg('');
       setSnsLinks(tenant.snsLinks.length > 0 ? [...tenant.snsLinks] : []);
     }
   }, [visible, tenant]);
+
+  const handlePostalSearch = useCallback(async () => {
+    setPostalBusy(true);
+    setPostalMsg('');
+    try {
+      const result = await lookupPostalCode(postalCode);
+      if (!result) {
+        setPostalMsg(t('settings.postalNotFound'));
+        return;
+      }
+      setPrefecture(result.prefecture);
+      setAddress(result.city + result.town);
+      setArea(resolveArea(result.city, result.town));
+    } catch {
+      setPostalMsg(t('settings.postalError'));
+    } finally {
+      setPostalBusy(false);
+    }
+  }, [postalCode, t]);
 
   const handleSave = useCallback(async () => {
     if (!name.trim()) {
@@ -76,6 +102,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
           openHours: openHours.trim() || undefined,
           tel: tel.trim() || undefined,
           note: note.trim() || undefined,
+          postalCode: postalCode.trim() || undefined,
         },
         snsLinks: validLinks.map(l => ({ platform: l.platform, url: l.url.trim() })),
         prefecture: prefecture.trim(),
@@ -87,7 +114,7 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [name, genre, address, openHours, tel, note, prefecture, area, snsLinks, t, updateTenant, onClose]);
+  }, [name, genre, address, openHours, tel, note, postalCode, prefecture, area, snsLinks, t, updateTenant, onClose]);
 
   return (
     <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
@@ -108,6 +135,27 @@ export default function StoreProfileModal({ visible, onClose }: Props) {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
         <Field label={t('settings.storeName')} value={name} onChangeText={setName} theme={theme} />
         <Field label={t('settings.storeGenre')} value={genre} onChangeText={setGenre} theme={theme} placeholder={t('settings.storeGenrePlaceholder')} />
+        <View style={s.field}>
+          <Text style={[s.label, { color: theme.subtext }]}>{t('settings.postalCode')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              style={[s.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.card, width: 140 }]}
+              value={postalCode}
+              onChangeText={setPostalCode}
+              placeholder="123-4567"
+              placeholderTextColor={theme.subtext}
+              keyboardType="number-pad"
+            />
+            <TouchableOpacity
+              style={[s.searchBtn, { backgroundColor: theme.primary, opacity: postalBusy ? 0.5 : 1 }]}
+              onPress={handlePostalSearch}
+              disabled={postalBusy}
+            >
+              <Text style={s.searchBtnText}>{postalBusy ? t('settings.postalSearching') : t('settings.postalSearch')}</Text>
+            </TouchableOpacity>
+          </View>
+          {postalMsg ? <Text style={{ color: '#dc2626', fontSize: 12, marginTop: 4 }}>{postalMsg}</Text> : null}
+        </View>
         <Field label={t('settings.storeAddress')} value={address} onChangeText={setAddress} theme={theme} />
         <Field label={t('settings.storeOpenHours')} value={openHours} onChangeText={setOpenHours} theme={theme} placeholder="18:00〜24:00" />
         <Field label={t('settings.storeTel')} value={tel} onChangeText={setTel} theme={theme} keyboardType="phone-pad" />
@@ -204,4 +252,6 @@ const s = StyleSheet.create({
   snsRow: { marginBottom: 12 },
   snsIconLabel: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   snsLabel: { fontSize: 13, fontWeight: '600', marginLeft: 6 },
+  searchBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
+  searchBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

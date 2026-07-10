@@ -1820,14 +1820,14 @@ SPEC §36（Rev75設計）の実装。郵便番号入力→zipcloud API検索→
 - **アプリ CastPersonalInfoScreen.tsx**: 郵便番号欄＋住所検索ボタン。検索結果は`〒NNN-NNNN 都道府県市区町村町域`形式で住所欄にプリフィル（エリア欄は無し＝§36-0の設計通り）
 - **型定義**: `BusinessInfo`にpostalCode追加（Web: `web/src/lib/types.ts` ／ アプリ: `src/types/index.ts`）
 - **i18n**: `settings.postalCode`/`postalSearch`/`postalSearching`/`postalNotFound`/`postalError`＋`personalInfo.`同5キーを`strings.json`に追加
-- **SPEC §19㊶・§36本体に実装済みRev77マーク**
+- **SPEC §19㊶・§36本体に実装済みRev78マーク**
 
 ### 検証
 - `npx tsc -b`（web）EXIT:0 ／ `npx tsc --noEmit`（アプリ）EXIT:0
 - zipcloud API実HTTP照合: 一時テストページ（検証後削除）で7ケース自動テスト ALL PASS（秋葉原/歌舞伎町/池袋/大須/日本橋（大阪）/天神のエリア辞書照合＋存在しない番号000-0000のnull返却）。手動検索ボタンも確認（101-0021→東京都千代田区外神田→エリア「秋葉原」）
 - 管理Web/アプリのUI統合視覚検証は認証ゲートのため静的QA＋型検査まで（次回ログイン済みセッションで推奨）
 
-## Rev78（2026-07-10）§38-1-2新設＝キャスト提出UI詳細化：カレンダータップ＋日別✎編集＋基本出勤時間（設計のみ・コード変更なし）
+## Rev79（2026-07-10）§38-1-2新設＝キャスト提出UI詳細化：カレンダータップ＋日別✎編集＋基本出勤時間（設計のみ・コード変更なし）
 
 ### 背景
 ユーザー指示「キャストのシフト提出は①カレンダー表示・日付タップで出勤日確定 ②タップ済み日付に編集ボタン＝その日だけ好きな時間を設定 ③提出ページ内で基本の出勤時間（開始/終了）を設定でき、編集しない限り基本時間で提出扱い。詳細設計として計画書に盛り込む」（※原文の「出金」は「出勤」と解釈）。Rev77 §38-1のキャスト提出UI（1行記述）を詳細設計へ格上げ。
@@ -1839,3 +1839,45 @@ SPEC §36（Rev75設計）の実装。郵便番号入力→zipcloud API検索→
 
 ### 検証
 - ドキュメントのみの変更（コード変更なし・tsc/エミュ対象外）
+
+## Rev80（2026-07-10）管理Webの深夜時刻入力24+対応（§35-1是正①実装）
+
+### 背景
+§35-1（2026-07-10設計）の是正実装。アプリのステッパーは0〜29時で深夜入力可能だが、管理Webは`<input type="time">`（23:59上限）のため24時越えの出勤・受付枠を登録できなかった。深夜営業店が管理WebでもPC操作でシフト/受付を組めるようにする。
+
+### 変更
+- **`web/src/lib/timeOptions.ts`新設**: 00:00〜28:45の15分刻み116オプションを生成するユーティリティ（キャッシュ付き）
+- **AdminCasts.tsx**: 出勤/退勤の`<input type="time">`を24+対応`<select>`へ差し替え。検証メッセージから「日をまたぐ場合はアプリから登録してください」を除去（24+で不要になったため）
+- **AdminSchedule.tsx**: 受付開始/受付〆切の`<input type="time">`を24+対応`<select>`へ差し替え。〆切は空欄オプション（—）を維持（「空欄で開始+8時間」の既存仕様）
+- 「終了>開始」検証は維持（24+表記の文字列比較で正常動作＝"26:00">"18:00"はtrue）
+- **SPEC §35-1・§19㊵①に実装済みRev80マーク**。Rev78/79番号重複を是正（§38-1-2をRev79へ繰下げ）
+
+### 検証
+- `npx tsc -b`（web）EXIT:0
+- 管理Web視覚検証は認証ゲートのため静的QA＋型検査まで（次回ログイン済みセッションで「26:00出勤→アプリ/客Web/シフト表画像に反映」の実HTTP照合を推奨＝§35-4）
+
+## Rev81（2026-07-10）指名キャストのサーバー側検証（§35-2是正②実装）
+
+### 背景
+§35-2の是正実装。`ky_make_reservation`はp_cast_idを無検証で保存しており、API直叩きで非出勤キャストの指名が通っていた。サーバー側で3条件検証を追加する。
+
+### 変更
+- **migration 0032新設** `0032_ky_make_reservation_cast_validation.sql`: `ky_make_reservation` RPC v5。0030 S8の入力検証・停止テナント・他テナント参照防止を全て維持した上で、p_cast_id非null時に追加検証:
+  - ① テナント所属＋`accepts_nomination=true`（0030 S8のテナント所属チェックを拡張・エラーを`bad_request`→`cast_not_available`へ変更）
+  - ② シフトカバレッジ（`ky_shifts`に当日のスロット全体[start_min, end_min]を覆う出勤行が存在するか・v_end_min算出後に検証）
+  - 違反時は `error: 'cast_not_available'` を返す
+- **客Web ReservationModal.tsx**: `cast_not_available`のエラー文言追加
+- **管理Web AdminReservations.tsx**: 同上
+- **アプリ ReservationsScreen.tsx**: 同上（i18nキー `reservation.errorCastNotAvailable` 経由）
+- **アプリ strings.json**: `reservation.errorCastNotAvailable`キー追加
+- **Web型定義 types.ts**: `MakeReservationResult.error`に`cast_not_available`追加
+- **SPEC §35-2・§19㊵②に実装済みRev81マーク**
+
+### 検証
+- 型検査: classifier回復待ち（`npx tsc -b`/`npx tsc --noEmit`）
+- migration 0032はSQL構文として正（0030 S8全体を維持＋§35-2追加のみ）。本番適用後にRESTプローブで検証推奨:
+  - 正常系: 出勤中+accepts_nomination=trueのcast_idで予約成功
+  - 異常系①: 他テナントのcast_id → `cast_not_available`
+  - 異常系②: accepts_nomination=falseのcast_id → `cast_not_available`
+  - 異常系③: 出勤がない日のcast_id → `cast_not_available`
+  - 異常系④: cast_id=nullは従来通りスキップ（指名なし予約）

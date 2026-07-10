@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyTenant, KyUnlockWindow, KySeatType } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import { getTimeOptions } from '../lib/timeOptions';
 import {
   addWindow,
   fetchWindows,
@@ -258,26 +259,31 @@ export function AdminSchedule({ tenant }: { tenant: KyTenant }) {
         <div className="admin-form-row">
           <div className="admin-field">
             <label htmlFor="win-open">受付開始</label>
-            <input
+            <select
               id="win-open"
-              type="time"
               className="w-md"
-              step={600}
               value={openFrom}
               onChange={(e) => setOpenFrom(e.target.value)}
               required
-            />
+            >
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div className="admin-field">
             <label htmlFor="win-close">受付〆切（空欄で開始+8時間）</label>
-            <input
+            <select
               id="win-close"
-              type="time"
               className="w-md"
-              step={600}
               value={closeAt}
               onChange={(e) => setCloseAt(e.target.value)}
-            />
+            >
+              <option value="">—</option>
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div className="admin-field">
             <label htmlFor="win-set">1セット（分）</label>

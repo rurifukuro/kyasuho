@@ -8,6 +8,7 @@ export interface KyTenant {
     openHours?: string;
     tel?: string;
     note?: string;
+    postalCode?: string;
   };
   sns_links: { platform: string; url: string }[];
   prefecture: string;
@@ -307,7 +308,7 @@ export type DayStatus = 'available' | 'low' | 'full';
 export interface MakeReservationResult {
   id?: string;
   seat_no?: number;
-  error?: 'no_available_seat' | 'not_unlocked';
+  error?: 'no_available_seat' | 'not_unlocked' | 'duplicate_contact' | 'cast_not_available' | 'no_seat_types' | 'bad_request';
 }
 
 export interface VerifyPinResult {

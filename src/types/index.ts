@@ -105,6 +105,7 @@ export type BusinessInfo = {
   openHours?: string;
   tel?: string;
   note?: string;
+  postalCode?: string;
 };
 
 /** 店舗＝テナント。slug が客側公開ページのキー。 */
