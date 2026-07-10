@@ -67,7 +67,7 @@
 ## ゲート③: §14（IAP プロダクト × UI 存在）
 - [ ] **MVPは `features.ts` の `IAP_ENABLED=false` で購入UI非表示**（フラグ構造は実装）
 - [ ] ON化時: `PlanCard`/`SubscriptionCard` の購入ボタンが SettingsScreen に描画
-- [ ] ON化時: **初月無料トライアル**（ASC Introductory Offer／Play free trial・§14＝2026-07-06ユーザー決定）を両サブスク商品に設定・価格や期間の固定文字ハードコード禁止
+- [ ] ON化時: **初月無料トライアル＝サーバーサイド・トライアル**（channel='promo' 台帳行・§14＝2026-07-10ユーザー承認・Rev70）。**ASC Introductory Offer／Play free trial はストア側に設定しない**（promoとスタックし実質3ヶ月化する事故防止・BILLING_DESIGN §17-1）・価格や期間の固定文字ハードコード禁止
 - [ ] 価格は `productsById[sku].localizedPrice`（配列順依存禁止＝ルールPRICE）・R35地域別倍率
 - [ ] 上限ゲート（キャスト数/予約数）は共通関数に集約し全経路が通す（ルールGATE-1）
 
