@@ -369,6 +369,48 @@ export async function countCastDrinksByMonth(
   return counts;
 }
 
+// §39: 指定月のメニューバック合計を「castId|date」→円 のマップで返す
+export async function sumMenuBackByMonth(
+  tenantId: string,
+  yearMonth: string,
+): Promise<Map<string, number>> {
+  const [y, m] = yearMonth.split('-').map(Number);
+  const from = `${y}-${String(m).padStart(2, '0')}-01`;
+  const nextM = m === 12 ? 1 : m + 1;
+  const nextY = m === 12 ? y + 1 : y;
+  const toExclusive = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+
+  const { data: orders, error: ordErr } = await supabase
+    .from('ky_orders')
+    .select('id, biz_date')
+    .eq('tenant_id', tenantId)
+    .gte('biz_date', from)
+    .lt('biz_date', toExclusive)
+    .eq('status', 'closed');
+  if (ordErr) throw ordErr;
+  if (!orders || orders.length === 0) return new Map();
+
+  const orderIds = (orders as { id: string; biz_date: string }[]).map((o) => o.id);
+  const dateById = new Map((orders as { id: string; biz_date: string }[]).map((o) => [o.id, o.biz_date]));
+
+  const { data: items, error: itemErr } = await supabase
+    .from('ky_order_items')
+    .select('order_id, cast_id, back_each, qty')
+    .in('order_id', orderIds)
+    .not('cast_id', 'is', null)
+    .not('back_each', 'is', null);
+  if (itemErr) throw itemErr;
+
+  const sums = new Map<string, number>();
+  for (const row of (items ?? []) as { order_id: string; cast_id: string; back_each: number; qty: number }[]) {
+    const bizDate = dateById.get(row.order_id);
+    if (!bizDate) continue;
+    const key = `${row.cast_id}|${bizDate}`;
+    sums.set(key, (sums.get(key) ?? 0) + row.back_each * row.qty);
+  }
+  return sums;
+}
+
 // §25-4: その営業日の closed 伝票を再集計して ky_sales に upsert（entry_mode='auto'）
 async function autoUpsertSales(
   tenantId: string,

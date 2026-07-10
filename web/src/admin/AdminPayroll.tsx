@@ -72,7 +72,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
   const [rateNomination, setRateNomination] = useState(
     String(DEFAULT_PAYROLL_SETTINGS.nominationBackRate),
   );
-  const [rateDrink, setRateDrink] = useState(String(DEFAULT_PAYROLL_SETTINGS.drinkBackRate));
+  const [rateDefaultBack, setRateDefaultBack] = useState('0');
   const [rateLate, setRateLate] = useState(String(DEFAULT_PAYROLL_SETTINGS.lateDeduction));
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
@@ -82,7 +82,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
   const [editHours, setEditHours] = useState('0');
   const [editMinutes, setEditMinutes] = useState('0');
   const [editNominations, setEditNominations] = useState('0');
-  const [editDrinks, setEditDrinks] = useState('0');
+  const [editMenuBack, setEditMenuBack] = useState('0');
   const [editOther, setEditOther] = useState('0');
   const [editDeductions, setEditDeductions] = useState('0');
   const [editNote, setEditNote] = useState('');
@@ -93,15 +93,13 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
   const calcSettings: PayrollCalcSettings = useMemo(() => {
     const h = toNonNegativeInt(rateHourly);
     const n = toNonNegativeInt(rateNomination);
-    const d = toNonNegativeInt(rateDrink);
     const l = toNonNegativeInt(rateLate);
     return {
       baseHourlyRate: h ?? DEFAULT_PAYROLL_SETTINGS.baseHourlyRate,
       nominationBackRate: n ?? DEFAULT_PAYROLL_SETTINGS.nominationBackRate,
-      drinkBackRate: d ?? DEFAULT_PAYROLL_SETTINGS.drinkBackRate,
       lateDeduction: l ?? DEFAULT_PAYROLL_SETTINGS.lateDeduction,
     };
-  }, [rateHourly, rateNomination, rateDrink, rateLate]);
+  }, [rateHourly, rateNomination, rateLate]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,7 +131,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         if (cancelled || !row) return;
         setRateHourly(String(row.base_hourly_rate));
         setRateNomination(String(row.nomination_back_rate));
-        setRateDrink(String(row.drink_back_rate));
+        setRateDefaultBack(String(row.default_back_rate));
         setRateLate(String(row.late_deduction));
       })
       .catch((e) => {
@@ -174,10 +172,10 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
     if (settingsBusy) return;
     const h = toNonNegativeInt(rateHourly);
     const n = toNonNegativeInt(rateNomination);
-    const d = toNonNegativeInt(rateDrink);
+    const dbr = parseFloat(rateDefaultBack);
     const l = toNonNegativeInt(rateLate);
-    if (h === null || n === null || d === null || l === null) {
-      setSettingsMsg('レートは0以上の整数で入力してください。');
+    if (h === null || n === null || isNaN(dbr) || dbr < 0 || dbr > 100 || l === null) {
+      setSettingsMsg('数値を正しく入力してください（基本バック割合は0〜100%）。');
       return;
     }
     setSettingsBusy(true);
@@ -186,7 +184,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
       await savePayrollSettings(tenant.id, {
         baseHourlyRate: h,
         nominationBackRate: n,
-        drinkBackRate: d,
+        defaultBackRate: dbr,
         lateDeduction: l,
       });
       setSettingsMsg('給与設定を保存しました。');
@@ -234,7 +232,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
     setEditHours(String(hours));
     setEditMinutes(String(minutes));
     setEditNominations(String(row.nomination_count));
-    setEditDrinks(String(row.drink_count));
+    setEditMenuBack(String(row.menu_back));
     setEditOther(String(row.other_back));
     setEditDeductions(String(row.deductions));
     setEditNote(row.note);
@@ -247,7 +245,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
     const hours = toNonNegativeInt(editHours);
     const minutes = toNonNegativeInt(editMinutes);
     const nominationCount = toNonNegativeInt(editNominations);
-    const drinkCount = toNonNegativeInt(editDrinks);
+    const menuBack = toNonNegativeInt(editMenuBack);
     const otherBack = toNonNegativeInt(editOther);
     const deductions = toNonNegativeInt(editDeductions);
     if (
@@ -255,7 +253,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
       minutes === null ||
       minutes > 59 ||
       nominationCount === null ||
-      drinkCount === null ||
+      menuBack === null ||
       otherBack === null ||
       deductions === null
     ) {
@@ -263,15 +261,14 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
       return;
     }
     const minutesWorked = hours * 60 + minutes;
-    // §23と同式で基本給・バックを再計算（控除だけ手入力値を採用）
     const bd = calcPayroll(calcSettings, {
       minutesWorked,
       nominationCount,
-      drinkCount,
+      menuBack,
       otherBack,
       lateCount: 0,
     });
-    const totalPay = bd.basePay + bd.nominationBack + bd.drinkBack + otherBack - deductions;
+    const totalPay = bd.basePay + bd.nominationBack + bd.menuBack + otherBack - deductions;
     setEditBusy(true);
     setEditError(null);
     try {
@@ -280,8 +277,8 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         basePay: bd.basePay,
         nominationCount,
         nominationBack: bd.nominationBack,
-        drinkCount,
-        drinkBack: bd.drinkBack,
+        drinkCount: editing.drink_count,
+        menuBack: bd.menuBack,
         otherBack,
         deductions,
         totalPay,
@@ -327,7 +324,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         '総勤務時間',
         '基本給',
         '指名バック',
-        'ドリンクバック',
+        'メニューバック',
         'その他',
         '控除',
         '支給額',
@@ -335,7 +332,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
       ...perCast.map((agg) => {
         const basePay = agg.rows.reduce((s, p) => s + p.base_pay, 0);
         const nomBack = agg.rows.reduce((s, p) => s + p.nomination_back, 0);
-        const drinkBack = agg.rows.reduce((s, p) => s + p.drink_back, 0);
+        const menuBack = agg.rows.reduce((s, p) => s + p.menu_back, 0);
         const otherBack = agg.rows.reduce((s, p) => s + p.other_back, 0);
         const deductions = agg.rows.reduce((s, p) => s + p.deductions, 0);
         return [
@@ -345,7 +342,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
           fmtMinutes(agg.minutes),
           String(basePay),
           String(nomBack),
-          String(drinkBack),
+          String(menuBack),
           String(otherBack),
           String(deductions),
           String(agg.total),
@@ -409,14 +406,16 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
             />
           </div>
           <div className="admin-field">
-            <label htmlFor="rate-drink">ドリンクバック（円/杯）</label>
+            <label htmlFor="rate-default-back">基本バック割合（%）</label>
             <input
-              id="rate-drink"
+              id="rate-default-back"
               type="number"
               className="w-md"
               min={0}
-              value={rateDrink}
-              onChange={(e) => setRateDrink(e.target.value)}
+              max={100}
+              step="0.01"
+              value={rateDefaultBack}
+              onChange={(e) => setRateDefaultBack(e.target.value)}
             />
           </div>
           <div className="admin-field">
@@ -435,8 +434,8 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
           </button>
         </div>
         <p className="admin-note">
-          支給額 = 基本給（勤務時間×時給）+ 指名バック + ドリンクバック + その他 −
-          控除。レートは自動生成と明細編集の再計算に使われます（保存済みの明細は自動では変わりません）。
+          支給額 = 基本給（勤務時間×時給）+ 指名バック + メニューバック + その他 −
+          控除。基本バック割合はメニュー個別の設定が無い商品に適用されます。保存済みの明細は自動では変わりません。
         </p>
         {settingsMsg ? <p className="admin-note">{settingsMsg}</p> : null}
       </form>
@@ -500,14 +499,14 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
               />
             </div>
             <div className="admin-field">
-              <label htmlFor="edit-drinks">ドリンク数</label>
+              <label htmlFor="edit-menu-back">メニューバック（円）</label>
               <input
-                id="edit-drinks"
+                id="edit-menu-back"
                 type="number"
-                className="w-sm"
+                className="w-md"
                 min={0}
-                value={editDrinks}
-                onChange={(e) => setEditDrinks(e.target.value)}
+                value={editMenuBack}
+                onChange={(e) => setEditMenuBack(e.target.value)}
               />
             </div>
             <div className="admin-field">
@@ -577,7 +576,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
                 <th className="num">勤務時間</th>
                 <th className="num">基本給</th>
                 <th className="num">指名</th>
-                <th className="num">ドリンク</th>
+                <th className="num">メニューバック</th>
                 <th className="num">その他</th>
                 <th className="num">控除</th>
                 <th className="num">支給額</th>
@@ -595,9 +594,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
                   <td className="num">
                     {row.nomination_count}件 {yen(row.nomination_back)}
                   </td>
-                  <td className="num">
-                    {row.drink_count}杯 {yen(row.drink_back)}
-                  </td>
+                  <td className="num">{yen(row.menu_back)}</td>
                   <td className="num">{yen(row.other_back)}</td>
                   <td className="num">{yen(row.deductions)}</td>
                   <td className="num">

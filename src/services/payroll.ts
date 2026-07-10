@@ -6,7 +6,7 @@
 import { supabase } from '../config/supabase';
 import type { Attendance, CastPayroll, PayrollSettings } from '../types';
 import { calcMinutesWorked, calcPayroll, monthRange } from '../utils/payrollCalc';
-import { countCastDrinksByMonth } from './orders';
+import { countCastDrinksByMonth, sumMenuBackByMonth } from './orders';
 
 // ── 給与設定（店一律・テナントで1行） ──────────────────────────────
 
@@ -15,15 +15,14 @@ type PayrollSettingsRow = {
   tenant_id: string;
   base_hourly_rate: number;
   nomination_back_rate: number;
-  drink_back_rate: number;
+  default_back_rate: number;
   late_deduction: number;
 };
 
-/** migration 0009 の default と同じ値（設定未保存テナントの計算に使う）。 */
 export const DEFAULT_PAYROLL_SETTINGS: Omit<PayrollSettings, 'id' | 'tenantId'> = {
   baseHourlyRate: 1200,
   nominationBackRate: 300,
-  drinkBackRate: 100,
+  defaultBackRate: 0,
   lateDeduction: 0,
 };
 
@@ -33,7 +32,7 @@ function rowToSettings(row: PayrollSettingsRow): PayrollSettings {
     tenantId: row.tenant_id,
     baseHourlyRate: row.base_hourly_rate,
     nominationBackRate: row.nomination_back_rate,
-    drinkBackRate: row.drink_back_rate,
+    defaultBackRate: row.default_back_rate,
     lateDeduction: row.late_deduction,
   };
 }
@@ -52,11 +51,10 @@ export async function fetchPayrollSettings(tenantId: string): Promise<PayrollSet
 export type PayrollSettingsInput = {
   baseHourlyRate: number;
   nominationBackRate: number;
-  drinkBackRate: number;
+  defaultBackRate: number;
   lateDeduction: number;
 };
 
-/** 給与設定を upsert（unique(tenant_id)）。 */
 export async function savePayrollSettings(
   tenantId: string,
   input: PayrollSettingsInput,
@@ -66,7 +64,7 @@ export async function savePayrollSettings(
       tenant_id: tenantId,
       base_hourly_rate: input.baseHourlyRate,
       nomination_back_rate: input.nominationBackRate,
-      drink_back_rate: input.drinkBackRate,
+      default_back_rate: input.defaultBackRate,
       late_deduction: input.lateDeduction,
     },
     { onConflict: 'tenant_id' },
@@ -86,7 +84,7 @@ type CastPayrollRow = {
   nomination_count: number;
   nomination_back: number;
   drink_count: number;
-  drink_back: number;
+  menu_back: number;
   other_back: number;
   deductions: number;
   total_pay: number;
@@ -104,7 +102,7 @@ function rowToPayroll(row: CastPayrollRow): CastPayroll {
     nominationCount: row.nomination_count,
     nominationBack: row.nomination_back,
     drinkCount: row.drink_count,
-    drinkBack: row.drink_back,
+    menuBack: row.menu_back,
     otherBack: row.other_back,
     deductions: row.deductions,
     totalPay: row.total_pay,
@@ -135,7 +133,7 @@ export type PayrollUpsertInput = {
   nominationCount: number;
   nominationBack: number;
   drinkCount: number;
-  drinkBack: number;
+  menuBack: number;
   otherBack: number;
   deductions: number;
   totalPay: number;
@@ -159,7 +157,7 @@ export async function upsertPayroll(
       nomination_count: input.nominationCount,
       nomination_back: input.nominationBack,
       drink_count: input.drinkCount,
-      drink_back: input.drinkBack,
+      menu_back: input.menuBack,
       other_back: input.otherBack,
       deductions: input.deductions,
       total_pay: input.totalPay,
@@ -228,14 +226,15 @@ export async function generatePayrollFromAttendance(
   attendance: Attendance[],
   settings: Pick<
     PayrollSettings,
-    'baseHourlyRate' | 'nominationBackRate' | 'drinkBackRate' | 'lateDeduction'
+    'baseHourlyRate' | 'nominationBackRate' | 'lateDeduction'
   >,
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
   const existingKeys = new Set(existing.map((p) => `${p.castId}|${p.date}`));
-  const [nominations, castDrinks] = await Promise.all([
+  const [nominations, castDrinks, menuBacks] = await Promise.all([
     countNominationsByMonth(tenantId, yearMonth),
     countCastDrinksByMonth(tenantId, yearMonth),
+    sumMenuBackByMonth(tenantId, yearMonth),
   ]);
 
   const rows = attendance
@@ -245,10 +244,11 @@ export async function generatePayrollFromAttendance(
       const minutesWorked = calcMinutesWorked(a.checkInAt, a.checkOutAt);
       const nominationCount = nominations.get(`${a.castId}|${a.date}`) ?? 0;
       const drinkCount = castDrinks.get(`${a.castId}|${a.date}`) ?? 0;
+      const menuBack = menuBacks.get(`${a.castId}|${a.date}`) ?? 0;
       const breakdown = calcPayroll(settings, {
         minutesWorked,
         nominationCount,
-        drinkCount,
+        menuBack,
         otherBack: 0,
         lateCount: a.status === 'late' ? 1 : 0,
       });
@@ -261,7 +261,7 @@ export async function generatePayrollFromAttendance(
         nomination_count: nominationCount,
         nomination_back: breakdown.nominationBack,
         drink_count: drinkCount,
-        drink_back: breakdown.drinkBack,
+        menu_back: breakdown.menuBack,
         other_back: breakdown.otherBack,
         deductions: breakdown.deductions,
         total_pay: breakdown.totalPay,

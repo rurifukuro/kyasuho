@@ -293,10 +293,11 @@ export function RegisterScreen() {
     needsCast: boolean; sortOrder: number; isActive: boolean;
   }) => {
     if (!tenantId) return;
+    const withBack = { ...data, backRate: editingMenuItem?.backRate ?? null, backAmount: editingMenuItem?.backAmount ?? null };
     if (editingMenuItem) {
-      await menuItemsService.updateMenuItem(editingMenuItem.id, data);
+      await menuItemsService.updateMenuItem(editingMenuItem.id, withBack);
     } else {
-      await menuItemsService.createMenuItem(tenantId, data);
+      await menuItemsService.createMenuItem(tenantId, withBack);
     }
     await loadMenuItems();
   };

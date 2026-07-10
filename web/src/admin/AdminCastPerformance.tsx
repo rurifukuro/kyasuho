@@ -92,7 +92,7 @@ export function AdminCastPerformance({ tenant }: { tenant: KyTenant }) {
       }
       s.nominationCount += row.nomination_count;
       s.drinkCount += row.drink_count;
-      s.totalSales += row.base_pay + row.nomination_back + row.drink_back + row.other_back;
+      s.totalSales += row.base_pay + row.nomination_back + row.menu_back + row.other_back;
       s.totalPay += row.total_pay;
       s.daysWorked += 1;
     }

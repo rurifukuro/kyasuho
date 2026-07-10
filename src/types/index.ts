@@ -287,6 +287,8 @@ export type MenuItem = {
   needsCast: boolean;
   sortOrder: number;
   isActive: boolean;
+  backRate: number | null;
+  backAmount: number | null;
 };
 
 /** 伝票ステータス（§25-2）。 */
@@ -338,7 +340,7 @@ export type CastPayroll = {
   nominationCount: number;
   nominationBack: number;
   drinkCount: number;
-  drinkBack: number;
+  menuBack: number;
   otherBack: number;
   deductions: number;
   totalPay: number;
@@ -351,7 +353,7 @@ export type PayrollSettings = {
   tenantId: string;
   baseHourlyRate: number; // 円/時
   nominationBackRate: number; // 円/件
-  drinkBackRate: number; // 円/杯
+  defaultBackRate: number; // %（メニュー個別設定が無い商品に適用）
   lateDeduction: number; // 円/回（遅刻控除）
 };
 

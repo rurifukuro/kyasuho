@@ -351,7 +351,6 @@ export async function deleteAttendance(id: string): Promise<void> {
 export const DEFAULT_PAYROLL_SETTINGS: PayrollCalcSettings = {
   baseHourlyRate: 1200,
   nominationBackRate: 300,
-  drinkBackRate: 100,
   lateDeduction: 0,
 };
 
@@ -367,14 +366,14 @@ export async function fetchPayrollSettings(tenantId: string): Promise<KyPayrollS
 
 export async function savePayrollSettings(
   tenantId: string,
-  input: PayrollCalcSettings,
+  input: PayrollCalcSettings & { defaultBackRate: number },
 ): Promise<void> {
   const { error } = await supabase.from('ky_payroll_settings').upsert(
     {
       tenant_id: tenantId,
       base_hourly_rate: input.baseHourlyRate,
       nomination_back_rate: input.nominationBackRate,
-      drink_back_rate: input.drinkBackRate,
+      default_back_rate: input.defaultBackRate,
       late_deduction: input.lateDeduction,
     },
     { onConflict: 'tenant_id' },
@@ -409,7 +408,7 @@ export async function upsertPayroll(
     nominationCount: number;
     nominationBack: number;
     drinkCount: number;
-    drinkBack: number;
+    menuBack: number;
     otherBack: number;
     deductions: number;
     totalPay: number;
@@ -426,7 +425,7 @@ export async function upsertPayroll(
       nomination_count: input.nominationCount,
       nomination_back: input.nominationBack,
       drink_count: input.drinkCount,
-      drink_back: input.drinkBack,
+      menu_back: input.menuBack,
       other_back: input.otherBack,
       deductions: input.deductions,
       total_pay: input.totalPay,
@@ -492,8 +491,9 @@ export async function generatePayrollFromAttendance(
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
   const existingKeys = new Set(existing.map((p) => `${p.cast_id}|${p.date}`));
-  const [nominations, castDrinks] = await Promise.all([
+  const [nominations, menuBacks, castDrinks] = await Promise.all([
     countNominationsByMonth(tenantId, yearMonth),
+    sumMenuBackByMonth(tenantId, yearMonth),
     countCastDrinksByMonth(tenantId, yearMonth),
   ]);
 
@@ -503,11 +503,12 @@ export async function generatePayrollFromAttendance(
     .map((a) => {
       const minutesWorked = calcMinutesWorked(a.check_in_at, a.check_out_at);
       const nominationCount = nominations.get(`${a.cast_id}|${a.date}`) ?? 0;
+      const menuBack = menuBacks.get(`${a.cast_id}|${a.date}`) ?? 0;
       const drinkCount = castDrinks.get(`${a.cast_id}|${a.date}`) ?? 0;
       const breakdown = calcPayroll(settings, {
         minutesWorked,
         nominationCount,
-        drinkCount,
+        menuBack,
         otherBack: 0,
         lateCount: a.status === 'late' ? 1 : 0,
       });
@@ -520,7 +521,7 @@ export async function generatePayrollFromAttendance(
         nomination_count: nominationCount,
         nomination_back: breakdown.nominationBack,
         drink_count: drinkCount,
-        drink_back: breakdown.drinkBack,
+        menu_back: breakdown.menuBack,
         other_back: breakdown.otherBack,
         deductions: breakdown.deductions,
         total_pay: breakdown.totalPay,
@@ -695,6 +696,8 @@ export async function upsertMenuItem(
     needsCast: boolean;
     sortOrder: number;
     isActive: boolean;
+    backRate: number | null;
+    backAmount: number | null;
   },
 ): Promise<void> {
   const row = {
@@ -705,6 +708,8 @@ export async function upsertMenuItem(
     needs_cast: input.needsCast,
     sort_order: input.sortOrder,
     is_active: input.isActive,
+    back_rate: input.backRate,
+    back_amount: input.backAmount,
     ...(input.id ? { id: input.id } : {}),
   };
   const { error } = input.id
@@ -718,7 +723,44 @@ export async function deleteMenuItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** §25-5: 指定月のキャストドリンク数を「castId|date」→杯数 のマップで返す */
+/** §39: 指定月のキャスト別メニューバック合計を「castId|date」→円 のマップで返す */
+export async function sumMenuBackByMonth(
+  tenantId: string,
+  yearMonth: string,
+): Promise<Map<string, number>> {
+  const { from, toExclusive } = monthRange(yearMonth);
+  const { data: orders, error: ordErr } = await supabase
+    .from('ky_orders')
+    .select('id, biz_date')
+    .eq('tenant_id', tenantId)
+    .gte('biz_date', from)
+    .lt('biz_date', toExclusive)
+    .eq('status', 'closed');
+  if (ordErr) throw ordErr;
+  if (!orders || orders.length === 0) return new Map();
+
+  const orderIds = (orders as { id: string; biz_date: string }[]).map((o) => o.id);
+  const dateById = new Map((orders as { id: string; biz_date: string }[]).map((o) => [o.id, o.biz_date]));
+
+  const { data: items, error: itemErr } = await supabase
+    .from('ky_order_items')
+    .select('order_id, cast_id, qty, back_each')
+    .in('order_id', orderIds)
+    .not('cast_id', 'is', null)
+    .not('back_each', 'is', null);
+  if (itemErr) throw itemErr;
+
+  const sums = new Map<string, number>();
+  for (const row of (items ?? []) as { order_id: string; cast_id: string; qty: number; back_each: number }[]) {
+    const bizDate = dateById.get(row.order_id);
+    if (!bizDate) continue;
+    const key = `${row.cast_id}|${bizDate}`;
+    sums.set(key, (sums.get(key) ?? 0) + row.back_each * row.qty);
+  }
+  return sums;
+}
+
+/** §25-5: 指定月のキャストドリンク数を「castId|date」→杯数 のマップで返す（表示用） */
 export async function countCastDrinksByMonth(
   tenantId: string,
   yearMonth: string,

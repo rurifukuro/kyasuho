@@ -1,4 +1,4 @@
-// src/utils/payrollCalc.ts — 給与計算の純関数（SPEC §23）
+// src/utils/payrollCalc.ts — 給与計算の純関数（SPEC §23・§39改訂）
 //
 // アプリ・管理Webで同一の計算式を使う（§24連携仕様）。ここは React / Supabase に依存しない
 // 純関数だけを置く＝Web側（kyasuho/web）へそのままコピーして共有できる形を保つ。
@@ -32,47 +32,46 @@ export function calcMinutesWorked(checkInAt: string | null, checkOutAt: string |
 
 /** 給与計算の入力（1キャスト×1日）。 */
 export type PayrollInput = {
-  minutesWorked: number; // 分
-  nominationCount: number; // 指名数（件）
-  drinkCount: number; // ドリンク数（杯）
-  otherBack: number; // その他バック（円・手入力）
-  lateCount: number; // 遅刻回数（0 or 1・ky_attendance.status=late と連動）
+  minutesWorked: number;
+  nominationCount: number;
+  menuBack: number; // §39: Σ(back_each×qty) or 手入力額
+  otherBack: number;
+  lateCount: number;
 };
 
 /** 給与計算の結果（金額内訳）。 */
 export type PayrollBreakdown = {
   basePay: number;
   nominationBack: number;
-  drinkBack: number;
+  menuBack: number;
   otherBack: number;
   deductions: number;
   totalPay: number;
 };
 
 /**
- * §23 の計算式:
+ * §23 の計算式（§39改訂）:
  *   base_pay        = minutes_worked × base_hourly_rate ÷ 60（円未満切り捨て）
  *   nomination_back = 指名数 × nomination_back_rate
- *   drink_back      = ドリンク数 × drink_back_rate
+ *   menu_back       = 入力値そのまま（close_order時にサーバーが解決済み or 手入力）
  *   deductions      = 遅刻回数 × late_deduction
- *   total_pay       = base_pay + nomination_back + drink_back + other_back − deductions
+ *   total_pay       = base_pay + nomination_back + menu_back + other_back − deductions
  */
 export function calcPayroll(
   settings: Pick<
     PayrollSettings,
-    'baseHourlyRate' | 'nominationBackRate' | 'drinkBackRate' | 'lateDeduction'
+    'baseHourlyRate' | 'nominationBackRate' | 'lateDeduction'
   >,
   input: PayrollInput,
 ): PayrollBreakdown {
   const basePay = Math.floor((input.minutesWorked * settings.baseHourlyRate) / 60);
   const nominationBack = input.nominationCount * settings.nominationBackRate;
-  const drinkBack = input.drinkCount * settings.drinkBackRate;
   const deductions = input.lateCount * settings.lateDeduction;
-  const totalPay = basePay + nominationBack + drinkBack + input.otherBack - deductions;
+  const totalPay = basePay + nominationBack + input.menuBack + input.otherBack - deductions;
   return {
     basePay,
     nominationBack,
-    drinkBack,
+    menuBack: input.menuBack,
     otherBack: input.otherBack,
     deductions,
     totalPay,

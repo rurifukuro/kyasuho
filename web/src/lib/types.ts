@@ -149,6 +149,8 @@ export interface KyMenuItem {
   needs_cast: boolean;
   sort_order: number;
   is_active: boolean;
+  back_rate: number | null;
+  back_amount: number | null;
 }
 
 /** 伝票ステータス（§25-2）。 */
@@ -187,6 +189,7 @@ export interface KyOrderItem {
   price: number;
   qty: number;
   cast_id: string | null;
+  back_each: number | null;
 }
 
 export type KyAttendanceStatus = 'present' | 'late' | 'early_leave' | 'absent' | 'substitute';
@@ -215,7 +218,7 @@ export interface KyPayrollSettings {
   tenant_id: string;
   base_hourly_rate: number;
   nomination_back_rate: number;
-  drink_back_rate: number;
+  default_back_rate: number;
   late_deduction: number;
 }
 
@@ -230,7 +233,7 @@ export interface KyCastPayroll {
   nomination_count: number;
   nomination_back: number;
   drink_count: number;
-  drink_back: number;
+  menu_back: number;
   other_back: number;
   deductions: number;
   total_pay: number;

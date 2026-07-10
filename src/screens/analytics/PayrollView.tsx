@@ -28,7 +28,7 @@ import type { Cast, CastPayroll, PayrollSettings, ThemeColor } from '../../types
 
 type EffectiveSettings = Pick<
   PayrollSettings,
-  'baseHourlyRate' | 'nominationBackRate' | 'drinkBackRate' | 'lateDeduction'
+  'baseHourlyRate' | 'nominationBackRate' | 'defaultBackRate' | 'lateDeduction'
 >;
 
 export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
@@ -139,7 +139,7 @@ export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps)
       ...perCast.map((agg) => {
         const basePay = agg.rows.reduce((s, p) => s + p.basePay, 0);
         const nomBack = agg.rows.reduce((s, p) => s + p.nominationBack, 0);
-        const drinkBack = agg.rows.reduce((s, p) => s + p.drinkBack, 0);
+        const menuBack = agg.rows.reduce((s, p) => s + p.menuBack, 0);
         const otherBack = agg.rows.reduce((s, p) => s + p.otherBack, 0);
         const deductions = agg.rows.reduce((s, p) => s + p.deductions, 0);
         const { hours, minutes } = splitMinutes(agg.minutes);
@@ -150,7 +150,7 @@ export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps)
           `${hours}:${pad2(minutes)}`,
           String(basePay),
           String(nomBack),
-          String(drinkBack),
+          String(menuBack),
           String(otherBack),
           String(deductions),
           String(agg.total),
@@ -188,7 +188,7 @@ export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps)
           <View style={pv.settingsGrid}>
             <SettingCell label={t('payroll.baseHourlyRate')} value={formatYen(effectiveSettings.baseHourlyRate)} theme={theme} />
             <SettingCell label={t('payroll.nominationBackRate')} value={formatYen(effectiveSettings.nominationBackRate)} theme={theme} />
-            <SettingCell label={t('payroll.drinkBackRate')} value={formatYen(effectiveSettings.drinkBackRate)} theme={theme} />
+            <SettingCell label={t('payroll.defaultBackRate')} value={`${effectiveSettings.defaultBackRate}%`} theme={theme} />
             <SettingCell label={t('payroll.lateDeduction')} value={formatYen(effectiveSettings.lateDeduction)} theme={theme} />
           </View>
         </View>
@@ -348,7 +348,7 @@ function PayrollSettingsModal({
 }) {
   const [baseRate, setBaseRate] = useState(String(current.baseHourlyRate));
   const [nomRate, setNomRate] = useState(String(current.nominationBackRate));
-  const [drinkRate, setDrinkRate] = useState(String(current.drinkBackRate));
+  const [defaultBackRate, setDefaultBackRate] = useState(String(current.defaultBackRate));
   const [lateDeduction, setLateDeduction] = useState(String(current.lateDeduction));
   const [saving, setSaving] = useState(false);
 
@@ -358,7 +358,7 @@ function PayrollSettingsModal({
       await payrollService.savePayrollSettings(tenantId, {
         baseHourlyRate: parseNum(baseRate),
         nominationBackRate: parseNum(nomRate),
-        drinkBackRate: parseNum(drinkRate),
+        defaultBackRate: parseFloat(defaultBackRate) || 0,
         lateDeduction: parseNum(lateDeduction),
       });
       onSaved();
@@ -367,7 +367,7 @@ function PayrollSettingsModal({
     } finally {
       setSaving(false);
     }
-  }, [tenantId, baseRate, nomRate, drinkRate, lateDeduction, t, onSaved]);
+  }, [tenantId, baseRate, nomRate, defaultBackRate, lateDeduction, t, onSaved]);
 
   return (
     <FormModalShell visible={visible} onRequestClose={onClose} theme={theme}>
@@ -383,7 +383,7 @@ function PayrollSettingsModal({
 
         <NumberField label={t('payroll.baseHourlyRate')} value={baseRate} onChange={setBaseRate} theme={theme} />
         <NumberField label={t('payroll.nominationBackRate')} value={nomRate} onChange={setNomRate} theme={theme} />
-        <NumberField label={t('payroll.drinkBackRate')} value={drinkRate} onChange={setDrinkRate} theme={theme} />
+        <NumberField label={t('payroll.defaultBackRate')} value={defaultBackRate} onChange={setDefaultBackRate} theme={theme} />
         <NumberField label={t('payroll.lateDeduction')} value={lateDeduction} onChange={setLateDeduction} theme={theme} />
 
         <TouchableOpacity
@@ -427,7 +427,7 @@ function PayrollEditModal({
   const [workHours, setWorkHours] = useState(String(initial.hours));
   const [workMinutes, setWorkMinutes] = useState(String(initial.minutes));
   const [nominationCount, setNominationCount] = useState(String(payroll.nominationCount));
-  const [drinkCount, setDrinkCount] = useState(String(payroll.drinkCount));
+  const [menuBack, setMenuBack] = useState(String(payroll.menuBack));
   const [otherBack, setOtherBack] = useState(String(payroll.otherBack));
   const [deductions, setDeductions] = useState(String(payroll.deductions));
   const [note, setNote] = useState(payroll.note);
@@ -439,7 +439,7 @@ function PayrollEditModal({
     const bd = calcPayroll(settings, {
       minutesWorked,
       nominationCount: parseNum(nominationCount),
-      drinkCount: parseNum(drinkCount),
+      menuBack: parseNum(menuBack),
       otherBack: parseNum(otherBack),
       lateCount: 0,
     });
@@ -448,12 +448,12 @@ function PayrollEditModal({
       minutesWorked,
       basePay: bd.basePay,
       nominationBack: bd.nominationBack,
-      drinkBack: bd.drinkBack,
+      menuBack: bd.menuBack,
       otherBack: bd.otherBack,
       deductions: ded,
-      totalPay: bd.basePay + bd.nominationBack + bd.drinkBack + bd.otherBack - ded,
+      totalPay: bd.basePay + bd.nominationBack + bd.menuBack + bd.otherBack - ded,
     };
-  }, [workHours, workMinutes, nominationCount, drinkCount, otherBack, deductions, settings]);
+  }, [workHours, workMinutes, nominationCount, menuBack, otherBack, deductions, settings]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -463,8 +463,8 @@ function PayrollEditModal({
         basePay: preview.basePay,
         nominationCount: parseNum(nominationCount),
         nominationBack: preview.nominationBack,
-        drinkCount: parseNum(drinkCount),
-        drinkBack: preview.drinkBack,
+        drinkCount: payroll.drinkCount,
+        menuBack: preview.menuBack,
         otherBack: preview.otherBack,
         deductions: preview.deductions,
         totalPay: preview.totalPay,
@@ -476,7 +476,7 @@ function PayrollEditModal({
     } finally {
       setSaving(false);
     }
-  }, [payroll, preview, nominationCount, drinkCount, note, t, onSaved]);
+  }, [payroll, preview, nominationCount, note, t, onSaved]);
 
   const handleDelete = useCallback(() => {
     Alert.alert(t('common.delete'), t('payroll.deleteConfirm'), [
@@ -532,7 +532,7 @@ function PayrollEditModal({
         </View>
 
         <NumberField label={t('payroll.nominationCount')} value={nominationCount} onChange={setNominationCount} theme={theme} />
-        <NumberField label={t('payroll.drinkCount')} value={drinkCount} onChange={setDrinkCount} theme={theme} />
+        <NumberField label={t('payroll.menuBack')} value={menuBack} onChange={setMenuBack} theme={theme} />
         <NumberField label={t('payroll.otherBack')} value={otherBack} onChange={setOtherBack} theme={theme} />
         <NumberField label={t('payroll.deductions')} value={deductions} onChange={setDeductions} theme={theme} />
 
@@ -551,7 +551,7 @@ function PayrollEditModal({
         <View style={[pv.previewCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <PreviewRow label={t('payroll.basePay')} value={formatYen(preview.basePay)} theme={theme} />
           <PreviewRow label={t('payroll.nominationBack')} value={formatYen(preview.nominationBack)} theme={theme} />
-          <PreviewRow label={t('payroll.drinkBack')} value={formatYen(preview.drinkBack)} theme={theme} />
+          <PreviewRow label={t('payroll.menuBack')} value={formatYen(preview.menuBack)} theme={theme} />
           <PreviewRow label={t('payroll.otherBack')} value={formatYen(preview.otherBack)} theme={theme} />
           <PreviewRow label={t('payroll.deductions')} value={`-${formatYen(preview.deductions)}`} theme={theme} />
           <View style={[pv.previewDivider, { backgroundColor: theme.border }]} />

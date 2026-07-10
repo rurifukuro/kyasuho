@@ -36,6 +36,8 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
   const [fNeedsCast, setFNeedsCast] = useState(false);
   const [fSortOrder, setFSortOrder] = useState('0');
   const [fIsActive, setFIsActive] = useState(true);
+  const [fBackType, setFBackType] = useState<'default' | 'rate' | 'amount'>('default');
+  const [fBackValue, setFBackValue] = useState('');
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -68,6 +70,16 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFNeedsCast(item.needs_cast);
       setFSortOrder(String(item.sort_order));
       setFIsActive(item.is_active);
+      if (item.back_amount != null) {
+        setFBackType('amount');
+        setFBackValue(String(item.back_amount));
+      } else if (item.back_rate != null) {
+        setFBackType('rate');
+        setFBackValue(String(item.back_rate));
+      } else {
+        setFBackType('default');
+        setFBackValue('');
+      }
     } else {
       setEditId(null);
       setFCategory('drink');
@@ -76,6 +88,8 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFNeedsCast(false);
       setFSortOrder('0');
       setFIsActive(true);
+      setFBackType('default');
+      setFBackValue('');
     }
     setFormError(null);
     setFormOpen(true);
@@ -99,6 +113,23 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFormError('表示順は0以上の整数で入力してください。');
       return;
     }
+    let backRate: number | null = null;
+    let backAmount: number | null = null;
+    if (fBackType === 'rate') {
+      const v = parseFloat(fBackValue);
+      if (isNaN(v) || v < 0 || v > 100) {
+        setFormError('バック割合は0〜100の数値で入力してください。');
+        return;
+      }
+      backRate = v;
+    } else if (fBackType === 'amount') {
+      const v = Number(fBackValue);
+      if (!Number.isInteger(v) || v < 0) {
+        setFormError('バック固定額は0以上の整数で入力してください。');
+        return;
+      }
+      backAmount = v;
+    }
     setFormBusy(true);
     setFormError(null);
     try {
@@ -110,6 +141,8 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
         needsCast: fNeedsCast,
         sortOrder,
         isActive: fIsActive,
+        backRate,
+        backAmount,
       });
       setFormOpen(false);
       await load();
@@ -191,6 +224,36 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
               有効
             </label>
           </div>
+          <div className="admin-form-row" style={{ marginTop: 8 }}>
+            <div className="admin-field">
+              <label>キャストバック</label>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {([['default', '基本割合'], ['rate', '割合%'], ['amount', '固定円']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    className={`admin-btn${fBackType === val ? ' primary' : ''}`}
+                    style={{ fontSize: 13, padding: '4px 10px' }}
+                    onClick={() => { setFBackType(val); setFBackValue(''); }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {fBackType === 'rate' && (
+              <div className="admin-field">
+                <label htmlFor="menu-back-rate">割合（%）</label>
+                <input id="menu-back-rate" type="number" className="w-sm" min={0} max={100} step={0.01} value={fBackValue} onChange={(e) => setFBackValue(e.target.value)} required />
+              </div>
+            )}
+            {fBackType === 'amount' && (
+              <div className="admin-field">
+                <label htmlFor="menu-back-amount">固定額（円）</label>
+                <input id="menu-back-amount" type="number" className="w-sm" min={0} step={1} value={fBackValue} onChange={(e) => setFBackValue(e.target.value)} required />
+              </div>
+            )}
+          </div>
           <div className="admin-btn-row" style={{ marginTop: 12 }}>
             <button type="submit" className="admin-btn primary" disabled={formBusy}>
               {formBusy ? '保存中…' : '保存'}
@@ -222,6 +285,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
                 <th>品名</th>
                 <th className="num">価格</th>
                 <th>キャスト</th>
+                <th>バック</th>
                 <th>状態</th>
                 <th className="num">順序</th>
                 <th>操作</th>
@@ -234,6 +298,15 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
                   <td>{item.name}</td>
                   <td className="num">{yen(item.price)}</td>
                   <td>{item.needs_cast ? '要' : '—'}</td>
+                  <td>
+                    {item.back_amount != null ? (
+                      <span className="admin-badge blue">{yen(item.back_amount)}</span>
+                    ) : item.back_rate != null ? (
+                      <span className="admin-badge blue">{item.back_rate}%</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>基本</span>
+                    )}
+                  </td>
                   <td>
                     <span className={`admin-badge ${item.is_active ? 'green' : 'gray'}`}>
                       {item.is_active ? '有効' : '無効'}

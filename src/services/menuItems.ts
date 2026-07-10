@@ -12,6 +12,8 @@ type MenuItemRow = {
   needs_cast: boolean;
   sort_order: number;
   is_active: boolean;
+  back_rate: number | null;
+  back_amount: number | null;
 };
 
 function rowToMenuItem(row: MenuItemRow): MenuItem {
@@ -24,6 +26,8 @@ function rowToMenuItem(row: MenuItemRow): MenuItem {
     needsCast: row.needs_cast,
     sortOrder: row.sort_order,
     isActive: row.is_active,
+    backRate: row.back_rate,
+    backAmount: row.back_amount,
   };
 }
 
@@ -45,6 +49,8 @@ export type MenuItemInput = {
   needsCast: boolean;
   sortOrder: number;
   isActive: boolean;
+  backRate: number | null;
+  backAmount: number | null;
 };
 
 export async function createMenuItem(
@@ -61,6 +67,8 @@ export async function createMenuItem(
       needs_cast: input.needsCast,
       sort_order: input.sortOrder,
       is_active: input.isActive,
+      back_rate: input.backRate,
+      back_amount: input.backAmount,
     })
     .select()
     .single();
@@ -79,6 +87,8 @@ export async function updateMenuItem(
   if (input.needsCast !== undefined) updates.needs_cast = input.needsCast;
   if (input.sortOrder !== undefined) updates.sort_order = input.sortOrder;
   if (input.isActive !== undefined) updates.is_active = input.isActive;
+  if (input.backRate !== undefined) updates.back_rate = input.backRate;
+  if (input.backAmount !== undefined) updates.back_amount = input.backAmount;
   const { error } = await supabase
     .from('ky_menu_items')
     .update(updates)

@@ -28,7 +28,7 @@ type PayrollRow = {
   nomination_count: number;
   nomination_back: number;
   drink_count: number;
-  drink_back: number;
+  menu_back: number;
   other_back: number;
   deductions: number;
 };
@@ -197,7 +197,7 @@ export function CastHomeScreen() {
       const monthEnd = payrollMonth + '-31';
       const { data } = await supabase
         .from('ky_cast_payroll')
-        .select('date, total_pay, minutes_worked, base_pay, nomination_count, nomination_back, drink_count, drink_back, other_back, deductions')
+        .select('date, total_pay, minutes_worked, base_pay, nomination_count, nomination_back, drink_count, menu_back, other_back, deductions')
         .eq('cast_id', castId)
         .gte('date', monthStart)
         .lte('date', monthEnd)
@@ -566,7 +566,7 @@ export function CastHomeScreen() {
                             <PayrollDetailLine label={t('payroll.workTime')} value={minutesToHM(p.minutes_worked)} theme={theme} />
                             <PayrollDetailLine label={t('payroll.basePay')} value={`¥${p.base_pay.toLocaleString()}`} theme={theme} />
                             <PayrollDetailLine label={t('payroll.nominationBack')} value={`${p.nomination_count}件 ¥${p.nomination_back.toLocaleString()}`} theme={theme} />
-                            <PayrollDetailLine label={t('payroll.drinkBack')} value={`${p.drink_count}杯 ¥${p.drink_back.toLocaleString()}`} theme={theme} />
+                            <PayrollDetailLine label={t('payroll.menuBack')} value={`¥${p.menu_back.toLocaleString()}`} theme={theme} />
                             {p.other_back > 0 && (
                               <PayrollDetailLine label={t('payroll.otherBack')} value={`¥${p.other_back.toLocaleString()}`} theme={theme} />
                             )}
