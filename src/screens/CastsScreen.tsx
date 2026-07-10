@@ -23,11 +23,12 @@ import * as Clipboard from 'expo-clipboard';
 import * as castService from '../services/casts';
 import * as inviteService from '../services/castInvites';
 import * as profileService from '../services/castProfile';
+import * as shiftReqService from '../services/shiftRequests';
 import { pickAndUploadShopPhoto } from '../services/castPhotos';
 import { fetchPayrollSettings, DEFAULT_PAYROLL_SETTINGS } from '../services/payroll';
 import { calcMinutesWorked } from '../utils/payrollCalc';
 import { guardFields } from '../utils/contentGuard';
-import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, PayrollSettings, ThemeColor } from '../types';
+import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, PayrollSettings, ShiftRequest, ShiftSubmission, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
 type TFunc = (key: TKey, params?: Record<string, string>) => string;
@@ -74,6 +75,7 @@ export function CastsScreen() {
   const [editingCast, setEditingCast] = useState<Cast | null>(null);
   const [detailCast, setDetailCast] = useState<Cast | null>(null);
   const [shiftImageVisible, setShiftImageVisible] = useState(false);
+  const [shiftRequestsVisible, setShiftRequestsVisible] = useState(false);
 
   const loadCasts = useCallback(async () => {
     if (!tenant) return;
@@ -132,6 +134,19 @@ export function CastsScreen() {
     );
   }
 
+  if (shiftRequestsVisible) {
+    return (
+      <ShiftRequestsView
+        tenant={tenant}
+        casts={casts}
+        theme={theme}
+        t={t}
+        insets={insets}
+        onBack={() => setShiftRequestsVisible(false)}
+      />
+    );
+  }
+
   if (shiftImageVisible) {
     return (
       <ShiftImageScreen
@@ -168,6 +183,16 @@ export function CastsScreen() {
           {t('cast.count', { count: String(casts.length) })}
         </Text>
         <View style={s.headerSpacer} />
+        <TouchableOpacity
+          style={[s.shiftImageBtn, { backgroundColor: theme.primary + '15' }]}
+          onPress={() => setShiftRequestsVisible(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <MaterialCommunityIcons name="calendar-clock" size={16} color={theme.primary} />
+          <Text style={[s.shiftImageBtnText, { color: theme.primary }]}>
+            {t('shiftRequest.title')}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[s.shiftImageBtn, { backgroundColor: theme.primary + '15' }]}
           onPress={() => setShiftImageVisible(true)}
@@ -1392,4 +1417,233 @@ const s = StyleSheet.create({
   historyPosition: { fontSize: 12, marginTop: 2 },
   historyPeriod: { fontSize: 11, marginTop: 2 },
   historyNotes: { fontSize: 12, marginTop: 4 },
+});
+
+// ── シフト希望受信箱＋提出状況 ──
+
+function getNextMonthPeriod(): { start: string; end: string; label: string } {
+  const now = new Date();
+  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+  const m = now.getMonth() === 11 ? 0 : now.getMonth() + 1;
+  const start = `${y}-${pad2(m + 1)}-01`;
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const end = `${y}-${pad2(m + 1)}-${pad2(lastDay)}`;
+  const label = `${y}年${m + 1}月`;
+  return { start, end, label };
+}
+
+function ShiftRequestsView({
+  tenant,
+  casts,
+  theme,
+  t,
+  insets,
+  onBack,
+}: {
+  tenant: { id: string; name: string };
+  casts: Cast[];
+  theme: ThemeColor;
+  t: TFunc;
+  insets: { top: number; bottom: number };
+  onBack: () => void;
+}) {
+  const [requests, setRequests] = useState<ShiftRequest[]>([]);
+  const [submissions, setSubmissions] = useState<ShiftSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const period = React.useMemo(() => getNextMonthPeriod(), []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [reqs, subs] = await Promise.all([
+        shiftReqService.fetchTenantShiftRequests(tenant.id, period.start, period.end),
+        shiftReqService.fetchTenantSubmissions(tenant.id, period.start),
+      ]);
+      setRequests(reqs);
+      setSubmissions(subs);
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant.id, period.start, period.end]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleApprove = useCallback(async (req: ShiftRequest) => {
+    const castName = casts.find((c) => c.id === req.castId)?.name ?? '';
+    Alert.alert(
+      t('shiftRequest.approve'),
+      `${castName} ${req.date} ${req.startAt}-${req.endAt}\n${t('shiftRequest.approveConfirm')}`,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('shiftRequest.approve'),
+          onPress: async () => {
+            try {
+              await shiftReqService.approveShiftRequest(req.id, tenant.id);
+              await load();
+            } catch {
+              Alert.alert(t('common.error'));
+            }
+          },
+        },
+      ],
+    );
+  }, [casts, tenant.id, load, t]);
+
+  const handleReject = useCallback(async (req: ShiftRequest) => {
+    try {
+      await shiftReqService.rejectShiftRequest(req.id);
+      await load();
+    } catch {
+      Alert.alert(t('common.error'));
+    }
+  }, [load, t]);
+
+  const castNameMap = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of casts) m.set(c.id, c.name);
+    return m;
+  }, [casts]);
+
+  const submittedCastIds = React.useMemo(
+    () => new Set(submissions.map((s) => s.castId)),
+    [submissions],
+  );
+
+  const pendingRequests = requests.filter((r) => r.status === 'requested');
+  const processedRequests = requests.filter((r) => r.status !== 'requested');
+
+  return (
+    <View style={[s.root, { backgroundColor: theme.background, paddingTop: insets.top }]}>
+      <View style={[srSt.headerBar, { borderBottomColor: theme.border }]}>
+        <TouchableOpacity onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <MaterialCommunityIcons name="arrow-left" size={24} color={theme.text} />
+        </TouchableOpacity>
+        <Text style={[srSt.headerTitle, { color: theme.text }]}>
+          {t('shiftRequest.title')} — {period.label}
+        </Text>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator color={theme.primary} style={s.spinner} />
+      ) : (
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
+          {/* 提出状況 */}
+          <Text style={[srSt.sectionTitle, { color: theme.text }]}>{t('shiftRequest.submissionStatus')}</Text>
+          <View style={[srSt.statusCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            {casts.map((c) => {
+              const isSubmitted = submittedCastIds.has(c.id);
+              const isLinked = !!c.userId;
+              let badge: string;
+              let badgeColor: string;
+              if (!isLinked) {
+                badge = '⚠️ ' + t('shiftRequest.notLinked');
+                badgeColor = '#F59E0B';
+              } else if (isSubmitted) {
+                badge = '✅ ' + t('shiftRequest.submitted');
+                badgeColor = '#22C55E';
+              } else {
+                badge = '❌ ' + t('shiftRequest.notSubmitted');
+                badgeColor = '#D7263D';
+              }
+              return (
+                <View key={c.id} style={[srSt.statusRow, { borderBottomColor: theme.border }]}>
+                  <Text style={[srSt.statusName, { color: theme.text }]}>{c.name}</Text>
+                  <Text style={[srSt.statusBadge, { color: badgeColor }]}>{badge}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* 未処理の希望 */}
+          <Text style={[srSt.sectionTitle, { color: theme.text, marginTop: 20 }]}>
+            {t('shiftRequest.statusRequested')} ({pendingRequests.length})
+          </Text>
+          {pendingRequests.length === 0 ? (
+            <Text style={[srSt.emptyText, { color: theme.subtext }]}>{t('shiftRequest.noRequests')}</Text>
+          ) : (
+            pendingRequests.map((req) => (
+              <View key={req.id} style={[srSt.reqCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                <View style={srSt.reqInfo}>
+                  <Text style={[srSt.reqCast, { color: theme.text }]}>
+                    {castNameMap.get(req.castId) ?? '?'}
+                  </Text>
+                  <Text style={[srSt.reqDate, { color: theme.subtext }]}>
+                    {req.date} {req.startAt}-{req.endAt}
+                  </Text>
+                  <Text style={[srSt.reqBadge, { color: req.timeSource === 'custom' ? theme.primary : theme.subtext }]}>
+                    {req.timeSource === 'custom' ? t('shiftRequest.customTime') : t('shiftRequest.defaultTime')}
+                  </Text>
+                </View>
+                <View style={srSt.reqActions}>
+                  <TouchableOpacity
+                    style={[srSt.actionBtn, { backgroundColor: '#22C55E' }]}
+                    onPress={() => handleApprove(req)}
+                  >
+                    <MaterialCommunityIcons name="check" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[srSt.actionBtn, { backgroundColor: '#D7263D' }]}
+                    onPress={() => handleReject(req)}
+                  >
+                    <MaterialCommunityIcons name="close" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+
+          {/* 処理済みの希望 */}
+          {processedRequests.length > 0 && (
+            <>
+              <Text style={[srSt.sectionTitle, { color: theme.text, marginTop: 20 }]}>
+                {t('shiftRequest.statusApproved')} / {t('shiftRequest.statusRejected')} ({processedRequests.length})
+              </Text>
+              {processedRequests.map((req) => (
+                <View key={req.id} style={[srSt.reqCard, { backgroundColor: theme.card, borderColor: theme.border, opacity: 0.7 }]}>
+                  <View style={srSt.reqInfo}>
+                    <Text style={[srSt.reqCast, { color: theme.text }]}>
+                      {castNameMap.get(req.castId) ?? '?'}
+                    </Text>
+                    <Text style={[srSt.reqDate, { color: theme.subtext }]}>
+                      {req.date} {req.startAt}-{req.endAt}
+                    </Text>
+                  </View>
+                  <Text style={[srSt.processedBadge, {
+                    color: req.status === 'approved' ? '#22C55E' : '#D7263D',
+                  }]}>
+                    {req.status === 'approved' ? t('shiftRequest.statusApproved') : t('shiftRequest.statusRejected')}
+                  </Text>
+                </View>
+              ))}
+            </>
+          )}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const srSt = StyleSheet.create({
+  headerBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  statusCard: { borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  statusName: { fontSize: 14, fontWeight: '600' },
+  statusBadge: { fontSize: 13, fontWeight: '600' },
+  emptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 16 },
+  reqCard: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8, gap: 10 },
+  reqInfo: { flex: 1 },
+  reqCast: { fontSize: 15, fontWeight: '700' },
+  reqDate: { fontSize: 13, marginTop: 2 },
+  reqBadge: { fontSize: 11, marginTop: 2 },
+  reqActions: { flexDirection: 'row', gap: 8 },
+  actionBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  processedBadge: { fontSize: 13, fontWeight: '700' },
 });

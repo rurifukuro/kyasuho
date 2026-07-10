@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,9 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import { CastPersonalInfoScreen } from './CastPersonalInfoScreen';
+import { ShiftTimeEditModal } from '../components/ShiftTimeEditModal';
+import * as shiftReqService from '../services/shiftRequests';
+import type { ShiftRequest, CastShiftDefault } from '../types';
 
 type ShiftRow = { id: string; date: string; start_at: string; end_at: string };
 type PayrollRow = {
@@ -51,6 +54,38 @@ function minutesToHM(min: number): string {
   return `${h}:${pad2(m)}`;
 }
 
+function getNextMonthPeriod(): { start: string; end: string; label: string } {
+  const now = new Date();
+  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+  const m = now.getMonth() === 11 ? 0 : now.getMonth() + 1;
+  const start = `${y}-${pad2(m + 1)}-01`;
+  const lastDay = new Date(y, m + 1, 0).getDate();
+  const end = `${y}-${pad2(m + 1)}-${pad2(lastDay)}`;
+  const label = `${y}年${m + 1}月`;
+  return { start, end, label };
+}
+
+type CalendarDay = { date: string; dayNum: number; dow: number; inPeriod: boolean };
+
+function buildCalendarGrid(periodStart: string, periodEnd: string): CalendarDay[] {
+  const [sy, sm] = periodStart.split('-').map(Number);
+  const firstOfMonth = new Date(sy, sm - 1, 1);
+  const startDow = firstOfMonth.getDay();
+  const [, , ed] = periodEnd.split('-').map(Number);
+  const days: CalendarDay[] = [];
+  for (let i = 0; i < startDow; i++) {
+    days.push({ date: '', dayNum: 0, dow: i, inPeriod: false });
+  }
+  for (let d = 1; d <= ed; d++) {
+    const dateStr = `${sy}-${pad2(sm)}-${pad2(d)}`;
+    const dow = (startDow + d - 1) % 7;
+    days.push({ date: dateStr, dayNum: d, dow, inPeriod: true });
+  }
+  return days;
+}
+
+const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+
 export function CastHomeScreen() {
   const { theme } = useTheme();
   const { t } = useLanguage();
@@ -69,7 +104,22 @@ export function CastHomeScreen() {
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [showPersonalInfo, setShowPersonalInfo] = useState(false);
 
+  const [shiftDefaults, setShiftDefaults] = useState<CastShiftDefault | null>(null);
+  const [defaultStart, setDefaultStart] = useState('18:00');
+  const [defaultEnd, setDefaultEnd] = useState('23:00');
+  const [defaultSaving, setDefaultSaving] = useState(false);
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
+  const [customTimes, setCustomTimes] = useState<Map<string, { start: string; end: string }>>(new Map());
+  const [existingRequests, setExistingRequests] = useState<ShiftRequest[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
   const castId = roleResult?.role === 'cast' ? roleResult.castId : null;
+  const tenantId = roleResult?.role === 'cast' ? roleResult.tenantId : null;
+
+  const period = useMemo(() => getNextMonthPeriod(), []);
+  const calendarDays = useMemo(() => buildCalendarGrid(period.start, period.end), [period]);
 
   useEffect(() => {
     if (!castId) return;
@@ -103,6 +153,42 @@ export function CastHomeScreen() {
     return () => { active = false; };
   }, [castId]);
 
+  useEffect(() => {
+    if (!castId || !tenantId) return;
+    let active = true;
+    (async () => {
+      try {
+        const [defaults, requests, submission] = await Promise.all([
+          shiftReqService.fetchShiftDefaults(tenantId, castId),
+          shiftReqService.fetchShiftRequests(castId, period.start, period.end),
+          shiftReqService.fetchSubmission(castId, period.start),
+        ]);
+        if (!active) return;
+        if (defaults) {
+          setShiftDefaults(defaults);
+          setDefaultStart(defaults.startAt);
+          setDefaultEnd(defaults.endAt);
+        }
+        setExistingRequests(requests);
+        setSubmitted(!!submission);
+
+        const sel = new Set<string>();
+        const cust = new Map<string, { start: string; end: string }>();
+        for (const r of requests) {
+          sel.add(r.date);
+          if (r.timeSource === 'custom') {
+            cust.set(r.date, { start: r.startAt, end: r.endAt });
+          }
+        }
+        setSelectedDays(sel);
+        setCustomTimes(cust);
+      } catch {
+        // silently fail
+      }
+    })();
+    return () => { active = false; };
+  }, [castId, tenantId, period.start, period.end]);
+
   const loadPayroll = useCallback(async () => {
     if (!castId) return;
     setPayrollLoading(true);
@@ -135,13 +221,125 @@ export function CastHomeScreen() {
     ]);
   }, [signOut, t]);
 
+  const handleSaveDefaults = useCallback(async () => {
+    if (!castId || !tenantId) return;
+    setDefaultSaving(true);
+    try {
+      await shiftReqService.upsertShiftDefaults(tenantId, castId, defaultStart, defaultEnd);
+      setShiftDefaults({ tenantId, castId, startAt: defaultStart, endAt: defaultEnd, updatedAt: '' });
+    } catch {
+      Alert.alert(t('common.error'));
+    } finally {
+      setDefaultSaving(false);
+    }
+  }, [castId, tenantId, defaultStart, defaultEnd, t]);
+
+  const handleDayToggle = useCallback((date: string) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) {
+        next.delete(date);
+        setCustomTimes((ct) => {
+          const n = new Map(ct);
+          n.delete(date);
+          return n;
+        });
+      } else {
+        next.add(date);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleEditTimeSave = useCallback((startAt: string, endAt: string) => {
+    if (!editingDate) return;
+    setCustomTimes((prev) => {
+      const n = new Map(prev);
+      n.set(editingDate, { start: startAt, end: endAt });
+      return n;
+    });
+    setEditingDate(null);
+  }, [editingDate]);
+
+  const handleResetToDefault = useCallback(() => {
+    if (!editingDate) return;
+    setCustomTimes((prev) => {
+      const n = new Map(prev);
+      n.delete(editingDate);
+      return n;
+    });
+    setEditingDate(null);
+  }, [editingDate]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!castId || !tenantId) return;
+    const approvedDates = new Set(
+      existingRequests.filter((r) => r.status === 'approved').map((r) => r.date),
+    );
+    const days = Array.from(selectedDays)
+      .filter((d) => !approvedDates.has(d))
+      .sort()
+      .map((d) => {
+        const custom = customTimes.get(d);
+        return {
+          date: d,
+          startAt: custom ? custom.start : defaultStart,
+          endAt: custom ? custom.end : defaultEnd,
+          timeSource: (custom ? 'custom' : 'default') as 'default' | 'custom',
+        };
+      });
+
+    const customCount = days.filter((d) => d.timeSource === 'custom').length;
+    const summary = t('shiftSubmit.confirmSummary', {
+      period: period.label,
+      days: String(days.length),
+      custom: String(customCount),
+    });
+
+    Alert.alert(t('shiftSubmit.confirmTitle'), summary, [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('shiftSubmit.submitBtn'),
+        onPress: async () => {
+          setSubmitting(true);
+          try {
+            await shiftReqService.submitShiftRequests(
+              tenantId, castId, period.start, period.end, days,
+            );
+            setSubmitted(true);
+            Alert.alert(t('shiftSubmit.submitDone'));
+          } catch {
+            Alert.alert(t('common.error'));
+          } finally {
+            setSubmitting(false);
+          }
+        },
+      },
+    ]);
+  }, [castId, tenantId, selectedDays, customTimes, defaultStart, defaultEnd, existingRequests, period, t]);
+
   const totalPay = payroll.reduce((sum, p) => sum + p.total_pay, 0);
   const totalMinutes = payroll.reduce((sum, p) => sum + p.minutes_worked, 0);
   const workedDays = payroll.length;
+  const hasDefaults = !!shiftDefaults;
+
+  const approvedDates = useMemo(
+    () => new Set(existingRequests.filter((r) => r.status === 'approved').map((r) => r.date)),
+    [existingRequests],
+  );
 
   if (showPersonalInfo) {
     return <CastPersonalInfoScreen onBack={() => setShowPersonalInfo(false)} />;
   }
+
+  const editTarget = editingDate
+    ? {
+        date: editingDate,
+        start: customTimes.get(editingDate)?.start ?? defaultStart,
+        end: customTimes.get(editingDate)?.end ?? defaultEnd,
+        isCustom: customTimes.has(editingDate),
+      }
+    : null;
 
   return (
     <View style={[st.root, { backgroundColor: theme.background }]}>
@@ -157,6 +355,147 @@ export function CastHomeScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
+            {/* シフト提出 */}
+            <View style={[st.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <Text style={[st.sectionTitle, { color: theme.text }]}>
+                {t('shiftSubmit.sectionTitle')} — {period.label}
+              </Text>
+              {submitted && (
+                <View style={[st.badge, { backgroundColor: theme.primary + '20' }]}>
+                  <MaterialCommunityIcons name="check-circle" size={16} color={theme.primary} />
+                  <Text style={[st.badgeText, { color: theme.primary }]}>
+                    {t('shiftSubmit.alreadySubmitted')}
+                  </Text>
+                </View>
+              )}
+
+              {/* 基本出勤時間 */}
+              <View style={[st.defaultCard, { borderColor: theme.border }]}>
+                <Text style={[st.defaultLabel, { color: theme.text }]}>
+                  {t('shiftSubmit.defaultTimeLabel')}
+                </Text>
+                <Text style={[st.defaultHint, { color: theme.subtext }]}>
+                  {t('shiftSubmit.defaultTimeHint')}
+                </Text>
+                <View style={st.defaultRow}>
+                  <TimeStepperCompact
+                    label={t('shiftSubmit.startTime')}
+                    value={defaultStart}
+                    onChange={setDefaultStart}
+                    theme={theme}
+                  />
+                  <Text style={[st.timeSep, { color: theme.subtext }]}>〜</Text>
+                  <TimeStepperCompact
+                    label={t('shiftSubmit.endTime')}
+                    value={defaultEnd}
+                    onChange={setDefaultEnd}
+                    theme={theme}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[st.defaultSaveBtn, { backgroundColor: theme.primary }]}
+                  onPress={handleSaveDefaults}
+                  disabled={defaultSaving}
+                >
+                  {defaultSaving ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={st.defaultSaveBtnText}>{t('common.save')}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* 未設定ガード */}
+              {!hasDefaults && (
+                <Text style={[st.guardText, { color: '#D7263D' }]}>
+                  {t('shiftSubmit.defaultRequired')}
+                </Text>
+              )}
+
+              {/* カレンダーグリッド */}
+              <View style={st.calendarWrap}>
+                <View style={st.weekRow}>
+                  {WEEKDAY_LABELS.map((w, i) => (
+                    <View key={w} style={st.weekCell}>
+                      <Text style={[st.weekText, { color: i === 0 ? '#D7263D' : i === 6 ? '#2563EB' : theme.subtext }]}>
+                        {w}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={st.dayGrid}>
+                  {calendarDays.map((day, idx) => {
+                    if (!day.inPeriod) {
+                      return <View key={`empty-${idx}`} style={st.dayCell} />;
+                    }
+                    const isSelected = selectedDays.has(day.date);
+                    const isApproved = approvedDates.has(day.date);
+                    const isCustom = customTimes.has(day.date);
+                    const timeLabel = isSelected
+                      ? (isCustom
+                        ? `✎ ${customTimes.get(day.date)!.start}-${customTimes.get(day.date)!.end}`
+                        : `${defaultStart}-${defaultEnd}`)
+                      : '';
+
+                    return (
+                      <TouchableOpacity
+                        key={day.date}
+                        style={[
+                          st.dayCell,
+                          isSelected && { backgroundColor: theme.primary + '20' },
+                          isApproved && { backgroundColor: '#22C55E20' },
+                        ]}
+                        disabled={!hasDefaults || isApproved}
+                        onPress={() => handleDayToggle(day.date)}
+                        activeOpacity={0.6}
+                      >
+                        <Text style={[
+                          st.dayNum,
+                          { color: isApproved ? '#22C55E' : isSelected ? theme.primary : theme.text },
+                          day.dow === 0 && { color: '#D7263D' },
+                          day.dow === 6 && { color: '#2563EB' },
+                          isSelected && { fontWeight: '800', color: theme.primary },
+                          isApproved && { color: '#22C55E' },
+                        ]}>
+                          {day.dayNum}
+                        </Text>
+                        {isApproved && (
+                          <Text style={st.approvedBadge}>✅</Text>
+                        )}
+                        {isSelected && !isApproved && (
+                          <>
+                            <Text style={[st.timeChip, { color: isCustom ? theme.primary : theme.subtext }]} numberOfLines={1}>
+                              {timeLabel}
+                            </Text>
+                            <TouchableOpacity
+                              style={st.editBtn}
+                              onPress={() => setEditingDate(day.date)}
+                              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                            >
+                              <MaterialCommunityIcons name="pencil" size={12} color={theme.primary} />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* 提出ボタン */}
+              <TouchableOpacity
+                style={[st.submitBtn, { backgroundColor: hasDefaults ? theme.primary : theme.border }]}
+                onPress={handleSubmit}
+                disabled={!hasDefaults || submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={st.submitBtnText}>{t('shiftSubmit.submitBtn')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
             {/* 出勤予定 */}
             <View style={[st.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[st.sectionTitle, { color: theme.text }]}>{t('castHome.myShifts')}</Text>
@@ -178,7 +517,6 @@ export function CastHomeScreen() {
             <View style={[st.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[st.sectionTitle, { color: theme.text }]}>{t('castHome.myPayroll')}</Text>
 
-              {/* 月切替 */}
               <View style={st.monthNav}>
                 <TouchableOpacity onPress={() => setPayrollMonth(shiftMonth(payrollMonth, -1))}>
                   <MaterialCommunityIcons name="chevron-left" size={28} color={theme.primary} />
@@ -204,7 +542,6 @@ export function CastHomeScreen() {
                     </Text>
                   </View>
 
-                  {/* 日別明細 */}
                   {payroll.map((p) => {
                     const expanded = expandedDate === p.date;
                     return (
@@ -261,6 +598,58 @@ export function CastHomeScreen() {
           <Text style={[st.signOutText, { color: '#D7263D' }]}>{t('castHome.signOut')}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {editTarget && (
+        <ShiftTimeEditModal
+          visible={!!editingDate}
+          onClose={() => setEditingDate(null)}
+          onSave={handleEditTimeSave}
+          onResetToDefault={handleResetToDefault}
+          theme={theme}
+          t={t}
+          date={editTarget.date}
+          initialStart={editTarget.start}
+          initialEnd={editTarget.end}
+          isCustom={editTarget.isCustom}
+        />
+      )}
+    </View>
+  );
+}
+
+function TimeStepperCompact({
+  label,
+  value,
+  onChange,
+  theme,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  theme: { primary: string; text: string; border: string };
+}) {
+  const step = (delta: number) => {
+    const [h, m] = value.split(':').map(Number);
+    let slot = h * 4 + Math.floor(m / 15) + delta;
+    if (slot < 0) slot = 0;
+    if (slot > 29 * 4 + 3) slot = 29 * 4 + 3;
+    const nh = Math.floor(slot / 4);
+    const nm = (slot % 4) * 15;
+    onChange(`${pad2(nh)}:${pad2(nm)}`);
+  };
+
+  return (
+    <View style={st.compactStepper}>
+      <Text style={[st.compactLabel, { color: theme.text }]}>{label}</Text>
+      <View style={st.compactControls}>
+        <TouchableOpacity onPress={() => step(-1)}>
+          <MaterialCommunityIcons name="minus-circle-outline" size={24} color={theme.primary} />
+        </TouchableOpacity>
+        <Text style={[st.compactValue, { color: theme.text }]}>{value}</Text>
+        <TouchableOpacity onPress={() => step(1)}>
+          <MaterialCommunityIcons name="plus-circle-outline" size={24} color={theme.primary} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -309,4 +698,33 @@ const st = StyleSheet.create({
   profileBtnText: { flex: 1, fontSize: 14, fontWeight: '600' },
   signOut: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },
   signOutText: { fontSize: 15, fontWeight: '600' },
+
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, marginBottom: 12 },
+  badgeText: { fontSize: 13, fontWeight: '600' },
+  defaultCard: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
+  defaultLabel: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  defaultHint: { fontSize: 12, marginBottom: 8 },
+  defaultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  timeSep: { fontSize: 18, fontWeight: '700' },
+  defaultSaveBtn: { marginTop: 10, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  defaultSaveBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  guardText: { fontSize: 13, textAlign: 'center', marginBottom: 8 },
+
+  compactStepper: { alignItems: 'center' },
+  compactLabel: { fontSize: 12, marginBottom: 4 },
+  compactControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  compactValue: { fontSize: 18, fontWeight: '700', minWidth: 60, textAlign: 'center' },
+
+  calendarWrap: { marginTop: 8, marginBottom: 12 },
+  weekRow: { flexDirection: 'row' },
+  weekCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
+  weekText: { fontSize: 12, fontWeight: '600' },
+  dayGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  dayCell: { width: '14.285%', minHeight: 56, alignItems: 'center', paddingVertical: 4, borderRadius: 6 },
+  dayNum: { fontSize: 14, fontWeight: '600' },
+  approvedBadge: { fontSize: 10 },
+  timeChip: { fontSize: 8, marginTop: 1 },
+  editBtn: { marginTop: 1 },
+  submitBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

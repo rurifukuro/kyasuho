@@ -16,6 +16,8 @@ import type {
   KySales,
   KySeatType,
   KyShift,
+  KyShiftRequest,
+  KyShiftSubmission,
   KyShiftTemplate,
   KyStampSettings,
   KyTenant,
@@ -1318,5 +1320,77 @@ export async function useVoucher(id: string, currentRemaining: number): Promise<
 
 export async function deleteVoucher(id: string): Promise<void> {
   const { error } = await supabase.from('ky_vouchers').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── シフト希望（§38） ──
+
+export async function fetchTenantShiftRequests(
+  tenantId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<KyShiftRequest[]> {
+  const { data, error } = await supabase
+    .from('ky_shift_requests')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .gte('date', periodStart)
+    .lte('date', periodEnd)
+    .order('date')
+    .order('created_at');
+  if (error) throw error;
+  return (data ?? []) as KyShiftRequest[];
+}
+
+export async function fetchTenantSubmissions(
+  tenantId: string,
+  periodStart: string,
+): Promise<KyShiftSubmission[]> {
+  const { data, error } = await supabase
+    .from('ky_shift_submissions')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .eq('period_start', periodStart)
+    .order('submitted_at');
+  if (error) throw error;
+  return (data ?? []) as KyShiftSubmission[];
+}
+
+export async function approveShiftRequest(
+  requestId: string,
+  tenantId: string,
+): Promise<void> {
+  const { error: upErr } = await supabase
+    .from('ky_shift_requests')
+    .update({ status: 'approved' })
+    .eq('id', requestId);
+  if (upErr) throw upErr;
+
+  const { data: req } = await supabase
+    .from('ky_shift_requests')
+    .select('cast_id, date, start_at, end_at')
+    .eq('id', requestId)
+    .single();
+  if (!req) return;
+  const r = req as { cast_id: string; date: string; start_at: string; end_at: string };
+
+  await supabase
+    .from('ky_shifts')
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('cast_id', r.cast_id)
+    .eq('date', r.date);
+
+  const { error: shiftErr } = await supabase
+    .from('ky_shifts')
+    .insert({ tenant_id: tenantId, cast_id: r.cast_id, date: r.date, start_at: r.start_at, end_at: r.end_at });
+  if (shiftErr) throw shiftErr;
+}
+
+export async function rejectShiftRequest(requestId: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_shift_requests')
+    .update({ status: 'rejected' })
+    .eq('id', requestId);
   if (error) throw error;
 }
