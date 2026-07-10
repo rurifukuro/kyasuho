@@ -100,12 +100,20 @@ export const THEMES: Record<string, ThemeColor> = {
 export type ReservationStatus = 'reserved' | 'checked_in' | 'cancelled' | 'no_show';
 
 /** 店舗プロフィールの詳細（jsonb で保持）。 */
+export type TenantTheme = {
+  primaryColor?: string;
+  accentColor?: string;
+  bgImageUrl?: string;
+  cardOpacity?: number;
+};
+
 export type BusinessInfo = {
   address?: string;
   openHours?: string;
   tel?: string;
   note?: string;
   postalCode?: string;
+  theme?: TenantTheme;
 };
 
 /** 店舗＝テナント。slug が客側公開ページのキー。 */

@@ -31,6 +31,23 @@ export function TenantPage() {
   const { events } = usePublicEvents(tenant?.id);
 
   useEffect(() => {
+    const theme = tenant?.business_info?.theme;
+    if (!theme) return;
+    const root = document.documentElement;
+    if (theme.primaryColor) {
+      root.style.setProperty('--primary', theme.primaryColor);
+      root.style.setProperty('--primary-dark', theme.accentColor ?? theme.primaryColor);
+    }
+    if (theme.accentColor) {
+      root.style.setProperty('--primary-dark', theme.accentColor);
+    }
+    return () => {
+      root.style.removeProperty('--primary');
+      root.style.removeProperty('--primary-dark');
+    };
+  }, [tenant?.business_info?.theme]);
+
+  useEffect(() => {
     if (!userPicked.current && nextDate && nextDate !== selectedDate) {
       setSelectedDate(nextDate);
     }

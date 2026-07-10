@@ -9,6 +9,12 @@ export interface KyTenant {
     tel?: string;
     note?: string;
     postalCode?: string;
+    theme?: {
+      primaryColor?: string;
+      accentColor?: string;
+      bgImageUrl?: string;
+      cardOpacity?: number;
+    };
   };
   sns_links: { platform: string; url: string }[];
   prefecture: string;

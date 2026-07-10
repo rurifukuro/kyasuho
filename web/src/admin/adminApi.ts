@@ -1188,7 +1188,14 @@ export async function updateTenantProfile(
   fields: Partial<{
     name: string;
     genre: string;
-    business_info: { address?: string; openHours?: string; tel?: string; note?: string };
+    business_info: {
+      address?: string;
+      openHours?: string;
+      tel?: string;
+      note?: string;
+      postalCode?: string;
+      theme?: { primaryColor?: string; accentColor?: string; bgImageUrl?: string; cardOpacity?: number };
+    };
     sns_links: { platform: string; url: string }[];
     prefecture: string;
     area: string;

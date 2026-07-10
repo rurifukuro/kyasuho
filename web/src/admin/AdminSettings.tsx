@@ -96,7 +96,14 @@ export function AdminSettings({
       const fields = {
         name: storeName.trim(),
         genre: genre.trim(),
-        business_info: { address: address.trim(), openHours: openHours.trim(), tel: tel.trim(), note: note.trim(), postalCode: postalCode.trim() || undefined },
+        business_info: {
+          address: address.trim(),
+          openHours: openHours.trim(),
+          tel: tel.trim(),
+          note: note.trim(),
+          postalCode: postalCode.trim() || undefined,
+          ...(tenant.business_info?.theme ? { theme: tenant.business_info.theme } : {}),
+        },
         prefecture,
         area: area.trim(),
         ranking_opt_in: rankingOptIn,
@@ -246,6 +253,9 @@ export function AdminSettings({
         </div>
       </div>
 
+      {/* 客ページデザイン（§34-3） */}
+      <ThemeDesignSection tenant={tenant} onTenantUpdate={onTenantUpdate} />
+
       {/* シフト提出リマインダー */}
       <ShiftReminderSection tenantId={tenant.id} />
 
@@ -291,6 +301,200 @@ export function AdminSettings({
         </div>
       </div>
     </div>
+  );
+}
+
+const DEFAULT_PRIMARY = '#e55381';
+const DEFAULT_ACCENT = '#c03868';
+const DEFAULT_CARD_OPACITY = 0.85;
+
+function ThemeDesignSection({
+  tenant,
+  onTenantUpdate,
+}: {
+  tenant: KyTenant;
+  onTenantUpdate: (patch: Partial<KyTenant>) => void;
+}) {
+  const theme = tenant.business_info?.theme;
+  const [primary, setPrimary] = useState(theme?.primaryColor ?? DEFAULT_PRIMARY);
+  const [accent, setAccent] = useState(theme?.accentColor ?? DEFAULT_ACCENT);
+  const [cardOpacity, setCardOpacity] = useState(theme?.cardOpacity ?? DEFAULT_CARD_OPACITY);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const isDefault =
+    primary === DEFAULT_PRIMARY &&
+    accent === DEFAULT_ACCENT &&
+    cardOpacity === DEFAULT_CARD_OPACITY;
+
+  const handleReset = () => {
+    setPrimary(DEFAULT_PRIMARY);
+    setAccent(DEFAULT_ACCENT);
+    setCardOpacity(DEFAULT_CARD_OPACITY);
+  };
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const bi = tenant.business_info ?? {};
+      const newTheme = isDefault
+        ? undefined
+        : { primaryColor: primary, accentColor: accent, cardOpacity };
+      const newBi = { ...bi, theme: newTheme };
+      await updateTenantProfile(tenant.id, { business_info: newBi });
+      onTenantUpdate({ business_info: newBi });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (err) {
+      console.warn('[kyasuho] theme save failed:', err);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenant.id, tenant.business_info, primary, accent, cardOpacity, isDefault, onTenantUpdate]);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>客ページデザイン</h3>
+      <div className="admin-card">
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          お客様向け予約ページのカラーを設定できます。未設定の場合は既定のピンクが適用されます。
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="admin-field">
+            <label htmlFor="theme-primary">メインカラー</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="theme-primary"
+                type="color"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value)}
+                style={{ width: 48, height: 36, padding: 2, cursor: 'pointer' }}
+              />
+              <input
+                type="text"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value)}
+                style={{ width: 90, fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          </div>
+
+          <div className="admin-field">
+            <label htmlFor="theme-accent">アクセントカラー</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="theme-accent"
+                type="color"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+                style={{ width: 48, height: 36, padding: 2, cursor: 'pointer' }}
+              />
+              <input
+                type="text"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+                style={{ width: 90, fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          </div>
+
+          <div className="admin-field" style={{ gridColumn: 'span 2' }}>
+            <label htmlFor="theme-opacity">カード透過度: {Math.round(cardOpacity * 100)}%</label>
+            <input
+              id="theme-opacity"
+              type="range"
+              min={0.5}
+              max={1}
+              step={0.05}
+              value={cardOpacity}
+              onChange={(e) => setCardOpacity(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              背景画像使用時のカード背景の透明度です（低い＝透ける）
+            </span>
+          </div>
+
+          {/* ライブプレビュー */}
+          <div
+            style={{
+              gridColumn: 'span 2',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 16,
+              background: '#faf8f5',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>プレビュー</div>
+            <div
+              style={{
+                borderRadius: 10,
+                padding: 16,
+                background: `rgba(255,255,255,${cardOpacity})`,
+                border: `1px solid ${primary}22`,
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700, color: primary, marginBottom: 4 }}>
+                {tenant.name || 'お店の名前'}
+              </div>
+              <div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>
+                {tenant.genre || 'コンカフェ'}
+              </div>
+              <div
+                style={{
+                  display: 'inline-block',
+                  padding: '6px 20px',
+                  borderRadius: 6,
+                  background: primary,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                予約する
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: accent,
+                  fontWeight: 600,
+                }}
+              >
+                リンク色のプレビュー
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <button
+            type="button"
+            className="admin-btn primary"
+            disabled={saving}
+            onClick={() => void handleSave()}
+          >
+            {saving ? '保存中…' : 'デザインを保存'}
+          </button>
+          <button
+            type="button"
+            className="admin-btn"
+            disabled={isDefault}
+            onClick={handleReset}
+          >
+            既定に戻す
+          </button>
+          {msg && (
+            <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+              {msg}
+            </span>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
