@@ -2773,3 +2773,28 @@ services層 `materializeRecurringExpenses` を domain関数 `computeMaterializat
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0
 - Web `npx tsc -b` EXIT:0
+
+---
+
+## Rev110 — §33 シフト表の見込み人件費概算（2026-07-12）
+
+### 概要
+§26棚卸し#40。シフト表作成画面に「時給×シフト時間」の見込み人件費概算を表示。
+domain純関数 `estimateLaborCost` を新設し、管理Webのシフト表画面に概算バーを追加。
+
+### 新規ファイル
+- `src/domain/payroll/estimateLaborCost.ts`: 見込み人件費計算（totalMinutes×baseHourlyRate÷60・円未満切り捨て）
+- `web/src/domain/payroll/estimateLaborCost.ts`: 同上（Web側コピー・同期元指示付き）
+
+### 変更ファイル
+- `web/src/admin/AdminShiftImage.tsx`:
+  - `fetchPayrollSettings` を並列fetchに追加
+  - `laborEstimate` memo: 全シフトのstart/endからestimateLaborCostで計算
+  - 概算バー表示: 時給×合計時間＝見込み額（payrollSettings未設定時は非表示）
+
+### 境界値の入出力例（§50-3 D-5）
+- **estimateLaborCost**: [{start:'18:00',end:'23:00'}], rate=1200 → 300min, ¥6,000 / 日跨ぎ{22:00→02:00} → 240min / 空配列 → null（非表示）
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0
+- Web `npx tsc -b` EXIT:0

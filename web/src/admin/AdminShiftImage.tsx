@@ -12,6 +12,7 @@ import {
   addShiftTemplate,
   fetchCastList,
   fetchEvents,
+  fetchPayrollSettings,
   fetchShiftTemplateList,
   fetchShiftsByMonth,
   removeShiftTemplate,
@@ -46,7 +47,8 @@ import {
 } from '../domain/sns/buildPostText';
 import type { PostCastEntry } from '../domain/sns/buildPostText';
 import { updateSnsPostTemplates } from './adminApi';
-import type { SnsPostTemplate, SnsPostTemplates } from '../lib/types';
+import type { KyPayrollSettings, SnsPostTemplate, SnsPostTemplates } from '../lib/types';
+import { estimateLaborCost } from '../domain/payroll/estimateLaborCost';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
@@ -153,8 +155,10 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
-  // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
   const [eventDays, setEventDays] = useState<ShiftEventDay[]>([]);
+  const [payrollSettings, setPayrollSettings] = useState<KyPayrollSettings | null>(null);
+
+  // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
 
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
   const [aiMood, setAiMood] = useState('');
@@ -169,15 +173,17 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setLoading(true);
     setError(null);
     try {
-      const [shiftRows, castRows, favRows, evRows] = await Promise.all([
+      const [shiftRows, castRows, favRows, evRows, ps] = await Promise.all([
         fetchShiftsByMonth(tenant.id, yearMonth),
         fetchCastList(tenant.id),
         fetchShiftTemplateList(tenant.id),
         fetchEvents(tenant.id),
+        fetchPayrollSettings(tenant.id).catch(() => null),
       ]);
       setShifts(shiftRows);
       setCasts(castRows);
       setFavorites(favRows);
+      setPayrollSettings(ps);
       const ym = yearMonth;
       setEventDays(
         evRows
@@ -215,6 +221,13 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     });
     return buildShiftDays(flatRows, yearMonth);
   }, [shifts, castById, yearMonth]);
+
+  const laborEstimate = useMemo(() => {
+    if (!payrollSettings?.base_hourly_rate) return null;
+    const allShifts = days.flatMap(d => d.casts.map(c => ({ start: c.start, end: c.end })));
+    if (allShifts.length === 0) return null;
+    return estimateLaborCost(allShifts, payrollSettings.base_hourly_rate);
+  }, [days, payrollSettings]);
 
   const dailyPages = useMemo(() => {
     if (viewMode !== 'daily') return [];
@@ -516,6 +529,13 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
           {exporting ? '生成中…' : 'PNGをダウンロード'}
         </button>
       </div>
+
+      {laborEstimate && (
+        <div style={{ padding: '8px 14px', background: '#f0fdf4', borderRadius: 8, fontSize: 13, marginBottom: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
+          <span>💰 見込み人件費（時給 ¥{payrollSettings!.base_hourly_rate.toLocaleString()} × {Math.floor(laborEstimate.totalMinutes / 60)}時間{laborEstimate.totalMinutes % 60 > 0 ? `${laborEstimate.totalMinutes % 60}分` : ''}）</span>
+          <strong style={{ color: '#15803d' }}>¥{laborEstimate.estimatedCost.toLocaleString()}</strong>
+        </div>
+      )}
 
       {error ? <p className="admin-error">{error}</p> : null}
       {!loading && days.length === 0 ? (
