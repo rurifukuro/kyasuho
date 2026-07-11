@@ -36,6 +36,14 @@ import { detectGridFromImage } from '../shiftTemplates/gridDetect';
 import { buildShiftDays, splitDailyPages } from '../shiftTemplates/shiftData';
 import type { ShiftEventDay } from '../shiftTemplates/shiftData';
 import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
+import {
+  buildDailyPostText as buildDailyPost,
+  buildMonthlyPostText,
+  DEFAULT_DAILY_TEMPLATE,
+  DEFAULT_MONTHLY_TEMPLATE,
+  extractXHandle,
+} from '../domain/sns/buildPostText';
+import type { PostCastEntry } from '../domain/sns/buildPostText';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
@@ -242,6 +250,27 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       decorations: { ...base.decorations, motif: ov.motif ?? base.decorations.motif ?? 'none' },
     };
   }, [base, ov, aspect, viewMode]);
+
+  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${tenant.slug}`;
+  const buildSnsText = useCallback(() => {
+    const templates = tenant.sns_post_templates ?? {};
+    if (viewMode === 'daily') {
+      const tmpl = templates.daily ?? DEFAULT_DAILY_TEMPLATE;
+      const dayData = days.find(d => d.date === dailyDate);
+      const entries: PostCastEntry[] = (dayData?.casts ?? []).map(c => {
+        const cast = casts.find(cc => cc.name === c.name);
+        return {
+          name: c.name,
+          nameKana: cast?.name_kana ?? c.name,
+          start: c.start,
+          xHandle: extractXHandle(cast?.sns_links ?? []),
+        };
+      });
+      return buildDailyPost(tmpl, tenant.name, dailyDate, entries, reserveUrl);
+    }
+    const tmpl = templates.monthly ?? DEFAULT_MONTHLY_TEMPLATE;
+    return buildMonthlyPostText(tmpl, tenant.name, yearMonth, reserveUrl);
+  }, [viewMode, tenant, days, dailyDate, casts, yearMonth, reserveUrl]);
 
   const hasCustom = Object.keys(ov).length > 0;
 
@@ -833,9 +862,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             type="button"
             className="admin-btn primary"
             onClick={() => {
-              const text = viewMode === 'daily'
-                ? buildDailyPostText(dailyDate, days, tenant.slug)
-                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = buildSnsText();
               window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank');
             }}
           >
@@ -845,9 +872,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             type="button"
             className="admin-btn"
             onClick={() => {
-              const text = viewMode === 'daily'
-                ? buildDailyPostText(dailyDate, days, tenant.slug)
-                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = buildSnsText();
               void navigator.clipboard.writeText(text).then(() => window.alert('投稿文をコピーしました'));
             }}
           >
@@ -866,26 +891,6 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   );
 }
 
-function buildWebPostText(
-  yearMonth: string,
-  casts: KyCast[],
-  shifts: KyShift[],
-  slug: string,
-): string {
-  const [y, m] = yearMonth.split('-').map(Number);
-  const monthLabel = `${y}年${m}月`;
-  const castIds = [...new Set(shifts.map(s => s.cast_id))];
-  const names = castIds
-    .map(id => casts.find(c => c.id === id)?.name)
-    .filter(Boolean)
-    .join('・');
-  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
-  const lines = [`${monthLabel}のシフトが出ました！`];
-  if (names) lines.push(`出勤キャスト: ${names}`);
-  lines.push('');
-  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
-  return lines.join('\n');
-}
 
 function PlacementEditor({
   placement: pl,
@@ -966,19 +971,3 @@ function PlacementEditor({
   );
 }
 
-function buildDailyPostText(
-  date: string,
-  days: import('../shiftTemplates/shiftData').ShiftDayData[],
-  slug: string,
-): string {
-  const [, m, d] = date.split('-').map(Number);
-  const wd = ['日', '月', '火', '水', '木', '金', '土'][new Date(date).getDay()]!;
-  const dayData = days.find(dd => dd.date === date);
-  const names = dayData?.casts.map(c => c.name).join('・') ?? '';
-  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
-  const lines = [`本日 ${m}/${d}(${wd}) の出勤キャスト`];
-  if (names) lines.push(names);
-  lines.push('');
-  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
-  return lines.join('\n');
-}

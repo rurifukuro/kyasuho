@@ -1305,6 +1305,16 @@ export async function updateTenantProfile(
   if (error) throw error;
 }
 
+// ---- SNS投稿テンプレート（§40-3） ----
+
+export async function updateSnsPostTemplates(
+  tenantId: string,
+  templates: import('../lib/types').SnsPostTemplates,
+): Promise<void> {
+  const { error } = await supabase.from('ky_tenants').update({ sns_post_templates: templates }).eq('id', tenantId);
+  if (error) throw error;
+}
+
 // ---- ボトルキープ（ky_bottle_keeps） ----
 
 export async function fetchBottleKeeps(tenantId: string): Promise<KyBottleKeep[]> {

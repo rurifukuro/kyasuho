@@ -2675,3 +2675,31 @@ SPEC §40-2 の実装。9名以上のキャストがいる日は自動で2枚目
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0
 - Web `npx tsc -b` EXIT:0
+
+## Rev106（2026-07-12）§40(c) X投稿テンプレートエンジン（基盤）
+
+SPEC §40-3 の基盤実装。プレースホルダ方式のテンプレート展開エンジン＋DB列＋型定義＋既存SNS投稿を置換。
+
+### 新規ファイル
+- `src/domain/sns/buildPostText.ts`（アプリ側・正準）:
+  - `SnsPostTemplate` / `PostCastEntry` 型
+  - `DEFAULT_DAILY_TEMPLATE` / `DEFAULT_MONTHLY_TEMPLATE` 既定テンプレート
+  - `buildDailyPostText()` — 時刻グルーピング＋name_kana順＋@ハンドル自動抽出
+  - `buildMonthlyPostText()` — マンスリー投稿文展開
+  - `extractXHandle()` — sns_linksからX@ハンドルを抽出
+  - `estimateXLength()` — X字数概算（日本語2字/URL23字固定）
+- `web/src/domain/sns/buildPostText.ts`（Web側コピー）: 同上
+- `supabase/migrations/0044_ky_tenants_sns_post_templates.sql`:
+  - `ky_tenants.sns_post_templates` JSONB列追加
+
+### 変更ファイル
+- `src/types/index.ts`: `SnsPostTemplate` / `SnsPostTemplates` 型追加、Tenantに`snsPostTemplates`追加
+- `web/src/lib/types.ts`: 同上（KyTenantに`sns_post_templates`追加）＋KyCastに`sns_links`追加
+- `src/context/TenantContext.tsx`: sns_post_templatesフィールドのマッピング追加
+- `src/screens/ShiftImageScreen.tsx`: 旧固定投稿文→テンプレートエンジンに置換（monthlyテンプレート使用）
+- `web/src/admin/AdminShiftImage.tsx`: 旧buildWebPostText/buildDailyPostTextを削除→テンプレートエンジンに置換
+- `web/src/admin/adminApi.ts`: `updateSnsPostTemplates()` API追加
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0
+- Web `npx tsc -b` EXIT:0

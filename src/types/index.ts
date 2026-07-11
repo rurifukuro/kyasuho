@@ -139,6 +139,19 @@ export type Tenant = {
   timerEnabled: boolean;
   timerAlertMinutes: number;
   nominationKindsEnabled: boolean;
+  snsPostTemplates: SnsPostTemplates;
+};
+
+export type SnsPostTemplate = {
+  header: string;
+  group_heading: string;
+  line: string;
+  footer: string;
+};
+
+export type SnsPostTemplates = {
+  monthly?: SnsPostTemplate;
+  daily?: SnsPostTemplate;
 };
 
 /** キャスト（コンカフェの出演者）。 */

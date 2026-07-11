@@ -28,6 +28,7 @@ import { buildShiftDays, splitDailyPages, yearMonthLabel } from '../shiftTemplat
 import type { ShiftEventDay, ShiftFlatRow } from '../shiftTemplates/shiftData';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 import { buildAiDefinition } from '../shiftTemplates/aiDesign';
+import { buildMonthlyPostText, DEFAULT_MONTHLY_TEMPLATE, estimateXLength, extractXHandle } from '../domain/sns/buildPostText';
 import * as castService from '../services/casts';
 import * as eventService from '../services/events';
 import { requestAiShiftDesign } from '../services/aiDesign';
@@ -79,17 +80,9 @@ export function ShiftImageScreen({
   const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${tenant.slug}`;
 
   const buildPostText = useCallback(() => {
-    const castNames = casts.map((c) => c.name).join('・');
-    const lines = [
-      `📅 ${yearMonthLabel(yearMonth)} シフト表`,
-      '',
-      castNames ? `出勤キャスト: ${castNames}` : '',
-      '',
-      `🔗 ご予約はこちら`,
-      reserveUrl,
-    ].filter(Boolean);
-    return lines.join('\n');
-  }, [casts, yearMonth, reserveUrl]);
+    const tmpl = tenant.snsPostTemplates?.monthly ?? DEFAULT_MONTHLY_TEMPLATE;
+    return buildMonthlyPostText(tmpl, tenant.name, yearMonth, reserveUrl);
+  }, [tenant, yearMonth, reserveUrl]);
 
   const handlePostX = useCallback(async () => {
     const text = encodeURIComponent(buildPostText());

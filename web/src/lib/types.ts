@@ -26,7 +26,20 @@ export interface KyTenant {
   timer_enabled: boolean;
   timer_alert_minutes: number;
   nomination_kinds_enabled: boolean;
+  sns_post_templates: SnsPostTemplates;
 }
+
+export type SnsPostTemplate = {
+  header: string;
+  group_heading: string;
+  line: string;
+  footer: string;
+};
+
+export type SnsPostTemplates = {
+  monthly?: SnsPostTemplate;
+  daily?: SnsPostTemplate;
+};
 
 export interface KyUnlockWindow {
   id: string;
@@ -44,6 +57,7 @@ export interface KyCast {
   name: string;
   name_kana: string;
   photo_url: string | null;
+  sns_links: { label: string; url: string }[];
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
