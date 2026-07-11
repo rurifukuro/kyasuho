@@ -24,7 +24,7 @@ import * as Clipboard from 'expo-clipboard';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHIFT_TEMPLATES, CATEGORY_LABELS } from '../shiftTemplates/definitions';
 import type { ShiftTemplateDefinition } from '../shiftTemplates/definitions';
-import { buildShiftDays, yearMonthLabel } from '../shiftTemplates/shiftData';
+import { buildShiftDays, splitDailyPages, yearMonthLabel } from '../shiftTemplates/shiftData';
 import type { ShiftEventDay, ShiftFlatRow } from '../shiftTemplates/shiftData';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 import { buildAiDefinition } from '../shiftTemplates/aiDesign';

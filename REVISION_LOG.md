@@ -2647,3 +2647,31 @@ SPEC §40-1 のシフト表画像へのイベント日強調表示。既存の k
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0
 - Web `npx tsc -b` EXIT:0
+
+## Rev105（2026-07-12）§40(b) デイリー出勤表の複数枚出力
+
+SPEC §40-2 の実装。9名以上のキャストがいる日は自動で2枚目以降へ分割（1枚最大8名）。
+
+### 変更ファイル（共通ロジック）
+- `src/shiftTemplates/shiftData.ts` / `web/src/shiftTemplates/shiftData.ts`:
+  - `MAX_CASTS_PER_PAGE = 8` 定数＋ `splitDailyPages(dayData)` 分割関数追加
+- `src/shiftTemplates/ShiftTableRenderer.tsx` / `web/src/shiftTemplates/ShiftTableRenderer.tsx`:
+  - Props に `pageInfo?: { page: number; total: number }` 追加
+  - ヘッダーに「1/2」形式のページ表記描画（total > 1の場合のみ）
+
+### 変更ファイル（管理Web UI）
+- `web/src/admin/AdminShiftImage.tsx`:
+  - `dailyPageIdx` state ＋ `dailyPages` / `dailyDaysForPage` memo追加
+  - プレビュー＋エクスポート用ノードにページ分割データとpageInfoを渡す
+  - デイリーモードのナビにページ切替ボタン（◀/▶/ページ表記）追加
+  - 日付変更時にページインデックスをリセット
+  - 5枚以上（33名以上）で警告表示（X投稿は4枚まで）
+  - ダウンロードファイル名に連番（`daily_YYYYMMDD_1.png`）
+
+### 変更ファイル（アプリ）
+- `src/screens/ShiftImageScreen.tsx`:
+  - `splitDailyPages` import追加（アプリにdailyモードUI追加時に使用予定）
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0
+- Web `npx tsc -b` EXIT:0

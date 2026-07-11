@@ -47,9 +47,10 @@ type Props = {
   storeName: string;
   logoUrl?: string | null;
   eventDays?: ShiftEventDay[];
+  pageInfo?: { page: number; total: number };
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, eventDays }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, eventDays, pageInfo }: Props) {
   const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
@@ -189,6 +190,11 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, e
             </Text>
           ) : null}
         </View>
+        {pageInfo && pageInfo.total > 1 ? (
+          <Text style={{ marginTop: 8, fontSize: 22, lineHeight: 28, color: p.dayLabel, fontWeight: '600', fontFamily: bodyFont }}>
+            {pageInfo.page}/{pageInfo.total}
+          </Text>
+        ) : null}
       </View>
 
       {/* 本体 */}

@@ -33,7 +33,7 @@ import {
   findTemplate,
 } from '../shiftTemplates/definitions';
 import { detectGridFromImage } from '../shiftTemplates/gridDetect';
-import { buildShiftDays } from '../shiftTemplates/shiftData';
+import { buildShiftDays, splitDailyPages } from '../shiftTemplates/shiftData';
 import type { ShiftEventDay } from '../shiftTemplates/shiftData';
 import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
@@ -125,6 +125,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
   const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
   const [dailyDate, setDailyDate] = useState(formatDate(new Date()));
+  const [dailyPageIdx, setDailyPageIdx] = useState(0);
 
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [ov, setOv] = useState<ShiftOverrides>({});
@@ -202,6 +203,22 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     return buildShiftDays(flatRows, yearMonth);
   }, [shifts, castById, yearMonth]);
 
+  const dailyPages = useMemo(() => {
+    if (viewMode !== 'daily') return [];
+    const dayData = days.find(d => d.date === dailyDate);
+    if (!dayData) return [{ date: dailyDate, casts: [] as typeof days[0]['casts'] }];
+    return splitDailyPages(dayData);
+  }, [days, dailyDate, viewMode]);
+
+  const dailyTotalPages = dailyPages.length;
+  const safeDailyPage = Math.min(dailyPageIdx, dailyTotalPages - 1);
+  const currentDailyPage = dailyPages[Math.max(0, safeDailyPage)];
+
+  const dailyDaysForPage = useMemo(() => {
+    if (!currentDailyPage) return days;
+    return [currentDailyPage];
+  }, [currentDailyPage, days]);
+
   const base =
     aiDef && templateId === aiDef.id ? aiDef : (findTemplate(templateId) ?? DEFAULT_TEMPLATE);
 
@@ -241,9 +258,13 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = viewMode === 'daily'
-        ? `kyasuho_daily_${dailyDate}.png`
-        : `kyasuho_shift_${yearMonth}.png`;
+      if (viewMode === 'daily' && dailyTotalPages > 1) {
+        a.download = `kyasuho_daily_${dailyDate}_${safeDailyPage + 1}.png`;
+      } else if (viewMode === 'daily') {
+        a.download = `kyasuho_daily_${dailyDate}.png`;
+      } else {
+        a.download = `kyasuho_shift_${yearMonth}.png`;
+      }
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -415,17 +436,20 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               const nd = shiftDay(dailyDate, -1);
               setDailyDate(nd);
               setYearMonth(nd.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               ◀ 前日
             </button>
             <input type="date" value={dailyDate} onChange={(e) => {
               setDailyDate(e.target.value);
               setYearMonth(e.target.value.slice(0, 7));
+              setDailyPageIdx(0);
             }} />
             <button type="button" className="admin-btn" onClick={() => {
               const nd = shiftDay(dailyDate, 1);
               setDailyDate(nd);
               setYearMonth(nd.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               翌日 ▶
             </button>
@@ -433,9 +457,19 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               const today = formatDate(new Date());
               setDailyDate(today);
               setYearMonth(today.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               今日
             </button>
+            {dailyTotalPages > 1 ? (
+              <>
+                <span style={{ margin: '0 8px', color: '#888' }}>|</span>
+                <button type="button" className="admin-btn" disabled={safeDailyPage <= 0} onClick={() => setDailyPageIdx(i => Math.max(0, i - 1))}>◀</button>
+                <span style={{ margin: '0 6px', fontWeight: 600 }}>{safeDailyPage + 1}/{dailyTotalPages}</span>
+                <button type="button" className="admin-btn" disabled={safeDailyPage >= dailyTotalPages - 1} onClick={() => setDailyPageIdx(i => i + 1)}>▶</button>
+                {dailyTotalPages >= 5 ? <span style={{ margin: '0 6px', color: '#d97706', fontSize: 13 }}>⚠ 5枚以上（X投稿は4枚まで）</span> : null}
+              </>
+            ) : null}
           </>
         )}
         <span className="admin-spacer" />
@@ -464,7 +498,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} />
+              <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
             </div>
           </div>
           <p className="admin-note">
@@ -825,7 +859,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
-          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} eventDays={eventDays} />
+          <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
         </div>
       </div>
     </div>

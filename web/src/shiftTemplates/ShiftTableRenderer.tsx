@@ -79,9 +79,10 @@ type Props = {
   bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
   placement?: ShiftPlacement | null; // §22-3: AI解析による配置情報
   eventDays?: ShiftEventDay[];
+  pageInfo?: { page: number; total: number };
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays, pageInfo }: Props) {
   const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
@@ -203,6 +204,11 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
             ) : null}
           </span>
         </div>
+        {pageInfo && pageInfo.total > 1 ? (
+          <div style={{ marginTop: 8, fontSize: 22, color: p.dayLabel, fontWeight: 600 }}>
+            {pageInfo.page}/{pageInfo.total}
+          </div>
+        ) : null}
       </div>
 
       {/* 本体 */}

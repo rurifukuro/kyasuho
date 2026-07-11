@@ -61,6 +61,17 @@ export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] 
 /** イベント日（ky_eventsから抽出・レンダラーへ渡す） */
 export type ShiftEventDay = { date: string; label: string };
 
+const MAX_CASTS_PER_PAGE = 8;
+
+export function splitDailyPages(dayData: ShiftDayData): ShiftDayData[] {
+  if (dayData.casts.length <= MAX_CASTS_PER_PAGE) return [dayData];
+  const pages: ShiftDayData[] = [];
+  for (let i = 0; i < dayData.casts.length; i += MAX_CASTS_PER_PAGE) {
+    pages.push({ date: dayData.date, casts: dayData.casts.slice(i, i + MAX_CASTS_PER_PAGE) });
+  }
+  return pages;
+}
+
 /** 'YYYY-MM' → 'YYYY年M月' */
 export function yearMonthLabel(yearMonth: string): string {
   const [y = 0, m = 0] = yearMonth.split('-').map(Number);
