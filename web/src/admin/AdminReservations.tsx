@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/timeUtils';
 import {
   adminMakeReservation,
+  checkinReservation,
   countNoShowByContacts,
   fetchAllReservations,
   fetchCastList,
@@ -133,6 +134,19 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     } catch (e) {
       console.warn('[kyasuho] updateReservationStatus failed:', e);
       window.alert('ステータスの変更に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleCheckin = async (row: KyReservationFull) => {
+    setBusyId(row.id);
+    try {
+      await checkinReservation(tenant.id, row);
+      await load();
+    } catch (e) {
+      console.warn('[kyasuho] checkinReservation failed:', e);
+      window.alert('来店処理に失敗しました。');
     } finally {
       setBusyId(null);
     }
@@ -401,7 +415,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                               type="button"
                               className="admin-btn primary"
                               disabled={busy}
-                              onClick={() => void changeStatus(row, 'checked_in')}
+                              onClick={() => void handleCheckin(row)}
                             >
                               来店
                             </button>

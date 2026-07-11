@@ -67,7 +67,7 @@ export async function fetchAllReservations(
   const { data, error } = await supabase
     .from('ky_reservations')
     .select(
-      'id, tenant_id, date, slot, set_minutes, seat_no, customer_name, contact, party_size, cast_id, note, status, created_at',
+      'id, tenant_id, date, slot, set_minutes, seat_no, customer_name, contact, party_size, cast_id, seat_type_id, note, status, created_at, preorder, menu_undecided',
     )
     .eq('tenant_id', tenantId)
     .eq('date', date)
@@ -82,6 +82,50 @@ export async function updateReservationStatus(
 ): Promise<void> {
   const { error } = await supabase.from('ky_reservations').update({ status }).eq('id', id);
   if (error) throw error;
+}
+
+/**
+ * 来店チェックイン＝ステータス更新＋伝票自動作成＋preorder明細プリフィル。
+ * preorderがあれば予約時のスナップショットからオーダー明細を初期投入する。
+ * 伝票はopen状態で作成され、RegisterScreenのレーンに即座に表示される。
+ */
+export async function checkinReservation(
+  tenantId: string,
+  reservation: KyReservationFull,
+): Promise<void> {
+  await updateReservationStatus(reservation.id, 'checked_in');
+
+  const { data: orderData, error: orderErr } = await supabase
+    .from('ky_orders')
+    .insert({
+      tenant_id: tenantId,
+      biz_date: reservation.date,
+      seat_no: reservation.seat_no,
+      reservation_id: reservation.id,
+      customer_label: reservation.customer_name,
+      status: 'open',
+    })
+    .select('id')
+    .single();
+  if (orderErr) throw orderErr;
+  const orderId = (orderData as { id: string }).id;
+
+  if (reservation.preorder && reservation.preorder.length > 0) {
+    const items = reservation.preorder.map((p) => ({
+      order_id: orderId,
+      tenant_id: tenantId,
+      menu_item_id: p.menu_item_id,
+      category: p.category,
+      name: p.name,
+      price: p.price,
+      qty: p.qty,
+      cast_id: p.cast_id ?? null,
+    }));
+    const { error: itemErr } = await supabase
+      .from('ky_order_items')
+      .insert(items);
+    if (itemErr) throw itemErr;
+  }
 }
 
 export async function removeReservation(id: string): Promise<void> {
