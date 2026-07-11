@@ -41,9 +41,12 @@ import {
   buildMonthlyPostText,
   DEFAULT_DAILY_TEMPLATE,
   DEFAULT_MONTHLY_TEMPLATE,
+  estimateXLength,
   extractXHandle,
 } from '../domain/sns/buildPostText';
 import type { PostCastEntry } from '../domain/sns/buildPostText';
+import { updateSnsPostTemplates } from './adminApi';
+import type { SnsPostTemplate, SnsPostTemplates } from '../lib/types';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
@@ -157,6 +160,8 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [aiMood, setAiMood] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  const [showTmplEditor, setShowTmplEditor] = useState(false);
 
   const exportRef = useRef<HTMLDivElement>(null);
 
@@ -851,12 +856,16 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         </div>
       </div>
 
-      {/* SNS投稿（§31） */}
+      {/* SNS投稿（§31＋§40-3） */}
       <div className="admin-card" style={{ marginTop: 16 }}>
         <div className="admin-section-title" style={{ margin: '0 0 8px' }}>SNS投稿</div>
         <p className="admin-note" style={{ marginTop: 0 }}>
           シフト表画像をダウンロードした後、SNSで共有できます。投稿文をコピーしてご利用ください。
         </p>
+        <div style={{ marginTop: 8, padding: 12, background: '#f8f9fa', borderRadius: 8, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#333' }}>
+          {buildSnsText()}
+          {(() => { const len = estimateXLength(buildSnsText()); return len > 280 ? <div style={{ marginTop: 8, color: '#d97706', fontWeight: 600 }}>⚠ X字数目安: {len}/280（超過。投稿時に編集してください）</div> : null; })()}
+        </div>
         <div className="admin-btn-row" style={{ marginTop: 8 }}>
           <button
             type="button"
@@ -878,8 +887,29 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
           >
             投稿文をコピー
           </button>
+          <button type="button" className="admin-btn" onClick={() => setShowTmplEditor(true)}>
+            テンプレ編集
+          </button>
         </div>
       </div>
+
+      {showTmplEditor ? (
+        <SnsTemplateEditor
+          templates={tenant.sns_post_templates ?? {}}
+          tenantId={tenant.id}
+          storeName={tenant.name}
+          yearMonth={yearMonth}
+          dailyDate={dailyDate}
+          days={days}
+          casts={casts}
+          reserveUrl={reserveUrl}
+          onClose={() => setShowTmplEditor(false)}
+          onSave={(t) => {
+            (tenant as unknown as Record<string, unknown>).sns_post_templates = t;
+            setShowTmplEditor(false);
+          }}
+        />
+      ) : null}
 
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
@@ -966,6 +996,157 @@ function PlacementEditor({
           <input type="checkbox" checked={pl.textOutline ?? false} onChange={(e) => onChange({ ...pl, textOutline: e.target.checked })} />
           文字の縁取り（背景画像上で読みやすくする）
         </label>
+      </div>
+    </div>
+  );
+}
+
+// ── SNS投稿テンプレート編集モーダル（§40-3） ──────────────────────────
+
+const PLACEHOLDERS_DAILY = [
+  { key: '{{store_name}}', label: '店名' },
+  { key: '{{date}}', label: '日付' },
+  { key: '{{time}}', label: '時間帯' },
+  { key: '{{name}}', label: 'キャスト名' },
+  { key: '{{account}}', label: 'Xアカウント' },
+  { key: '{{reservation_url}}', label: '予約URL' },
+];
+const PLACEHOLDERS_MONTHLY = [
+  { key: '{{store_name}}', label: '店名' },
+  { key: '{{month}}', label: '月' },
+  { key: '{{reservation_url}}', label: '予約URL' },
+];
+
+function SnsTemplateEditor({
+  templates,
+  tenantId,
+  storeName,
+  yearMonth,
+  dailyDate,
+  days,
+  casts,
+  reserveUrl,
+  onClose,
+  onSave,
+}: {
+  templates: SnsPostTemplates;
+  tenantId: string;
+  storeName: string;
+  yearMonth: string;
+  dailyDate: string;
+  days: import('../shiftTemplates/shiftData').ShiftDayData[];
+  casts: KyCast[];
+  reserveUrl: string;
+  onClose: () => void;
+  onSave: (t: SnsPostTemplates) => void;
+}) {
+  const [tab, setTab] = useState<'daily' | 'monthly'>('daily');
+  const [daily, setDaily] = useState<SnsPostTemplate>(templates.daily ?? DEFAULT_DAILY_TEMPLATE);
+  const [monthly, setMonthly] = useState<SnsPostTemplate>(templates.monthly ?? DEFAULT_MONTHLY_TEMPLATE);
+  const [saving, setSaving] = useState(false);
+
+  const cur = tab === 'daily' ? daily : monthly;
+  const setCur = tab === 'daily' ? setDaily : setMonthly;
+  const placeholders = tab === 'daily' ? PLACEHOLDERS_DAILY : PLACEHOLDERS_MONTHLY;
+
+  const preview = useMemo(() => {
+    if (tab === 'daily') {
+      const dayData = days.find(d => d.date === dailyDate);
+      const entries: PostCastEntry[] = (dayData?.casts ?? []).map(c => {
+        const cast = casts.find(cc => cc.name === c.name);
+        return { name: c.name, nameKana: cast?.name_kana ?? c.name, start: c.start, xHandle: extractXHandle(cast?.sns_links ?? []) };
+      });
+      return buildDailyPost(daily, storeName, dailyDate, entries, reserveUrl);
+    }
+    return buildMonthlyPostText(monthly, storeName, yearMonth, reserveUrl);
+  }, [tab, daily, monthly, storeName, yearMonth, dailyDate, days, casts, reserveUrl]);
+
+  const xLen = estimateXLength(preview);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const next: SnsPostTemplates = { daily, monthly };
+      await updateSnsPostTemplates(tenantId, next);
+      onSave(next);
+    } catch (e) {
+      console.warn('[kyasuho] updateSnsPostTemplates:', e);
+      window.alert('保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const insertPlaceholder = (ph: string) => {
+    setCur(prev => ({ ...prev, footer: prev.footer + ph }));
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 640, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>投稿テンプレート編集</h3>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="admin-btn" onClick={onClose} style={{ fontSize: 16, padding: '2px 8px' }}>✕</button>
+        </div>
+
+        <div className="admin-btn-row" style={{ marginBottom: 12 }}>
+          <button type="button" className={`admin-btn${tab === 'daily' ? ' primary' : ''}`} onClick={() => setTab('daily')}>デイリー</button>
+          <button type="button" className={`admin-btn${tab === 'monthly' ? ' primary' : ''}`} onClick={() => setTab('monthly')}>マンスリー</button>
+        </div>
+
+        <div style={{ marginBottom: 12, fontSize: 13, color: '#6b7280' }}>
+          タップで末尾に挿入:
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+          {placeholders.map(p => (
+            <button key={p.key} type="button" onClick={() => insertPlaceholder(p.key)} style={{ padding: '3px 10px', background: '#e5e7eb', borderRadius: 4, fontSize: 12, cursor: 'pointer', border: '1px solid #d1d5db' }} title={`フッターに ${p.key} を挿入`}>
+              {p.label} <code style={{ fontSize: 11 }}>{p.key}</code>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>ヘッダー
+            <textarea value={cur.header} onChange={e => setCur(prev => ({ ...prev, header: e.target.value }))} rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+          </label>
+          {tab === 'daily' && (
+            <>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>時間帯見出し
+                <textarea value={cur.group_heading} onChange={e => setCur(prev => ({ ...prev, group_heading: e.target.value }))} rows={1} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>キャスト1行
+                <textarea value={cur.line} onChange={e => setCur(prev => ({ ...prev, line: e.target.value }))} rows={1} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+              </label>
+            </>
+          )}
+          <label style={{ fontSize: 13, fontWeight: 600 }}>フッター
+            <textarea value={cur.footer} onChange={e => setCur(prev => ({ ...prev, footer: e.target.value }))} rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+          </label>
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+          プレビュー{' '}
+          {xLen > 280
+            ? <span style={{ color: '#d97706', fontWeight: 400 }}>⚠ {xLen}/280文字</span>
+            : <span style={{ color: '#6b7280', fontWeight: 400 }}>{xLen}/280文字</span>}
+        </div>
+        <div style={{ padding: 12, background: '#f8f9fa', borderRadius: 8, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#333', marginBottom: 16, maxHeight: 200, overflow: 'auto', border: '1px solid #e5e7eb' }}>
+          {preview}
+        </div>
+
+        <div className="admin-btn-row">
+          <button type="button" className="admin-btn primary" disabled={saving} onClick={() => void handleSave()}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+          <button type="button" className="admin-btn" onClick={() => {
+            if (tab === 'daily') setDaily(DEFAULT_DAILY_TEMPLATE);
+            else setMonthly(DEFAULT_MONTHLY_TEMPLATE);
+          }}>
+            既定に戻す
+          </button>
+          <button type="button" className="admin-btn" onClick={onClose}>キャンセル</button>
+        </div>
       </div>
     </div>
   );
