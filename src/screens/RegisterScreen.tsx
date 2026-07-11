@@ -3,7 +3,7 @@
 // 3モード切替: lane（open伝票一覧）/ detail（伝票明細＋メニュー追加）/ menu（メニュー管理CRUD）。
 // 会計は CheckoutModal → ChangeResultModal。割引は DiscountModal（CheckoutModal内）。
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import * as menuItemsService from '../services/menuItems';
 import { fetchCasts } from '../services/casts';
 import { fetchStampSettings } from '../services/customers';
 import { todayStr, formatYen } from './analytics/common';
+import { calcRemainingSeconds, timerStatus, formatTimer } from '../domain/order/setTimer';
 import type { Order, OrderItem, MenuItem, MenuCategory, Cast, Customer, StampSettings, PaymentMethod, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
@@ -53,6 +54,8 @@ const CAT_LABELS: Record<MenuCategory, TKey> = {
 };
 
 type ViewMode = 'lane' | 'detail' | 'menu';
+
+const TIMER_COLORS = { green: '#22C55E', yellow: '#EAB308', red: '#EF4444' } as const;
 
 export function RegisterScreen() {
   const { theme } = useTheme();
@@ -79,6 +82,16 @@ export function RegisterScreen() {
   const [stampSettings, setStampSettings] = useState<StampSettings | null>(null);
 
   const tenantId = tenant?.id ?? '';
+  const timerEnabled = tenant?.timerEnabled ?? false;
+  const alertMinutes = tenant?.timerAlertMinutes ?? 5;
+
+  const [nowMs, setNowMs] = useState(Date.now());
+  const hasDeadline = timerEnabled && orders.some((o) => o.setDeadlineAt);
+  useEffect(() => {
+    if (!hasDeadline) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasDeadline]);
 
   // ── データ読込 ──
 
@@ -375,6 +388,10 @@ export function RegisterScreen() {
               const timeStr = order.openedAt
                 ? new Date(order.openedAt).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
                 : '';
+              const deadline = timerEnabled ? order.setDeadlineAt : null;
+              const remSec = deadline ? calcRemainingSeconds(deadline, nowMs) : null;
+              const tStatus = remSec !== null ? timerStatus(remSec, alertMinutes) : null;
+              const tColor = tStatus ? TIMER_COLORS[tStatus] : undefined;
               return (
                 <TouchableOpacity
                   style={[s.laneCard, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -385,10 +402,26 @@ export function RegisterScreen() {
                     <Text style={[s.laneLabel, { color: theme.text }]}>
                       {order.customerLabel || t('register.customerLabel')}
                     </Text>
-                    {order.seatNo != null && (
-                      <Text style={[s.laneSeat, { color: theme.subtext }]}>
-                        {t('register.openSince', { time: timeStr })}
-                      </Text>
+                    {remSec !== null && tColor && (
+                      <TouchableOpacity
+                        style={[s.timerBadge, { backgroundColor: tColor }]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          Alert.alert(
+                            order.customerLabel || t('register.customerLabel'),
+                            t('timer.extendOrCheckout'),
+                            [
+                              { text: t('timer.extend'), onPress: () => openExistingOrder(order) },
+                              { text: t('timer.goCheckout'), onPress: () => { openExistingOrder(order); setTimeout(() => setShowCheckout(true), 300); } },
+                              { text: t('common.cancel'), style: 'cancel' },
+                            ],
+                          );
+                        }}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <MaterialCommunityIcons name="timer-outline" size={14} color="#fff" />
+                        <Text style={s.timerText}>{formatTimer(remSec)}</Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                   <Text style={[s.laneTime, { color: theme.subtext }]}>
@@ -736,6 +769,10 @@ function makeStyles(theme: ThemeColor) {
     customerLinked: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, padding: 12, gap: 10 },
     linkedName: { fontSize: 15, fontWeight: '700' },
     linkCustomerBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, alignSelf: 'flex-start' },
+
+    // Timer badge
+    timerBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+    timerText: { color: '#fff', fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
     // Menu manage
     menuManageRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, padding: 14, marginBottom: 6, gap: 10 },

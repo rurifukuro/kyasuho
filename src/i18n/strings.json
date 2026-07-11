@@ -706,5 +706,10 @@
   "points.noRewards": { "ja": "景品が登録されていません" },
   "points.rewardHint": { "ja": "景品の追加・編集はPC管理画面から行えます。" },
   "points.active": { "ja": "有効" },
-  "points.inactive": { "ja": "無効" }
+  "points.inactive": { "ja": "無効" },
+
+  "timer.overdue": { "ja": "超過" },
+  "timer.extend": { "ja": "セット延長" },
+  "timer.extendOrCheckout": { "ja": "このお客様の次のアクションを選んでください" },
+  "timer.goCheckout": { "ja": "お会計へ" }
 }
