@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import type { RecurringExpense, ExpenseCategory } from '../types';
+import { computeMaterializations } from '../domain/expense/computeMaterializations';
 
 type RecurringRow = {
   id: string;
@@ -98,26 +99,8 @@ export async function deleteRecurringExpense(id: string): Promise<void> {
   if (error) throw error;
 }
 
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
 function monthFirstDay(ym: string): string {
   return `${ym}-01`;
-}
-
-function enumMonths(startYm: string, endYm: string): string[] {
-  const result: string[] = [];
-  const [sy, sm] = startYm.split('-').map(Number);
-  const [ey, em] = endYm.split('-').map(Number);
-  let y = sy;
-  let m = sm;
-  while (y < ey || (y === ey && m <= em)) {
-    result.push(`${y}-${pad2(m)}`);
-    m++;
-    if (m > 12) { m = 1; y++; }
-  }
-  return result;
 }
 
 export async function materializeRecurringExpenses(
@@ -152,48 +135,22 @@ export async function materializeRecurringExpenses(
     ),
   );
 
-  const toInsert: {
-    tenant_id: string;
-    date: string;
-    category: string;
-    amount: number;
-    memo: string;
-    source_recurring_id: string;
-  }[] = [];
-
-  for (const t of active) {
-    const startYm = t.startMonth.substring(0, 7);
-    const endYm = t.endMonth ? t.endMonth.substring(0, 7) : upToYm;
-    const effectiveEnd = endYm <= upToYm ? endYm : upToYm;
-
-    for (const ym of enumMonths(startYm, effectiveEnd)) {
-      const key = `${t.id}:${ym}`;
-      if (existingSet.has(key) || skipSet.has(key)) continue;
-
-      const [yy, mm] = ym.split('-').map(Number);
-      const lastDay = new Date(yy, mm, 0).getDate();
-      const day = Math.min(t.dayOfMonth, lastDay);
-      const dateStr = `${ym}-${pad2(day)}`;
-
-      toInsert.push({
-        tenant_id: tenantId,
-        date: dateStr,
-        category: t.category,
-        amount: t.amount,
-        memo: t.name,
-        source_recurring_id: t.id,
-      });
-    }
-  }
-
-  if (toInsert.length === 0) return 0;
+  const rows = computeMaterializations(active, existingSet, skipSet, upToYm);
+  if (rows.length === 0) return 0;
 
   const { error: insertErr } = await supabase
     .from('ky_expenses')
-    .insert(toInsert);
+    .insert(rows.map(r => ({
+      tenant_id: r.tenantId,
+      date: r.date,
+      category: r.category,
+      amount: r.amount,
+      memo: r.memo,
+      source_recurring_id: r.sourceRecurringId,
+    })));
   if (insertErr) throw insertErr;
 
-  return toInsert.length;
+  return rows.length;
 }
 
 export async function skipRecurringMonth(
