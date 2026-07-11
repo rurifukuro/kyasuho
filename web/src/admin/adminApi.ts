@@ -128,6 +128,30 @@ export async function checkinReservation(
   }
 }
 
+/**
+ * 来店取消＝ステータスをreservedに戻し、紐付きopen伝票をvoidにする。
+ * closed伝票がある場合は会計済みのためvoidしない（手動対応を案内）。
+ */
+export async function revertCheckin(reservationId: string): Promise<void> {
+  await updateReservationStatus(reservationId, 'reserved');
+
+  const { data: orders, error: fetchErr } = await supabase
+    .from('ky_orders')
+    .select('id, status')
+    .eq('reservation_id', reservationId);
+  if (fetchErr) throw fetchErr;
+
+  for (const row of (orders ?? []) as { id: string; status: string }[]) {
+    if (row.status === 'open') {
+      const { error: voidErr } = await supabase
+        .from('ky_orders')
+        .update({ status: 'void' })
+        .eq('id', row.id);
+      if (voidErr) throw voidErr;
+    }
+  }
+}
+
 export async function removeReservation(id: string): Promise<void> {
   const { error } = await supabase.from('ky_reservations').delete().eq('id', id);
   if (error) throw error;

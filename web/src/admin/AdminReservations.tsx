@@ -11,6 +11,7 @@ import {
   fetchCastList,
   fetchMonthlyNoShowCount,
   removeReservation,
+  revertCheckin,
   updateReservationStatus,
 } from './adminApi';
 
@@ -147,6 +148,20 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     } catch (e) {
       console.warn('[kyasuho] checkinReservation failed:', e);
       window.alert('来店処理に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRevertCheckin = async (row: KyReservationFull) => {
+    if (!window.confirm(`${row.customer_name} 様を予約中に戻しますか？\n紐付きの未会計伝票は取消されます。`)) return;
+    setBusyId(row.id);
+    try {
+      await revertCheckin(row.id);
+      await load();
+    } catch (e) {
+      console.warn('[kyasuho] revertCheckin failed:', e);
+      window.alert('予約中への復帰に失敗しました。');
     } finally {
       setBusyId(null);
     }
@@ -454,7 +469,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                             type="button"
                             className="admin-btn"
                             disabled={busy}
-                            onClick={() => void changeStatus(row, 'reserved')}
+                            onClick={() => void handleRevertCheckin(row)}
                           >
                             予約中に戻す
                           </button>
