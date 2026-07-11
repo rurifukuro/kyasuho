@@ -2,6 +2,7 @@
 
 import { supabase } from '../config/supabase';
 import type { Order, OrderItem, OrderStatus, PaymentMethod, StampSettings } from '../types';
+import { buildSaleMoves } from '../domain/inventory/stockBalance';
 
 // ── row → domain 変換 ──
 
@@ -257,6 +258,7 @@ export async function closeOrder(
   const bizDate = (bizDateRes.data as { biz_date: string }).biz_date;
 
   await autoUpsertSales(tenantId, bizDate);
+  await autoDeductInventory(tenantId, orderId, _items);
 
   const stampResult = await applyStamp(tenantId, input.customerId ?? null);
   return stampResult;
@@ -488,4 +490,43 @@ async function autoUpsertSales(
     { onConflict: 'tenant_id,date' },
   );
   if (upsertErr) throw upsertErr;
+}
+
+// §47: 会計確定時に在庫紐付きメニュー項目を自動sale減算
+async function autoDeductInventory(
+  tenantId: string,
+  orderId: string,
+  items: OrderItem[],
+): Promise<void> {
+  const menuItemIds = items
+    .map((i) => i.menuItemId)
+    .filter((id): id is string => id !== null);
+  if (menuItemIds.length === 0) return;
+
+  const { data: invItems, error: invErr } = await supabase
+    .from('ky_inventory_items')
+    .select('id, menu_item_id')
+    .eq('tenant_id', tenantId)
+    .in('menu_item_id', menuItemIds)
+    .eq('is_active', true);
+  if (invErr || !invItems || invItems.length === 0) return;
+
+  const links = (invItems as { id: string; menu_item_id: string }[]).map(
+    (r) => ({ itemId: r.id, menuItemId: r.menu_item_id }),
+  );
+  const saleMoves = buildSaleMoves(
+    items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty })),
+    links,
+  );
+
+  for (const mv of saleMoves) {
+    await supabase.rpc('ky_record_inventory_move', {
+      p_tenant_id: tenantId,
+      p_item_id: mv.itemId,
+      p_kind: 'sale',
+      p_qty: mv.qty,
+      p_order_id: orderId,
+      p_memo: '',
+    });
+  }
 }

@@ -44,11 +44,18 @@ export async function fetchOwnTenant(): Promise<KyTenant | null> {
   if (!uid) return null;
   const { data, error } = await supabase
     .from('ky_tenants')
-    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended, enable_bottle_keep, enable_vouchers, timer_enabled, timer_alert_minutes, nomination_kinds_enabled')
+    .select('*')
     .eq('owner_user_id', uid)
     .maybeSingle();
   if (error) throw error;
-  return (data as KyTenant | null) ?? null;
+  if (!data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    ...row,
+    timer_enabled: row.timer_enabled ?? false,
+    timer_alert_minutes: row.timer_alert_minutes ?? 5,
+    nomination_kinds_enabled: row.nomination_kinds_enabled ?? false,
+  } as KyTenant;
 }
 
 // ---- 予約台帳 ----
