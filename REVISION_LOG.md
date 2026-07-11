@@ -2753,3 +2753,23 @@ services層 `materializeRecurringExpenses` を domain関数 `computeMaterializat
 ### 検証
 - アプリ `npx tsc --noEmit` EXIT:0
 - Web `npx tsc -b` EXIT:0
+
+---
+
+## Rev109 — §31 ノーショー履歴活用（管理Webに月次集計＋日次サマリ強化）（2026-07-12）
+
+### 概要
+§26棚卸し#38。同一連絡先の過去no_show回数バッジ表示は既にRev29（アプリ）＋Rev31（管理Web）で実装済み。
+本Revでは管理Webの予約台帳に日次・月次の無断キャンセル集計を追加。
+
+### 機能
+- **日次サマリ強化**: 日付ナビの横に「無断キャンセル N件」バッジ（当日にno_showがある場合のみ表示）
+- **月次集計バー**: テーブル下部に当該月の無断キャンセル合計件数を表示（1件以上のみ）
+
+### 新規・変更ファイル
+- `web/src/admin/adminApi.ts`: `fetchMonthlyNoShowCount()` 追加
+- `web/src/admin/AdminReservations.tsx`: `statusCounts`（日次状態集計）＋`monthlyNoShow`（月次no_show件数）追加、UIにバッジ＋月次集計バー表示
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0
+- Web `npx tsc -b` EXIT:0

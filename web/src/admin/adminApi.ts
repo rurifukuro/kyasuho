@@ -135,6 +135,29 @@ export async function countNoShowByContacts(
   return map;
 }
 
+export async function fetchMonthlyNoShowCount(
+  tenantId: string,
+  yearMonth: string,
+): Promise<number> {
+  const from = `${yearMonth}-01`;
+  const toExcl = (() => {
+    const parts = yearMonth.split('-').map(Number);
+    const y = parts[0] ?? 2026;
+    const m = parts[1] ?? 1;
+    const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    return `${next}-01`;
+  })();
+  const { count, error } = await supabase
+    .from('ky_reservations')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('status', 'no_show')
+    .gte('date', from)
+    .lt('date', toExcl);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 // ---- 受付枠 ----
 
 export async function fetchWindows(tenantId: string, date: string): Promise<KyUnlockWindow[]> {

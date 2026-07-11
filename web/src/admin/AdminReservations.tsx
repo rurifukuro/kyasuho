@@ -8,6 +8,7 @@ import {
   countNoShowByContacts,
   fetchAllReservations,
   fetchCastList,
+  fetchMonthlyNoShowCount,
   removeReservation,
   updateReservationStatus,
 } from './adminApi';
@@ -48,6 +49,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [noShowMap, setNoShowMap] = useState<Map<string, number>>(new Map());
+  const [monthlyNoShow, setMonthlyNoShow] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,8 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
       } else {
         setNoShowMap(new Map());
       }
+      const ym = date.substring(0, 7);
+      fetchMonthlyNoShowCount(tenant.id, ym).then(setMonthlyNoShow).catch(() => {});
     } catch (e) {
       console.warn('[kyasuho] fetchAllReservations failed:', e);
       setError('予約の取得に失敗しました。再読み込みしてください。');
@@ -109,6 +113,12 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     () => items.filter((r) => r.status === 'reserved' || r.status === 'checked_in').length,
     [items],
   );
+
+  const statusCounts = useMemo(() => {
+    const counts = { reserved: 0, checked_in: 0, cancelled: 0, no_show: 0 };
+    for (const r of items) counts[r.status]++;
+    return counts;
+  }, [items]);
 
   const changeStatus = async (
     row: KyReservationFull,
@@ -218,6 +228,11 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
         </button>
         <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
           有効な予約 {activeCount} 件
+          {statusCounts.no_show > 0 && (
+            <span className="admin-badge st-no_show" style={{ marginLeft: 8, fontSize: 11 }}>
+              無断キャンセル {statusCounts.no_show} 件
+            </span>
+          )}
         </span>
         <button
           type="button"
@@ -445,6 +460,12 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {monthlyNoShow > 0 && (
+        <div style={{ marginTop: 16, padding: '10px 14px', background: '#fef3c7', borderRadius: 8, fontSize: 13 }}>
+          <strong>📊 {date.substring(0, 7).replace('-', '年')}月</strong>の無断キャンセル: <strong style={{ color: '#b91c1c' }}>{monthlyNoShow}件</strong>
         </div>
       )}
     </div>
