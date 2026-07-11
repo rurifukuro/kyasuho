@@ -12,7 +12,7 @@ import type { ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ShiftFontKey, ShiftTemplateDefinition } from './definitions';
 import { MOTIF_CHARS } from './definitions';
-import type { ShiftDayData } from './shiftData';
+import type { ShiftDayData, ShiftEventDay } from './shiftData';
 import {
   WEEKDAY_LABELS,
   daysInMonth,
@@ -46,9 +46,11 @@ type Props = {
   yearMonth: string; // 'YYYY-MM'
   storeName: string;
   logoUrl?: string | null;
+  eventDays?: ShiftEventDay[];
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, eventDays }: Props) {
+  const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
@@ -191,9 +193,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl }:
 
       {/* 本体 */}
       {def.layout === 'month-grid' ? (
-        <MonthGrid def={def} days={days} yearMonth={yearMonth} bodyFont={bodyFont} />
+        <MonthGrid def={def} days={days} yearMonth={yearMonth} bodyFont={bodyFont} eventMap={eventMap} />
       ) : (
-        <WeekRows def={def} days={days} bodyFont={bodyFont} />
+        <WeekRows def={def} days={days} bodyFont={bodyFont} eventMap={eventMap} />
       )}
     </View>
   );
@@ -358,11 +360,13 @@ function MonthGrid({
   days,
   yearMonth,
   bodyFont,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   yearMonth: string;
   bodyFont: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
@@ -417,7 +421,9 @@ function MonthGrid({
               }
               const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
               const casts = byDate.get(date) ?? [];
-              const shown = casts.slice(0, maxPerCell);
+              const eventLabel = eventMap.get(date);
+              const evColor = p.eventAccent ?? p.accent;
+              const shown = casts.slice(0, eventLabel ? Math.max(1, maxPerCell - 1) : maxPerCell);
               const rest = casts.length - shown.length;
               const wd = i % 7;
               return (
@@ -426,14 +432,19 @@ function MonthGrid({
                   style={{
                     flex: 1,
                     backgroundColor: p.cellBg,
-                    borderWidth: 1,
-                    borderColor: p.cellBorder,
+                    borderWidth: eventLabel ? 3 : 1,
+                    borderColor: eventLabel ? evColor : p.cellBorder,
                     borderRadius: deco.cornerRadius,
                     paddingVertical: 6,
                     paddingHorizontal: 8,
                     overflow: 'hidden',
                   }}
                 >
+                  {eventLabel ? (
+                    <View style={{ backgroundColor: evColor, marginHorizontal: -8, marginTop: -6, paddingVertical: 2, paddingHorizontal: 6, marginBottom: 4 }}>
+                      <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 11, lineHeight: 14, fontWeight: '700', color: '#FFFFFF', fontFamily: bodyFont }}>{eventLabel}</Text>
+                    </View>
+                  ) : null}
                   <Text
                     style={{
                       fontSize: 20,
@@ -548,10 +559,12 @@ function WeekRows({
   def,
   days,
   bodyFont,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   bodyFont: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
@@ -626,23 +639,30 @@ function WeekRows({
             const wd = weekdayOf(d.date);
             const dayNum = Number(d.date.slice(8, 10));
             const monthNum = Number(d.date.slice(5, 7));
+            const eventLabel = eventMap.get(d.date);
+            const evColor = p.eventAccent ?? p.accent;
             const shown =
               d.casts.length <= maxChips
                 ? d.casts
                 : d.casts.slice(0, Math.max(1, maxChips - 1));
             const rest = d.casts.length - shown.length;
             return (
-              <View
-                key={d.date}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  gap: 18,
-                  paddingVertical: s.rowPadV,
-                  borderBottomWidth: 1,
-                  borderBottomColor: p.cellBorder,
-                }}
-              >
+              <View key={d.date}>
+                {eventLabel ? (
+                  <View style={{ backgroundColor: evColor, paddingVertical: 2, paddingHorizontal: 10, marginBottom: 2 }}>
+                    <Text numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: s.nameFs, lineHeight: Math.round(s.nameFs * 1.3), fontWeight: '700', color: '#FFFFFF', fontFamily: bodyFont }}>{eventLabel}</Text>
+                  </View>
+                ) : null}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: 18,
+                    paddingVertical: s.rowPadV,
+                    borderBottomWidth: 1,
+                    borderBottomColor: p.cellBorder,
+                  }}
+                >
                 <View
                   style={{
                     width: s.labelW,
@@ -752,6 +772,7 @@ function WeekRows({
                     </View>
                   ) : null}
                 </View>
+              </View>
               </View>
             );
           })}

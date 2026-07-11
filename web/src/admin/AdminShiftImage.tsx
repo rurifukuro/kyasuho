@@ -11,6 +11,7 @@ import { formatDate } from '../lib/timeUtils';
 import {
   addShiftTemplate,
   fetchCastList,
+  fetchEvents,
   fetchShiftTemplateList,
   fetchShiftsByMonth,
   removeShiftTemplate,
@@ -33,6 +34,7 @@ import {
 } from '../shiftTemplates/definitions';
 import { detectGridFromImage } from '../shiftTemplates/gridDetect';
 import { buildShiftDays } from '../shiftTemplates/shiftData';
+import type { ShiftEventDay } from '../shiftTemplates/shiftData';
 import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 
@@ -140,6 +142,8 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
+  const [eventDays, setEventDays] = useState<ShiftEventDay[]>([]);
+
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
   const [aiMood, setAiMood] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
@@ -151,14 +155,21 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setLoading(true);
     setError(null);
     try {
-      const [shiftRows, castRows, favRows] = await Promise.all([
+      const [shiftRows, castRows, favRows, evRows] = await Promise.all([
         fetchShiftsByMonth(tenant.id, yearMonth),
         fetchCastList(tenant.id),
         fetchShiftTemplateList(tenant.id),
+        fetchEvents(tenant.id),
       ]);
       setShifts(shiftRows);
       setCasts(castRows);
       setFavorites(favRows);
+      const ym = yearMonth;
+      setEventDays(
+        evRows
+          .filter(e => e.event_date.startsWith(`${ym}-`))
+          .map(e => ({ date: e.event_date, label: e.title })),
+      );
     } catch (e) {
       console.warn('[kyasuho] fetchShiftsByMonth failed:', e);
       setError('シフトデータの取得に失敗しました。再読み込みしてください。');
@@ -453,7 +464,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} />
+              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} />
             </div>
           </div>
           <p className="admin-note">
@@ -814,7 +825,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
-          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} />
+          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} eventDays={eventDays} />
         </div>
       </div>
     </div>

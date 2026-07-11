@@ -25,7 +25,7 @@ function outlineStyle(color: string): string {
   const shadow = lum > 128 ? '#000000' : '#FFFFFF';
   return `1px 1px 2px ${shadow}, -1px -1px 2px ${shadow}, 1px -1px 2px ${shadow}, -1px 1px 2px ${shadow}`;
 }
-import type { ShiftDayData } from './shiftData';
+import type { ShiftDayData, ShiftEventDay } from './shiftData';
 import {
   WEEKDAY_LABELS,
   daysInMonth,
@@ -78,9 +78,11 @@ type Props = {
   dailyDate?: string; // 'YYYY-MM-DD'（daily-lineup用）
   bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
   placement?: ShiftPlacement | null; // §22-3: AI解析による配置情報
+  eventDays?: ShiftEventDay[];
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays }: Props) {
+  const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
@@ -214,11 +216,11 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
           dailyDate={dailyDate}
         />
       ) : def.layout === 'daily-lineup' && dailyDate ? (
-        <DailyLineup def={def} days={days} dailyDate={dailyDate} />
+        <DailyLineup def={def} days={days} dailyDate={dailyDate} eventMap={eventMap} />
       ) : def.layout === 'month-grid' ? (
-        <MonthGrid def={def} days={days} yearMonth={yearMonth} />
+        <MonthGrid def={def} days={days} yearMonth={yearMonth} eventMap={eventMap} />
       ) : (
-        <WeekRows def={def} days={days} />
+        <WeekRows def={def} days={days} eventMap={eventMap} />
       )}
     </div>
   );
@@ -370,10 +372,12 @@ function MonthGrid({
   def,
   days,
   yearMonth,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   yearMonth: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
@@ -449,12 +453,14 @@ function MonthGrid({
           const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
           const casts = byDate.get(date) ?? [];
           const wd = i % 7;
+          const eventLabel = eventMap.get(date);
+          const evColor = p.eventAccent ?? p.accent;
           return (
             <div
               key={date}
               style={{
                 backgroundColor: p.cellBg,
-                border: `1px solid ${p.cellBorder}`,
+                border: eventLabel ? `3px solid ${evColor}` : `1px solid ${p.cellBorder}`,
                 borderRadius: deco.cornerRadius,
                 padding: '4px 5px',
                 overflow: 'hidden',
@@ -462,6 +468,11 @@ function MonthGrid({
                 flexDirection: 'column',
               }}
             >
+              {eventLabel ? (
+                <div style={{ background: evColor, margin: '-4px -5px 3px', padding: '1px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+                </div>
+              ) : null}
               <div
                 style={{
                   fontSize: 18,
@@ -545,7 +556,7 @@ function wrChipsPerRow(s: WeekRowsSizes, colW: number): number {
   return Math.max(1, Math.floor((chipArea + s.chipGap) / (s.chipW + s.chipGap)));
 }
 
-function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayData[] }) {
+function WeekRows({ def, days, eventMap }: { def: ShiftTemplateDefinition; days: ShiftDayData[]; eventMap: Map<string, string> }) {
   const p = def.palette;
   const deco = def.decorations;
 
@@ -643,14 +654,21 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
             const wd = weekdayOf(d.date);
             const dayNum = Number(d.date.slice(8, 10));
             const monthNum = Number(d.date.slice(5, 7));
+            const eventLabel = eventMap.get(d.date);
+            const evColor = p.eventAccent ?? p.accent;
             const shown =
               d.casts.length <= maxChips
                 ? d.casts
                 : d.casts.slice(0, Math.max(1, maxChips - 1));
             const rest = d.casts.length - shown.length;
             return (
+              <div key={d.date}>
+              {eventLabel ? (
+                <div style={{ background: evColor, padding: '2px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: s.nameFs, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+                </div>
+              ) : null}
               <div
-                key={d.date}
                 style={{
                   display: 'flex',
                   alignItems: 'flex-start',
@@ -745,6 +763,7 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
                   ) : null}
                 </div>
               </div>
+              </div>
             );
           })}
         </div>
@@ -769,20 +788,25 @@ function DailyLineup({
   def,
   days,
   dailyDate,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   dailyDate: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
   const dayData = days.find(d => d.date === dailyDate);
   const casts = dayData?.casts ?? [];
   const count = casts.length;
+  const eventLabel = eventMap.get(dailyDate);
+  const evColor = p.eventAccent ?? p.accent;
 
   const gap = deco.cellGap + 4;
   const availW = def.size.w - PADDING * 2;
-  const availH = def.size.h - PADDING * 2 - 140;
+  const eventBannerH = eventLabel ? 44 : 0;
+  const availH = def.size.h - PADDING * 2 - 140 - eventBannerH;
 
   const cols = count <= 2 ? count || 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
   const maxVisible = cols * Math.floor((availH + gap) / (Math.floor((availW - gap * (cols - 1)) / cols) * 0.7 + gap));
@@ -796,34 +820,45 @@ function DailyLineup({
   const cellH = Math.min(Math.floor((availH - gap * (rows - 1)) / rows), cellW * 1.35);
   const photoSize = Math.min(cellW - 24, cellH - 80, 200);
 
+  const eventBanner = eventLabel ? (
+    <div style={{ background: evColor, borderRadius: deco.cornerRadius, padding: '6px 16px', textAlign: 'center', marginBottom: 8 }}>
+      <span style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+    </div>
+  ) : null;
+
   if (count === 0) {
     return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: p.dayLabel,
-          fontSize: 28,
-        }}
-      >
-        この日の出勤予定はありません
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {eventBanner}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: p.dayLabel,
+            fontSize: 28,
+          }}
+        >
+          この日の出勤予定はありません
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap,
-        alignContent: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {eventBanner}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap,
+          alignContent: 'center',
+          justifyContent: 'center',
+        }}
+      >
       {shown.map((c, i) => (
         <div
           key={i}
@@ -917,6 +952,7 @@ function DailyLineup({
           </span>
         </div>
       )}
+      </div>
     </div>
   );
 }

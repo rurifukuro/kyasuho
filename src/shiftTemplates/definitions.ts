@@ -64,6 +64,7 @@ export type ShiftPalette = {
   accent: string;
   cellBg: string;
   cellBorder: string;
+  eventAccent?: string;
 };
 
 export type ShiftTemplateDefinition = {

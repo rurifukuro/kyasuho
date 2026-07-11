@@ -25,10 +25,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SHIFT_TEMPLATES, CATEGORY_LABELS } from '../shiftTemplates/definitions';
 import type { ShiftTemplateDefinition } from '../shiftTemplates/definitions';
 import { buildShiftDays, yearMonthLabel } from '../shiftTemplates/shiftData';
-import type { ShiftFlatRow } from '../shiftTemplates/shiftData';
+import type { ShiftEventDay, ShiftFlatRow } from '../shiftTemplates/shiftData';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
 import { buildAiDefinition } from '../shiftTemplates/aiDesign';
 import * as castService from '../services/casts';
+import * as eventService from '../services/events';
 import { requestAiShiftDesign } from '../services/aiDesign';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
 import type { Cast, Shift, Tenant, ThemeColor } from '../types';
@@ -72,6 +73,7 @@ export function ShiftImageScreen({
   const [templateId, setTemplateId] = useState(SHIFT_TEMPLATES[0].id);
   const [tall, setTall] = useState(false);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [eventDays, setEventDays] = useState<ShiftEventDay[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<'save' | 'share' | null>(null);
   const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${tenant.slug}`;
@@ -125,8 +127,12 @@ export function ShiftImageScreen({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await castService.fetchShiftsByMonth(tenant.id, yearMonth);
+      const [data, evts] = await Promise.all([
+        castService.fetchShiftsByMonth(tenant.id, yearMonth),
+        eventService.fetchEventsByMonth(tenant.id, yearMonth),
+      ]);
       setShifts(data);
+      setEventDays(evts.map(e => ({ date: e.eventDate, label: e.title })));
     } catch (e: unknown) {
       console.warn('[kyasuho] fetchShiftsByMonth:', e);
     } finally {
@@ -417,6 +423,7 @@ export function ShiftImageScreen({
                 days={days}
                 yearMonth={yearMonth}
                 storeName={tenant.name}
+                eventDays={eventDays}
               />
             </View>
           </View>
@@ -493,7 +500,7 @@ export function ShiftImageScreen({
         collapsable={false}
         style={{ position: 'absolute', left: -20000, top: 0, width: def.size.w, height: def.size.h }}
       >
-        <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} />
+        <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} eventDays={eventDays} />
       </View>
 
       {/* Z-KBD: AI雰囲気入力（TextInput）があるため必須。KAVなし＝ルート直下の兄弟に置く */}

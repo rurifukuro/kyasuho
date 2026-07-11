@@ -58,6 +58,9 @@ export function weekdayOf(date: string): number {
 
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const;
 
+/** イベント日（ky_eventsから抽出・レンダラーへ渡す） */
+export type ShiftEventDay = { date: string; label: string };
+
 /** 'YYYY-MM' → 'YYYY年M月' */
 export function yearMonthLabel(yearMonth: string): string {
   const [y = 0, m = 0] = yearMonth.split('-').map(Number);
