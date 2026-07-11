@@ -17,6 +17,7 @@ type PayrollSettingsRow = {
   nomination_back_rate: number;
   default_back_rate: number;
   late_deduction: number;
+  slide_enabled: boolean;
 };
 
 export const DEFAULT_PAYROLL_SETTINGS: Omit<PayrollSettings, 'id' | 'tenantId'> = {
@@ -24,6 +25,7 @@ export const DEFAULT_PAYROLL_SETTINGS: Omit<PayrollSettings, 'id' | 'tenantId'> 
   nominationBackRate: 300,
   defaultBackRate: 0,
   lateDeduction: 0,
+  slideEnabled: false,
 };
 
 function rowToSettings(row: PayrollSettingsRow): PayrollSettings {
@@ -34,6 +36,7 @@ function rowToSettings(row: PayrollSettingsRow): PayrollSettings {
     nominationBackRate: row.nomination_back_rate,
     defaultBackRate: row.default_back_rate,
     lateDeduction: row.late_deduction,
+    slideEnabled: row.slide_enabled,
   };
 }
 
@@ -53,6 +56,7 @@ export type PayrollSettingsInput = {
   nominationBackRate: number;
   defaultBackRate: number;
   lateDeduction: number;
+  slideEnabled: boolean;
 };
 
 export async function savePayrollSettings(
@@ -66,6 +70,7 @@ export async function savePayrollSettings(
       nomination_back_rate: input.nominationBackRate,
       default_back_rate: input.defaultBackRate,
       late_deduction: input.lateDeduction,
+      slide_enabled: input.slideEnabled,
     },
     { onConflict: 'tenant_id' },
   );

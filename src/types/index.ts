@@ -370,6 +370,18 @@ export type PayrollSettings = {
   nominationBackRate: number; // 円/件
   defaultBackRate: number; // %（メニュー個別設定が無い商品に適用）
   lateDeduction: number; // 円/回（遅刻控除）
+  slideEnabled: boolean;
+};
+
+export type SlideMetric = 'monthly_sales' | 'monthly_nominations';
+
+export type HourlyRateTier = {
+  id: string;
+  tenantId: string;
+  metric: SlideMetric;
+  threshold: number;
+  hourlyRate: number;
+  sortOrder: number;
 };
 
 // ── ロール判定（T13 キャストアカウント基盤） ──────────────────────────

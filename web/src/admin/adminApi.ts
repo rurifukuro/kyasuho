@@ -27,6 +27,7 @@ import type {
   KyPointSettings,
   KyPointReward,
   KyRecurringExpense,
+  KyHourlyRateTier,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -371,7 +372,7 @@ export async function fetchPayrollSettings(tenantId: string): Promise<KyPayrollS
 
 export async function savePayrollSettings(
   tenantId: string,
-  input: PayrollCalcSettings & { defaultBackRate: number },
+  input: PayrollCalcSettings & { defaultBackRate: number; slideEnabled: boolean },
 ): Promise<void> {
   const { error } = await supabase.from('ky_payroll_settings').upsert(
     {
@@ -380,9 +381,48 @@ export async function savePayrollSettings(
       nomination_back_rate: input.nominationBackRate,
       default_back_rate: input.defaultBackRate,
       late_deduction: input.lateDeduction,
+      slide_enabled: input.slideEnabled,
     },
     { onConflict: 'tenant_id' },
   );
+  if (error) throw error;
+}
+
+export async function fetchHourlyRateTiers(
+  tenantId: string,
+): Promise<KyHourlyRateTier[]> {
+  const { data, error } = await supabase
+    .from('ky_hourly_rate_tiers')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data ?? []) as KyHourlyRateTier[];
+}
+
+export async function upsertHourlyRateTier(
+  tenantId: string,
+  tier: Partial<KyHourlyRateTier> & { metric: KyHourlyRateTier['metric']; threshold: number; hourly_rate: number },
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    tenant_id: tenantId,
+    metric: tier.metric,
+    threshold: tier.threshold,
+    hourly_rate: tier.hourly_rate,
+    sort_order: tier.sort_order ?? 0,
+  };
+  if (tier.id) row.id = tier.id;
+  const { error } = await supabase
+    .from('ky_hourly_rate_tiers')
+    .upsert(row);
+  if (error) throw error;
+}
+
+export async function deleteHourlyRateTier(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_hourly_rate_tiers')
+    .delete()
+    .eq('id', id);
   if (error) throw error;
 }
 

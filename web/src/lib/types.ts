@@ -237,6 +237,18 @@ export interface KyPayrollSettings {
   nomination_back_rate: number;
   default_back_rate: number;
   late_deduction: number;
+  slide_enabled: boolean;
+}
+
+export type KySlideMetric = 'monthly_sales' | 'monthly_nominations';
+
+export interface KyHourlyRateTier {
+  id: string;
+  tenant_id: string;
+  metric: KySlideMetric;
+  threshold: number;
+  hourly_rate: number;
+  sort_order: number;
 }
 
 /** キャスト日別給与（ky_cast_payroll・キャスト×日付で1行）。金額は円・勤務時間は分単位。 */

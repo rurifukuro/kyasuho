@@ -28,7 +28,7 @@ import type { Cast, CastPayroll, PayrollSettings, ThemeColor } from '../../types
 
 type EffectiveSettings = Pick<
   PayrollSettings,
-  'baseHourlyRate' | 'nominationBackRate' | 'defaultBackRate' | 'lateDeduction'
+  'baseHourlyRate' | 'nominationBackRate' | 'defaultBackRate' | 'lateDeduction' | 'slideEnabled'
 >;
 
 export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
@@ -360,6 +360,7 @@ function PayrollSettingsModal({
         nominationBackRate: parseNum(nomRate),
         defaultBackRate: parseFloat(defaultBackRate) || 0,
         lateDeduction: parseNum(lateDeduction),
+        slideEnabled: current.slideEnabled,
       });
       onSaved();
     } catch (e: unknown) {

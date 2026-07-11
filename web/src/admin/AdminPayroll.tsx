@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyCast, KyCastPayroll, KyTenant } from '../lib/types';
+import type { KyCast, KyCastPayroll, KyHourlyRateTier, KySlideMetric, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
 import {
   DEFAULT_PAYROLL_SETTINGS,
   deletePayroll,
+  deleteHourlyRateTier,
   fetchAttendanceByMonth,
   fetchCastList,
+  fetchHourlyRateTiers,
   fetchPayrollByMonth,
   fetchPayrollSettings,
   generatePayrollFromAttendance,
   savePayrollSettings,
+  upsertHourlyRateTier,
   upsertPayroll,
 } from './adminApi';
 import { calcPayroll, splitMinutes } from './payrollCalc';
@@ -74,8 +77,19 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
   );
   const [rateDefaultBack, setRateDefaultBack] = useState('0');
   const [rateLate, setRateLate] = useState(String(DEFAULT_PAYROLL_SETTINGS.lateDeduction));
+  const [slideEnabled, setSlideEnabled] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState<string | null>(null);
+
+  // スライド時給tier
+  const [tiers, setTiers] = useState<KyHourlyRateTier[]>([]);
+  const [tierFormOpen, setTierFormOpen] = useState(false);
+  const [tierEditId, setTierEditId] = useState<string | null>(null);
+  const [tierMetric, setTierMetric] = useState<KySlideMetric>('monthly_sales');
+  const [tierThreshold, setTierThreshold] = useState('0');
+  const [tierRate, setTierRate] = useState('1200');
+  const [tierBusy, setTierBusy] = useState(false);
+  const [tierError, setTierError] = useState<string | null>(null);
 
   // 明細編集フォーム
   const [editing, setEditing] = useState<KyCastPayroll | null>(null);
@@ -133,9 +147,17 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         setRateNomination(String(row.nomination_back_rate));
         setRateDefaultBack(String(row.default_back_rate));
         setRateLate(String(row.late_deduction));
+        setSlideEnabled(row.slide_enabled);
       })
       .catch((e) => {
         console.warn('[kyasuho] fetchPayrollSettings failed:', e);
+      });
+    fetchHourlyRateTiers(tenant.id)
+      .then((rows) => {
+        if (!cancelled) setTiers(rows);
+      })
+      .catch((e) => {
+        console.warn('[kyasuho] fetchHourlyRateTiers failed:', e);
       });
     return () => {
       cancelled = true;
@@ -186,6 +208,7 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         nominationBackRate: n,
         defaultBackRate: dbr,
         lateDeduction: l,
+        slideEnabled,
       });
       setSettingsMsg('給与設定を保存しました。');
     } catch (err) {
@@ -307,6 +330,75 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
       window.alert('削除に失敗しました。');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const loadTiers = useCallback(async () => {
+    try {
+      const rows = await fetchHourlyRateTiers(tenant.id);
+      setTiers(rows);
+    } catch (e) {
+      console.warn('[kyasuho] fetchHourlyRateTiers failed:', e);
+    }
+  }, [tenant.id]);
+
+  const openTierForm = (tier?: KyHourlyRateTier) => {
+    if (tier) {
+      setTierEditId(tier.id);
+      setTierMetric(tier.metric as KySlideMetric);
+      setTierThreshold(String(tier.threshold));
+      setTierRate(String(tier.hourly_rate));
+    } else {
+      setTierEditId(null);
+      setTierMetric('monthly_sales');
+      setTierThreshold('0');
+      setTierRate('1200');
+    }
+    setTierError(null);
+    setTierFormOpen(true);
+  };
+
+  const handleSaveTier = async (e: FormEvent) => {
+    e.preventDefault();
+    if (tierBusy) return;
+    const threshold = toNonNegativeInt(tierThreshold);
+    const rate = toNonNegativeInt(tierRate);
+    if (threshold === null || rate === null || rate <= 0) {
+      setTierError('しきい値は0以上、時給は1以上で入力してください。');
+      return;
+    }
+    setTierBusy(true);
+    setTierError(null);
+    try {
+      const nextOrder = tierEditId ? undefined : tiers.length;
+      await upsertHourlyRateTier(tenant.id, {
+        id: tierEditId ?? undefined,
+        metric: tierMetric,
+        threshold,
+        hourly_rate: rate,
+        sort_order: nextOrder ?? tiers.find((t) => t.id === tierEditId)?.sort_order ?? 0,
+      });
+      setTierFormOpen(false);
+      await loadTiers();
+    } catch (err) {
+      console.warn('[kyasuho] upsertHourlyRateTier failed:', err);
+      setTierError('保存に失敗しました。');
+    } finally {
+      setTierBusy(false);
+    }
+  };
+
+  const handleDeleteTier = async (tier: KyHourlyRateTier) => {
+    if (!window.confirm(`しきい値 ${yen(tier.threshold)} のティアを削除しますか？`)) return;
+    setTierBusy(true);
+    try {
+      await deleteHourlyRateTier(tier.id);
+      await loadTiers();
+    } catch (e) {
+      console.warn('[kyasuho] deleteHourlyRateTier failed:', e);
+      window.alert('削除に失敗しました。');
+    } finally {
+      setTierBusy(false);
     }
   };
 
@@ -433,12 +525,128 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
             {settingsBusy ? '保存中…' : '設定を保存'}
           </button>
         </div>
+        <div className="admin-form-row" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={slideEnabled}
+              onChange={(e) => setSlideEnabled(e.target.checked)}
+            />
+            スライド時給を有効にする
+          </label>
+        </div>
         <p className="admin-note">
           支給額 = 基本給（勤務時間×時給）+ 指名バック + メニューバック + その他 −
           控除。基本バック割合はメニュー個別の設定が無い商品に適用されます。保存済みの明細は自動では変わりません。
         </p>
         {settingsMsg ? <p className="admin-note">{settingsMsg}</p> : null}
       </form>
+
+      {slideEnabled ? (
+        <div className="admin-card">
+          <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
+            スライド時給ティア
+          </div>
+          <p className="admin-note" style={{ marginBottom: 8 }}>
+            月間売上や指名数が一定額を超えた場合に適用される時給を設定します。基本時給をベースとし、しきい値を超えた最も高いティアが適用されます。
+          </p>
+          {tiers.length > 0 ? (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>指標</th>
+                    <th className="num">しきい値</th>
+                    <th className="num">時給</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tiers.map((tier) => (
+                    <tr key={tier.id}>
+                      <td>{tier.metric === 'monthly_sales' ? '月間売上' : '月間指名数'}</td>
+                      <td className="num">{tier.metric === 'monthly_sales' ? yen(tier.threshold) : `${tier.threshold}件`}</td>
+                      <td className="num">{yen(tier.hourly_rate)}</td>
+                      <td>
+                        <div className="admin-btn-row">
+                          <button type="button" className="admin-btn" onClick={() => openTierForm(tier)}>
+                            編集
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-btn danger"
+                            disabled={tierBusy}
+                            onClick={() => void handleDeleteTier(tier)}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="admin-empty" style={{ padding: '12px 0' }}>
+              ティアが設定されていません。基本時給がそのまま適用されます。
+            </div>
+          )}
+          <div style={{ marginTop: 8 }}>
+            <button type="button" className="admin-btn primary" onClick={() => openTierForm()}>
+              ティアを追加
+            </button>
+          </div>
+          {tierFormOpen ? (
+            <form onSubmit={handleSaveTier} style={{ marginTop: 12, padding: '12px', border: '1px solid var(--admin-border)', borderRadius: 8 }}>
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label htmlFor="tier-metric">指標</label>
+                  <select
+                    id="tier-metric"
+                    value={tierMetric}
+                    onChange={(e) => setTierMetric(e.target.value as KySlideMetric)}
+                  >
+                    <option value="monthly_sales">月間売上</option>
+                    <option value="monthly_nominations">月間指名数</option>
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="tier-threshold">しきい値{tierMetric === 'monthly_sales' ? '（円）' : '（件）'}</label>
+                  <input
+                    id="tier-threshold"
+                    type="number"
+                    className="w-md"
+                    min={0}
+                    value={tierThreshold}
+                    onChange={(e) => setTierThreshold(e.target.value)}
+                  />
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="tier-rate">適用時給（円）</label>
+                  <input
+                    id="tier-rate"
+                    type="number"
+                    className="w-md"
+                    min={1}
+                    value={tierRate}
+                    onChange={(e) => setTierRate(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="admin-btn-row" style={{ marginTop: 8 }}>
+                <button type="submit" className="admin-btn primary" disabled={tierBusy}>
+                  {tierBusy ? '保存中…' : tierEditId ? '更新' : '追加'}
+                </button>
+                <button type="button" className="admin-btn" onClick={() => setTierFormOpen(false)}>
+                  キャンセル
+                </button>
+              </div>
+              {tierError ? <p className="admin-error">{tierError}</p> : null}
+            </form>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="admin-card">
         <div className="admin-stat-row">
