@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { KyCast, KyCastPayroll, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
 import { fetchCastList, fetchPayrollByMonth, fetchPayrollByRange } from './adminApi';
+import { downloadCsv } from './csv';
 
 function currentMonth(): string {
   return formatDate(new Date()).slice(0, 7);
@@ -171,6 +172,25 @@ export function AdminCastPerformance({ tenant }: { tenant: KyTenant }) {
 
   const hasTrend = trendMonths.some(t => t.value > 0);
 
+  const handleCsv = () => {
+    if (summaries.length === 0) {
+      window.alert('この月のデータがありません。');
+      return;
+    }
+    const rows: string[][] = [
+      ['キャスト', '出勤日数', '指名数', 'ドリンク数', '売上貢献', '支給総額'],
+      ...summaries.map(s => [
+        s.name,
+        String(s.daysWorked),
+        String(s.nominationCount),
+        String(s.drinkCount),
+        String(s.totalSales),
+        String(s.totalPay),
+      ]),
+    ];
+    downloadCsv(`kyasuho_cast_performance_${yearMonth}.csv`, rows);
+  };
+
   return (
     <div>
       <h2 className="admin-page-title">キャスト成績</h2>
@@ -186,7 +206,11 @@ export function AdminCastPerformance({ tenant }: { tenant: KyTenant }) {
         <button type="button" className="admin-btn" onClick={() => setYearMonth(currentMonth())}>
           今月
         </button>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span className="admin-spacer" />
+        <button type="button" className="admin-btn" onClick={handleCsv}>
+          CSVダウンロード
+        </button>
+        <div style={{ marginLeft: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
           <label htmlFor="sort-key" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>並び順:</label>
           <select
             id="sort-key"
