@@ -3,6 +3,12 @@ import type { FormEvent } from 'react';
 import type { KyMenuItem, KyMenuCategory, KyTenant } from '../lib/types';
 import { fetchMenuItems, upsertMenuItem, deleteMenuItem } from './adminApi';
 
+const NOMINATION_KINDS: { value: string; label: string }[] = [
+  { value: '', label: '種別なし' },
+  { value: 'honshimei', label: '本指名' },
+  { value: 'jounai', label: '場内指名' },
+];
+
 const CATEGORIES: { value: KyMenuCategory; label: string }[] = [
   { value: 'set', label: 'セット' },
   { value: 'extension', label: '延長' },
@@ -38,6 +44,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
   const [fIsActive, setFIsActive] = useState(true);
   const [fBackType, setFBackType] = useState<'default' | 'rate' | 'amount'>('default');
   const [fBackValue, setFBackValue] = useState('');
+  const [fNominationKind, setFNominationKind] = useState('');
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -80,6 +87,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
         setFBackType('default');
         setFBackValue('');
       }
+      setFNominationKind(item.nomination_kind ?? '');
     } else {
       setEditId(null);
       setFCategory('drink');
@@ -90,6 +98,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFIsActive(true);
       setFBackType('default');
       setFBackValue('');
+      setFNominationKind('');
     }
     setFormError(null);
     setFormOpen(true);
@@ -143,6 +152,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
         isActive: fIsActive,
         backRate,
         backAmount,
+        nominationKind: (fCategory === 'nomination' && tenant.nomination_kinds_enabled && fNominationKind) ? fNominationKind : null,
       });
       setFormOpen(false);
       await load();
@@ -224,6 +234,23 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
               有効
             </label>
           </div>
+          {fCategory === 'nomination' && tenant.nomination_kinds_enabled && (
+            <div className="admin-form-row" style={{ marginTop: 8 }}>
+              <div className="admin-field">
+                <label htmlFor="menu-nom-kind">指名種別</label>
+                <select id="menu-nom-kind" value={fNominationKind} onChange={(e) => setFNominationKind(e.target.value)}>
+                  {NOMINATION_KINDS.map((k) => (
+                    <option key={k.value} value={k.value}>{k.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  本指名・場内指名ごとに別メニューを作成すると、料金やバック率を個別に設定できます。
+                </span>
+              </div>
+            </div>
+          )}
           <div className="admin-form-row" style={{ marginTop: 8 }}>
             <div className="admin-field">
               <label>キャストバック</label>
@@ -295,7 +322,14 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
               {filtered.map((item) => (
                 <tr key={item.id} style={!item.is_active ? { opacity: 0.5 } : undefined}>
                   <td>{CATEGORY_LABEL.get(item.category) ?? item.category}</td>
-                  <td>{item.name}</td>
+                  <td>
+                    {item.name}
+                    {item.nomination_kind && (
+                      <span className="admin-badge blue" style={{ marginLeft: 6, fontSize: 11 }}>
+                        {item.nomination_kind === 'honshimei' ? '本指名' : item.nomination_kind === 'jounai' ? '場内指名' : item.nomination_kind}
+                      </span>
+                    )}
+                  </td>
                   <td className="num">{yen(item.price)}</td>
                   <td>{item.needs_cast ? '要' : '—'}</td>
                   <td>

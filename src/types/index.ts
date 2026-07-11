@@ -138,6 +138,7 @@ export type Tenant = {
   enableVouchers: boolean;
   timerEnabled: boolean;
   timerAlertMinutes: number;
+  nominationKindsEnabled: boolean;
 };
 
 /** キャスト（コンカフェの出演者）。 */
@@ -306,6 +307,7 @@ export type MenuItem = {
   isActive: boolean;
   backRate: number | null;
   backAmount: number | null;
+  nominationKind: string | null;
 };
 
 /** 伝票ステータス（§25-2）。 */

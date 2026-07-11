@@ -51,6 +51,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         enableVouchers: (data.enable_vouchers ?? false) as boolean,
         timerEnabled: (data.timer_enabled ?? true) as boolean,
         timerAlertMinutes: (data.timer_alert_minutes ?? 5) as number,
+        nominationKindsEnabled: (data.nomination_kinds_enabled ?? false) as boolean,
       });
     }
     setLoading(false);

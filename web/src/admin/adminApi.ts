@@ -44,7 +44,7 @@ export async function fetchOwnTenant(): Promise<KyTenant | null> {
   if (!uid) return null;
   const { data, error } = await supabase
     .from('ky_tenants')
-    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended, enable_bottle_keep, enable_vouchers')
+    .select('id, slug, name, genre, business_info, sns_links, prefecture, area, ranking_opt_in, is_suspended, enable_bottle_keep, enable_vouchers, timer_enabled, timer_alert_minutes, nomination_kinds_enabled')
     .eq('owner_user_id', uid)
     .maybeSingle();
   if (error) throw error;
@@ -746,6 +746,7 @@ export async function upsertMenuItem(
     isActive: boolean;
     backRate: number | null;
     backAmount: number | null;
+    nominationKind: string | null;
   },
 ): Promise<void> {
   const row = {
@@ -758,6 +759,7 @@ export async function upsertMenuItem(
     is_active: input.isActive,
     back_rate: input.backRate,
     back_amount: input.backAmount,
+    nomination_kind: input.nominationKind,
     ...(input.id ? { id: input.id } : {}),
   };
   const { error } = input.id
@@ -1265,7 +1267,7 @@ export async function fetchPublicEvents(tenantId: string): Promise<KyEvent[]> {
 
 export async function updateTenantFlags(
   tenantId: string,
-  flags: Partial<{ enable_bottle_keep: boolean; enable_vouchers: boolean }>,
+  flags: Partial<{ enable_bottle_keep: boolean; enable_vouchers: boolean; nomination_kinds_enabled: boolean }>,
 ): Promise<void> {
   const { error } = await supabase.from('ky_tenants').update(flags).eq('id', tenantId);
   if (error) throw error;

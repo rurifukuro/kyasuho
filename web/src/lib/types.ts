@@ -25,6 +25,7 @@ export interface KyTenant {
   enable_vouchers: boolean;
   timer_enabled: boolean;
   timer_alert_minutes: number;
+  nomination_kinds_enabled: boolean;
 }
 
 export interface KyUnlockWindow {
@@ -169,6 +170,7 @@ export interface KyMenuItem {
   is_active: boolean;
   back_rate: number | null;
   back_amount: number | null;
+  nomination_kind: string | null;
 }
 
 /** 伝票ステータス（§25-2）。 */

@@ -61,7 +61,7 @@ export function AdminSettings({
   const [snsBusy, setSnsBusy] = useState(false);
   const [snsMsg, setSnsMsg] = useState<string | null>(null);
 
-  const toggle = async (flag: 'enable_bottle_keep' | 'enable_vouchers') => {
+  const toggle = async (flag: 'enable_bottle_keep' | 'enable_vouchers' | 'nomination_kinds_enabled') => {
     const newVal = !tenant[flag];
     setBusy(true);
     try {
@@ -304,6 +304,23 @@ export function AdminSettings({
               <strong>回数券・クーポン券管理</strong>
               <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
                 回数券やクーポン券の発行・使用回数の管理ができます。
+              </span>
+            </span>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={tenant.nomination_kinds_enabled}
+              disabled={busy}
+              onChange={() => void toggle('nomination_kinds_enabled')}
+              style={{ width: 18, height: 18 }}
+            />
+            <span>
+              <strong>指名種別（本指名/場内指名）</strong>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                ONにするとメニュー管理の指名カテゴリで「本指名」「場内指名」を区別できます。
+                それぞれ別料金・別バック率の設定が可能です。
               </span>
             </span>
           </label>
