@@ -21,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'customers', label: '顧客管理' },
   { path: 'cast-performance', label: 'キャスト成績' },
   { path: 'events', label: 'イベント' },
+  { path: 'inventory', label: '在庫管理' },
   { path: 'bottle-keep', label: 'ボトルキープ', flag: 'enable_bottle_keep' },
   { path: 'vouchers', label: '回数券・クーポン券', flag: 'enable_vouchers' },
   { path: 'shift-image', label: 'シフト表作成' },

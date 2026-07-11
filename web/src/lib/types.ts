@@ -413,3 +413,32 @@ export interface KyPointReward {
   created_at: string;
   updated_at: string;
 }
+
+// ── 在庫管理（§47） ──────────────────────────────────────────────
+
+export type KyInventoryMoveKind = 'in' | 'sale' | 'adjust' | 'out';
+
+export interface KyInventoryItem {
+  id: string;
+  tenant_id: string;
+  name: string;
+  unit: string;
+  menu_item_id: string | null;
+  stock_qty: number;
+  alert_threshold: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KyInventoryMove {
+  id: string;
+  tenant_id: string;
+  item_id: string;
+  kind: KyInventoryMoveKind;
+  qty: number;
+  order_id: string | null;
+  memo: string;
+  created_at: string;
+}

@@ -597,3 +597,30 @@ export type PointReward = {
   isActive: boolean;
   sortOrder: number;
 };
+
+// ── 在庫管理（§47） ──────────────────────────────────────────────
+
+export type InventoryMoveKind = 'in' | 'sale' | 'adjust' | 'out';
+
+export type InventoryItem = {
+  id: string;
+  tenantId: string;
+  name: string;
+  unit: string;
+  menuItemId: string | null;
+  stockQty: number;
+  alertThreshold: number | null;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+export type InventoryMove = {
+  id: string;
+  tenantId: string;
+  itemId: string;
+  kind: InventoryMoveKind;
+  qty: number;
+  orderId: string | null;
+  memo: string;
+  createdAt: string;
+};

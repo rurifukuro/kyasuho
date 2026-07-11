@@ -28,6 +28,8 @@ import type {
   KyPointReward,
   KyRecurringExpense,
   KyHourlyRateTier,
+  KyInventoryItem,
+  KyInventoryMove,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -1762,4 +1764,77 @@ export async function skipRecurringMonth(
     .delete()
     .eq('id', expenseId);
   if (delErr) throw delErr;
+}
+
+// ── 在庫管理（§47） ──────────────────────────────────────────────
+
+export async function fetchInventoryItems(
+  tenantId: string,
+): Promise<KyInventoryItem[]> {
+  const { data, error } = await supabase
+    .from('ky_inventory_items')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order');
+  if (error) throw error;
+  return (data ?? []) as KyInventoryItem[];
+}
+
+export async function upsertInventoryItem(
+  tenantId: string,
+  item: Partial<KyInventoryItem> & { name: string; unit: string },
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    tenant_id: tenantId,
+    name: item.name,
+    unit: item.unit,
+    alert_threshold: item.alert_threshold ?? null,
+    is_active: item.is_active ?? true,
+    sort_order: item.sort_order ?? 0,
+  };
+  if (item.menu_item_id !== undefined) row.menu_item_id = item.menu_item_id;
+  if (item.id) row.id = item.id;
+  const { error } = await supabase.from('ky_inventory_items').upsert(row);
+  if (error) throw error;
+}
+
+export async function deleteInventoryItem(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_inventory_items')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchInventoryMoves(
+  tenantId: string,
+  itemId?: string,
+): Promise<KyInventoryMove[]> {
+  let q = supabase
+    .from('ky_inventory_moves')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (itemId) q = q.eq('item_id', itemId);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as KyInventoryMove[];
+}
+
+export async function recordInventoryMove(
+  tenantId: string,
+  itemId: string,
+  kind: KyInventoryMove['kind'],
+  qty: number,
+  memo?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('ky_record_inventory_move', {
+    p_tenant_id: tenantId,
+    p_item_id: itemId,
+    p_kind: kind,
+    p_qty: qty,
+    p_memo: memo ?? '',
+  });
+  if (error) throw error;
 }
