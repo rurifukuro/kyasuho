@@ -22,6 +22,7 @@ import { AdminEvents } from './AdminEvents';
 import { AdminBottleKeep } from './AdminBottleKeep';
 import { AdminVouchers } from './AdminVouchers';
 import { AdminInventory } from './AdminInventory';
+import { AdminDailyReports } from './AdminDailyReports';
 import { AdminSettings } from './AdminSettings';
 import './admin.css';
 
@@ -132,6 +133,7 @@ export default function AdminApp() {
         <Route path="cast-performance" element={<AdminCastPerformance tenant={tenant} />} />
         <Route path="events" element={<AdminEvents tenant={tenant} />} />
         <Route path="inventory" element={<AdminInventory tenant={tenant} />} />
+        <Route path="daily-reports" element={<AdminDailyReports tenant={tenant} />} />
         <Route path="bottle-keep" element={<AdminBottleKeep tenant={tenant} />} />
         <Route path="vouchers" element={<AdminVouchers tenant={tenant} />} />
         <Route path="settings" element={<AdminSettings tenant={tenant} onTenantUpdate={handleTenantUpdate} />} />

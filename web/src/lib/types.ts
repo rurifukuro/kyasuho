@@ -442,3 +442,23 @@ export interface KyInventoryMove {
   memo: string;
   created_at: string;
 }
+
+// ── 日報（§49-2） ──────────────────────────────────────────────
+
+export interface KyDailyReport {
+  id: string;
+  tenant_id: string;
+  business_date: string;
+  total_revenue: number;
+  order_count: number;
+  guest_count: number;
+  cast_summary: unknown[];
+  cash_expected: number;
+  cash_actual: number | null;
+  cash_diff: number | null;
+  memo: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}

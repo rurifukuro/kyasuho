@@ -624,3 +624,21 @@ export type InventoryMove = {
   memo: string;
   createdAt: string;
 };
+
+// ── 日報（§49-2） ────────────────────────────────────────────────
+
+export type DailyReport = {
+  id: string;
+  tenantId: string;
+  businessDate: string;
+  totalRevenue: number;
+  orderCount: number;
+  guestCount: number;
+  castSummary: unknown[];
+  cashExpected: number;
+  cashActual: number | null;
+  cashDiff: number | null;
+  memo: string;
+  closedAt: string | null;
+  closedBy: string | null;
+};

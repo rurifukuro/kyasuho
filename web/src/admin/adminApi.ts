@@ -30,6 +30,7 @@ import type {
   KyHourlyRateTier,
   KyInventoryItem,
   KyInventoryMove,
+  KyDailyReport,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -1836,5 +1837,55 @@ export async function recordInventoryMove(
     p_qty: qty,
     p_memo: memo ?? '',
   });
+  if (error) throw error;
+}
+
+// ── 日報（§49-2） ──────────────────────────────────────────────
+
+export async function fetchDailyReports(
+  tenantId: string,
+  yearMonth: string,
+): Promise<KyDailyReport[]> {
+  const { from, toExclusive } = monthRange(yearMonth);
+  const { data, error } = await supabase
+    .from('ky_daily_reports')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .gte('business_date', from)
+    .lt('business_date', toExclusive)
+    .order('business_date');
+  if (error) throw error;
+  return (data ?? []) as KyDailyReport[];
+}
+
+export async function upsertDailyReport(
+  tenantId: string,
+  report: Partial<KyDailyReport> & { business_date: string },
+): Promise<void> {
+  const row: Record<string, unknown> = {
+    tenant_id: tenantId,
+    business_date: report.business_date,
+    total_revenue: report.total_revenue ?? 0,
+    order_count: report.order_count ?? 0,
+    guest_count: report.guest_count ?? 0,
+    cast_summary: report.cast_summary ?? [],
+    cash_expected: report.cash_expected ?? 0,
+    cash_actual: report.cash_actual ?? null,
+    memo: report.memo ?? '',
+  };
+  if (report.id) row.id = report.id;
+  if (report.closed_at !== undefined) row.closed_at = report.closed_at;
+  if (report.closed_by !== undefined) row.closed_by = report.closed_by;
+  const { error } = await supabase
+    .from('ky_daily_reports')
+    .upsert(row, { onConflict: 'tenant_id,business_date' });
+  if (error) throw error;
+}
+
+export async function deleteDailyReport(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_daily_reports')
+    .delete()
+    .eq('id', id);
   if (error) throw error;
 }
