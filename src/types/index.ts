@@ -246,6 +246,16 @@ export type SeatType = {
   isActive: boolean;
 };
 
+/** 事前オーダー1行のスナップショット（§34(c)）。 */
+export type PreorderItem = {
+  menu_item_id: string;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  cast_id?: string | null;
+};
+
 /** 予約本体。 */
 export type Reservation = {
   id: string;
@@ -261,6 +271,8 @@ export type Reservation = {
   note: string;
   status: ReservationStatus;
   createdAt: string;
+  preorder: PreorderItem[] | null;
+  menuUndecided: boolean;
 };
 
 // ── 売上・給与・勤怠ドメイン（SPEC §3-F/H・§23／migration 0009） ──────

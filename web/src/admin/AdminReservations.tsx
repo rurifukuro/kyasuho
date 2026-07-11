@@ -351,6 +351,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                 <th>指名</th>
                 <th>連絡先</th>
                 <th>メモ</th>
+                <th>注文予定</th>
                 <th>状態</th>
                 <th>操作</th>
               </tr>
@@ -376,6 +377,17 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                     <td>{row.cast_id ? (castNameById.get(row.cast_id) ?? '—') : '—'}</td>
                     <td>{row.contact || '—'}</td>
                     <td>{row.note || '—'}</td>
+                    <td>
+                      {row.preorder && row.preorder.length > 0 ? (
+                        <span style={{ fontSize: 12 }}>
+                          {(row.preorder as { name: string; qty: number; price: number }[]).map((p, i) => (
+                            <span key={i}>{p.name}×{p.qty}<br /></span>
+                          ))}
+                        </span>
+                      ) : row.menu_undecided ? (
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>当日決定</span>
+                      ) : '—'}
+                    </td>
                     <td>
                       <span className={`admin-badge st-${row.status}`}>
                         {STATUS_LABELS[row.status]}

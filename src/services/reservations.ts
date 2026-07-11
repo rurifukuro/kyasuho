@@ -1,6 +1,8 @@
 import { supabase } from '../config/supabase';
 import type { Reservation, ReservationStatus } from '../types';
 
+import type { PreorderItem } from '../types';
+
 type ReservationRow = {
   id: string;
   tenant_id: string;
@@ -16,6 +18,8 @@ type ReservationRow = {
   note: string;
   status: ReservationStatus;
   created_at: string;
+  preorder: PreorderItem[] | null;
+  menu_undecided: boolean;
 };
 
 function rowToReservation(row: ReservationRow): Reservation {
@@ -33,6 +37,8 @@ function rowToReservation(row: ReservationRow): Reservation {
     note: row.note,
     status: row.status,
     createdAt: row.created_at,
+    preorder: row.preorder ?? null,
+    menuUndecided: row.menu_undecided ?? false,
   };
 }
 

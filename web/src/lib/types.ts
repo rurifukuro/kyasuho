@@ -141,6 +141,16 @@ export interface KyReservation {
   status: 'reserved' | 'checked_in' | 'cancelled' | 'no_show';
 }
 
+/** 事前オーダー1行のスナップショット（§34(c)）。 */
+export interface KyPreorderItem {
+  menu_item_id: string;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  cast_id?: string | null;
+}
+
 /** 管理Web用＝予約の全列（客Webの KyReservation は anon の列レベルGRANTと同じ公開安全な列だけ）。 */
 export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   seat_no: number | null;
@@ -151,6 +161,8 @@ export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   seat_type_id: string | null;
   note: string;
   created_at: string;
+  preorder: KyPreorderItem[] | null;
+  menu_undecided: boolean;
 }
 
 /** 日別売上（ky_sales・テナント×日付で1行）。金額は円。 */
