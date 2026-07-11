@@ -21,6 +21,7 @@ type OrderRow = {
   change: number;
   payment_method: PaymentMethod;
   note: string;
+  set_deadline_at: string | null;
 };
 
 type OrderItemRow = {
@@ -52,6 +53,7 @@ function rowToOrder(row: OrderRow): Order {
     change: row.change,
     paymentMethod: row.payment_method,
     note: row.note,
+    setDeadlineAt: row.set_deadline_at,
   };
 }
 

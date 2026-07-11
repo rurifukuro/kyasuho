@@ -136,6 +136,8 @@ export type Tenant = {
   isSuspended: boolean;
   enableBottleKeep: boolean;
   enableVouchers: boolean;
+  timerEnabled: boolean;
+  timerAlertMinutes: number;
 };
 
 /** キャスト（コンカフェの出演者）。 */
@@ -329,6 +331,7 @@ export type Order = {
   change: number;
   paymentMethod: PaymentMethod;
   note: string;
+  setDeadlineAt: string | null;
 };
 
 /** オーダー明細（ky_order_items・スナップショット）。 */

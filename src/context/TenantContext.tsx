@@ -49,6 +49,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         isSuspended: data.is_suspended as boolean,
         enableBottleKeep: (data.enable_bottle_keep ?? false) as boolean,
         enableVouchers: (data.enable_vouchers ?? false) as boolean,
+        timerEnabled: (data.timer_enabled ?? true) as boolean,
+        timerAlertMinutes: (data.timer_alert_minutes ?? 5) as number,
       });
     }
     setLoading(false);

@@ -23,6 +23,8 @@ export interface KyTenant {
   is_suspended: boolean;
   enable_bottle_keep: boolean;
   enable_vouchers: boolean;
+  timer_enabled: boolean;
+  timer_alert_minutes: number;
 }
 
 export interface KyUnlockWindow {
@@ -192,6 +194,7 @@ export interface KyOrder {
   change: number;
   payment_method: KyPaymentMethod;
   note: string;
+  set_deadline_at: string | null;
 }
 
 /** オーダー明細（ky_order_items・スナップショット）。 */
