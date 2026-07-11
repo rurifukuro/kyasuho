@@ -268,6 +268,7 @@ export type Attendance = {
   checkInAt: string | null; // HH:MM（実入店・null=未入力）
   checkOutAt: string | null; // HH:MM（実退店・null=未入力）
   note: string;
+  editedByOwner: boolean;
 };
 
 /** 日別売上（テナント×日付で1行）。金額は円。 */

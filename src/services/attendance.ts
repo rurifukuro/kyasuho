@@ -18,6 +18,7 @@ type AttendanceRow = {
   check_in_at: string | null;
   check_out_at: string | null;
   note: string;
+  edited_by_owner: boolean;
 };
 
 function rowToAttendance(row: AttendanceRow): Attendance {
@@ -33,6 +34,7 @@ function rowToAttendance(row: AttendanceRow): Attendance {
     checkInAt: row.check_in_at,
     checkOutAt: row.check_out_at,
     note: row.note,
+    editedByOwner: row.edited_by_owner,
   };
 }
 

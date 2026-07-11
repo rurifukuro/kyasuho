@@ -142,6 +142,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
         checkInAt: formCheckIn || null,
         checkOutAt: formCheckOut || null,
         note: formNote.trim(),
+        editedByOwner: true,
       });
       setFormOpen(false);
       const savedMonth = formDate.slice(0, 7);
@@ -177,7 +178,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
       return;
     }
     const rows: string[][] = [
-      ['日付', 'キャスト名', '状態', '入店時刻', '退店時刻', '理由'],
+      ['日付', 'キャスト名', '状態', '入店時刻', '退店時刻', '理由', '入力元'],
       ...attendance.map((a) => {
         const reasonLabel = a.reason_category ? REASON_LABELS[a.reason_category] : '';
         const reason = [reasonLabel, a.reason_note].filter(Boolean).join(': ');
@@ -188,6 +189,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
           a.check_in_at ?? '',
           a.check_out_at ?? '',
           reason,
+          a.edited_by_owner ? '店舗修正' : (a.check_in_at ? '本人打刻' : ''),
         ];
       }),
     ];
@@ -377,6 +379,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
                     <th>退店</th>
                     <th>理由</th>
                     <th>メモ</th>
+                    <th>入力元</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -395,6 +398,11 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
                         <td>{row.check_out_at ?? '—'}</td>
                         <td>{reason || '—'}</td>
                         <td>{row.note || '—'}</td>
+                        <td>
+                          {row.edited_by_owner
+                            ? <span className="att-status att-late">店舗修正</span>
+                            : (row.check_in_at ? <span className="att-status att-present">本人打刻</span> : '—')}
+                        </td>
                         <td>
                           <div className="admin-btn-row">
                             <button type="button" className="admin-btn" onClick={() => openForm(row)}>

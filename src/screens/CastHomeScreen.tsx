@@ -11,13 +11,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { useLanguage } from '../context/LanguageContext';
+import { useLanguage, type TKey } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../config/supabase';
 import { CastPersonalInfoScreen } from './CastPersonalInfoScreen';
 import { ShiftTimeEditModal } from '../components/ShiftTimeEditModal';
 import * as shiftReqService from '../services/shiftRequests';
+import * as timecardService from '../services/timecard';
 import type { ShiftRequest, CastShiftDefault } from '../types';
+import type { TodayAttendance } from '../services/timecard';
 
 type ShiftRow = { id: string; date: string; start_at: string; end_at: string };
 type PayrollRow = {
@@ -115,6 +117,9 @@ export function CastHomeScreen() {
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  const [todayAttendance, setTodayAttendance] = useState<TodayAttendance>(null);
+  const [punchLoading, setPunchLoading] = useState(false);
+
   const castId = roleResult?.role === 'cast' ? roleResult.castId : null;
   const tenantId = roleResult?.role === 'cast' ? roleResult.tenantId : null;
 
@@ -152,6 +157,49 @@ export function CastHomeScreen() {
     })();
     return () => { active = false; };
   }, [castId]);
+
+  useEffect(() => {
+    if (!castId) return;
+    let active = true;
+    (async () => {
+      try {
+        const att = await timecardService.fetchTodayAttendance(castId);
+        if (active) setTodayAttendance(att);
+      } catch {
+        // silently fail
+      }
+    })();
+    return () => { active = false; };
+  }, [castId]);
+
+  const handlePunch = useCallback(async (direction: 'in' | 'out') => {
+    const msg = direction === 'in' ? t('timecard.confirmIn') : t('timecard.confirmOut');
+    Alert.alert(t('timecard.sectionTitle'), msg, [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: direction === 'in' ? t('timecard.punchIn') : t('timecard.punchOut'),
+        onPress: async () => {
+          setPunchLoading(true);
+          try {
+            const result = await timecardService.castPunch(direction);
+            setTodayAttendance({ checkInAt: result.checkInAt, checkOutAt: result.checkOutAt });
+            Alert.alert(direction === 'in' ? t('timecard.punchInDone') : t('timecard.punchOutDone'));
+          } catch (err) {
+            const message = err instanceof Error ? err.message : '';
+            if (message.includes('already_punched_in')) {
+              Alert.alert(t('timecard.sectionTitle'), t('timecard.confirmReIn'), [
+                { text: t('common.cancel'), style: 'cancel' },
+              ]);
+            } else {
+              Alert.alert(t('timecard.punchError'));
+            }
+          } finally {
+            setPunchLoading(false);
+          }
+        },
+      },
+    ]);
+  }, [t]);
 
   useEffect(() => {
     if (!castId || !tenantId) return;
@@ -355,6 +403,15 @@ export function CastHomeScreen() {
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
         ) : (
           <>
+            {/* タイムカード */}
+            <TimecardSection
+              todayAttendance={todayAttendance}
+              punchLoading={punchLoading}
+              onPunch={handlePunch}
+              theme={theme}
+              t={t}
+            />
+
             {/* シフト提出 */}
             <View style={[st.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[st.sectionTitle, { color: theme.text }]}>
@@ -673,6 +730,86 @@ function PayrollDetailLine({
   );
 }
 
+function TimecardSection({
+  todayAttendance,
+  punchLoading,
+  onPunch,
+  theme,
+  t,
+}: {
+  todayAttendance: TodayAttendance;
+  punchLoading: boolean;
+  onPunch: (direction: 'in' | 'out') => void;
+  theme: { primary: string; text: string; subtext: string; card: string; border: string; background: string };
+  t: (key: TKey) => string;
+}) {
+  const hasIn = !!todayAttendance?.checkInAt;
+  const hasOut = !!todayAttendance?.checkOutAt;
+
+  let statusLabel: string;
+  let statusColor: string;
+  let statusIcon: 'clock-outline' | 'clock-check' | 'clock-remove';
+  if (!hasIn) {
+    statusLabel = t('timecard.notPunchedIn');
+    statusColor = theme.subtext;
+    statusIcon = 'clock-outline';
+  } else if (!hasOut) {
+    statusLabel = `${t('timecard.working')} ${todayAttendance!.checkInAt}〜`;
+    statusColor = '#22C55E';
+    statusIcon = 'clock-check';
+  } else {
+    statusLabel = `${t('timecard.done')} ${todayAttendance!.checkInAt}〜${todayAttendance!.checkOutAt}`;
+    statusColor = theme.subtext;
+    statusIcon = 'clock-remove';
+  }
+
+  return (
+    <View style={[st.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <Text style={[st.sectionTitle, { color: theme.text }]}>{t('timecard.sectionTitle')}</Text>
+
+      <View style={st.tcStatusRow}>
+        <MaterialCommunityIcons name={statusIcon} size={24} color={statusColor} />
+        <Text style={[st.tcStatusText, { color: statusColor }]}>{statusLabel}</Text>
+      </View>
+
+      <View style={st.tcBtnRow}>
+        {!hasIn && (
+          <TouchableOpacity
+            style={[st.tcBtn, { backgroundColor: '#22C55E' }]}
+            onPress={() => onPunch('in')}
+            disabled={punchLoading}
+          >
+            {punchLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="login" size={20} color="#fff" />
+                <Text style={st.tcBtnText}>{t('timecard.punchIn')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+        {hasIn && !hasOut && (
+          <TouchableOpacity
+            style={[st.tcBtn, { backgroundColor: '#D7263D' }]}
+            onPress={() => onPunch('out')}
+            disabled={punchLoading}
+          >
+            {punchLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <MaterialCommunityIcons name="logout" size={20} color="#fff" />
+                <Text style={st.tcBtnText}>{t('timecard.punchOut')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
 const st = StyleSheet.create({
   root: { flex: 1 },
   header: { fontSize: 26, fontWeight: '800' },
@@ -727,4 +864,10 @@ const st = StyleSheet.create({
   editBtn: { marginTop: 1 },
   submitBtn: { borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  tcStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  tcStatusText: { fontSize: 16, fontWeight: '700' },
+  tcBtnRow: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
+  tcBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12 },
+  tcBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

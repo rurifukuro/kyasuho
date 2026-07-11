@@ -226,6 +226,7 @@ export interface KyAttendance {
   check_in_at: string | null; // HH:MM（null=未入力）
   check_out_at: string | null;
   note: string;
+  edited_by_owner: boolean;
 }
 
 /** 給与計算設定（ky_payroll_settings・店一律・テナントで1行）。 */

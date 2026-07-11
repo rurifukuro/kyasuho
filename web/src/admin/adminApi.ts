@@ -323,6 +323,7 @@ export async function upsertAttendance(
     checkInAt: string | null;
     checkOutAt: string | null;
     note: string;
+    editedByOwner?: boolean;
   },
 ): Promise<void> {
   const { error } = await supabase.from('ky_attendance').upsert(
@@ -337,6 +338,7 @@ export async function upsertAttendance(
       check_in_at: input.checkInAt,
       check_out_at: input.checkOutAt,
       note: input.note,
+      edited_by_owner: input.editedByOwner ?? false,
     },
     { onConflict: 'cast_id,date' },
   );
