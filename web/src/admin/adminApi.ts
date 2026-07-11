@@ -475,6 +475,24 @@ export async function fetchPayrollByMonth(
   return (data ?? []) as KyCastPayroll[];
 }
 
+export async function fetchPayrollByRange(
+  tenantId: string,
+  startYm: string,
+  endYm: string,
+): Promise<KyCastPayroll[]> {
+  const { from } = monthRange(startYm);
+  const { toExclusive } = monthRange(endYm);
+  const { data, error } = await supabase
+    .from('ky_cast_payroll')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .gte('date', from)
+    .lt('date', toExclusive)
+    .order('date');
+  if (error) throw error;
+  return (data ?? []) as KyCastPayroll[];
+}
+
 /** 給与明細1行を upsert（キャスト×日付で1行＝unique(cast_id, date)・手修正の保存に使う）。 */
 export async function upsertPayroll(
   tenantId: string,
