@@ -9,6 +9,7 @@ type ExpenseRow = {
   amount: number;
   memo: string;
   receipt_url: string | null;
+  source_recurring_id: string | null;
 };
 
 function rowToExpense(r: ExpenseRow): Expense {
@@ -20,6 +21,7 @@ function rowToExpense(r: ExpenseRow): Expense {
     amount: r.amount,
     memo: r.memo,
     receiptUrl: r.receipt_url,
+    sourceRecurringId: r.source_recurring_id,
   };
 }
 
@@ -30,7 +32,7 @@ export async function fetchExpenses(
 ): Promise<Expense[]> {
   const { data, error } = await supabase
     .from('ky_expenses')
-    .select('id, tenant_id, date, category, amount, memo, receipt_url')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url, source_recurring_id')
     .eq('tenant_id', tenantId)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -49,7 +51,7 @@ export async function addExpense(
   const { data, error } = await supabase
     .from('ky_expenses')
     .insert({ tenant_id: tenantId, date, category, amount, memo })
-    .select('id, tenant_id, date, category, amount, memo, receipt_url')
+    .select('id, tenant_id, date, category, amount, memo, receipt_url, source_recurring_id')
     .single();
   if (error) throw error;
   return rowToExpense(data as ExpenseRow);

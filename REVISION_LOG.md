@@ -2241,3 +2241,36 @@ SPEC §41 の前半（a）を実装。ポイント制度ON/OFF＋円/pt単価の
 - アプリ `npx tsc --noEmit` EXIT:0
 - Web `npx tsc -b` EXIT:0
 - **Migration 0036は本番未適用**（承認ゲート）
+
+---
+
+## Rev94（2026-07-11）§42 定期固定経費（毎月自動計上テンプレート＋実体化＋スキップ）
+
+SPEC §42 実装。家賃等の毎月固定経費をテンプレート登録→毎月自動で ky_expenses に実体化。
+設計の核心: テンプレ変更は未生成月のみ反映、既生成行は金額スナップショットとして不変（FIN-2思想）。
+
+### Migration 0037 (`supabase/migrations/0037_ky_recurring_expenses.sql`)
+- **ky_recurring_expenses**: テンプレ（name, category, amount, day_of_month CHECK 1-28, start_month, end_month nullable, is_active）。RLS=owner
+- **ky_recurring_expense_skips**: 「この月だけスキップ」記録（UNIQUE(recurring_id, month)）。物理削除後の再生成防止
+- **ky_expenses.source_recurring_id**: 出自列追加 + UNIQUE INDEX (source_recurring_id, date_trunc('month', date)) = 同一テンプレ×同一月の冪等保証
+
+### 型定義
+- `src/types/index.ts`: Expense に sourceRecurringId 追加、RecurringExpense 型新設
+- `web/src/lib/types.ts`: KyExpense に source_recurring_id 追加、KyRecurringExpense 新設
+
+### アプリ側
+- **services/expenses.ts**: ExpenseRow/rowToExpense/select に source_recurring_id 追加
+- **services/recurringExpenses.ts**: CRUD + materializeRecurringExpenses（テンプレ→当月以前を自動生成・冪等）+ skipRecurringMonth
+
+### Web管理画面
+- **adminApi.ts**: fetchRecurringExpenses / upsertRecurringExpense / deleteRecurringExpense / materializeRecurringExpenses / skipRecurringMonth / enumMonths ヘルパー
+- **AdminExpenses.tsx**:
+  - loadData 冒頭で materializeRecurringExpenses 呼出（画面を開くだけで欠落月を補完）
+  - 経費テーブルに「固定費」バッジ表示（source_recurring_id があれば青バッジ）
+  - 固定費行は「この月だけ削除」ボタン（skipRecurringMonth → skipsテーブルに記録 + 行削除）
+  - RecurringExpenseSection: 折りたたみ式テンプレCRUD（名称/カテゴリ/金額/計上日/開始月/終了月/有効/無効）
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0
+- Web `npx tsc -b` EXIT:0
+- **Migration 0037は本番未適用**（承認ゲート）

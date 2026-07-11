@@ -56,6 +56,22 @@ export interface KyExpense {
   amount: number;
   memo: string;
   receipt_url: string | null;
+  source_recurring_id: string | null;
+}
+
+/** 定期固定経費テンプレート（§42）。 */
+export interface KyRecurringExpense {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category: string;
+  amount: number;
+  day_of_month: number;
+  start_month: string;
+  end_month: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 /** 席種・席料（§29）。 */

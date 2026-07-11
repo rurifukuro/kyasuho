@@ -26,6 +26,7 @@ import type {
   KyVoucher,
   KyPointSettings,
   KyPointReward,
+  KyRecurringExpense,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -1551,4 +1552,172 @@ export async function deletePointReward(id: string): Promise<void> {
     .delete()
     .eq('id', id);
   if (error) throw error;
+}
+
+// ── 定期固定経費（§42） ──
+
+export async function fetchRecurringExpenses(
+  tenantId: string,
+): Promise<KyRecurringExpense[]> {
+  const { data, error } = await supabase
+    .from('ky_recurring_expenses')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyRecurringExpense[];
+}
+
+export async function upsertRecurringExpense(
+  tenantId: string,
+  rec: Partial<KyRecurringExpense> & {
+    name: string;
+    category: string;
+    amount: number;
+    day_of_month: number;
+    start_month: string;
+  },
+): Promise<void> {
+  const row = {
+    tenant_id: tenantId,
+    name: rec.name,
+    category: rec.category,
+    amount: rec.amount,
+    day_of_month: rec.day_of_month,
+    start_month: rec.start_month,
+    end_month: rec.end_month ?? null,
+    is_active: rec.is_active ?? true,
+    updated_at: new Date().toISOString(),
+    ...(rec.id ? { id: rec.id } : {}),
+  };
+  const { error } = await supabase
+    .from('ky_recurring_expenses')
+    .upsert(row, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deleteRecurringExpense(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_recurring_expenses')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+function pad2(n: number): string {
+  return n.toString().padStart(2, '0');
+}
+
+function enumMonths(startYm: string, endYm: string): string[] {
+  const result: string[] = [];
+  const sp = startYm.split('-').map(Number);
+  const ep = endYm.split('-').map(Number);
+  let y = sp[0] ?? 2020;
+  let m = sp[1] ?? 1;
+  const ey = ep[0] ?? 2020;
+  const em = ep[1] ?? 1;
+  while (y < ey || (y === ey && m <= em)) {
+    result.push(`${y}-${pad2(m)}`);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return result;
+}
+
+export async function materializeRecurringExpenses(
+  tenantId: string,
+  upToYm: string,
+): Promise<number> {
+  const templates = await fetchRecurringExpenses(tenantId);
+  const active = templates.filter((t) => t.is_active);
+  if (active.length === 0) return 0;
+
+  const { data: existingRows, error: fetchErr } = await supabase
+    .from('ky_expenses')
+    .select('source_recurring_id, date')
+    .eq('tenant_id', tenantId)
+    .not('source_recurring_id', 'is', null);
+  if (fetchErr) throw fetchErr;
+
+  const existingSet = new Set(
+    ((existingRows ?? []) as { source_recurring_id: string; date: string }[]).map(
+      (r) => `${r.source_recurring_id}:${r.date.substring(0, 7)}`,
+    ),
+  );
+
+  const { data: skipRows, error: skipErr } = await supabase
+    .from('ky_recurring_expense_skips')
+    .select('recurring_id, month');
+  if (skipErr) throw skipErr;
+
+  const skipSet = new Set(
+    ((skipRows ?? []) as { recurring_id: string; month: string }[]).map(
+      (r) => `${r.recurring_id}:${r.month.substring(0, 7)}`,
+    ),
+  );
+
+  const toInsert: {
+    tenant_id: string;
+    date: string;
+    category: string;
+    amount: number;
+    memo: string;
+    source_recurring_id: string;
+  }[] = [];
+
+  for (const t of active) {
+    const startYm = t.start_month.substring(0, 7);
+    const endYm = t.end_month ? t.end_month.substring(0, 7) : upToYm;
+    const effectiveEnd = endYm <= upToYm ? endYm : upToYm;
+
+    for (const ym of enumMonths(startYm, effectiveEnd)) {
+      const key = `${t.id}:${ym}`;
+      if (existingSet.has(key) || skipSet.has(key)) continue;
+
+      const ymParts = ym.split('-').map(Number);
+      const yy = ymParts[0] ?? 2020;
+      const mm = ymParts[1] ?? 1;
+      const lastDay = new Date(yy, mm, 0).getDate();
+      const day = Math.min(t.day_of_month, lastDay);
+      const dateStr = `${ym}-${pad2(day)}`;
+
+      toInsert.push({
+        tenant_id: tenantId,
+        date: dateStr,
+        category: t.category,
+        amount: t.amount,
+        memo: t.name,
+        source_recurring_id: t.id,
+      });
+    }
+  }
+
+  if (toInsert.length === 0) return 0;
+
+  const { error: insertErr } = await supabase
+    .from('ky_expenses')
+    .insert(toInsert);
+  if (insertErr) throw insertErr;
+
+  return toInsert.length;
+}
+
+export async function skipRecurringMonth(
+  recurringId: string,
+  expenseId: string,
+  month: string,
+): Promise<void> {
+  const { error: skipErr } = await supabase
+    .from('ky_recurring_expense_skips')
+    .upsert(
+      { recurring_id: recurringId, month: `${month}-01` },
+      { onConflict: 'recurring_id,month' },
+    );
+  if (skipErr) throw skipErr;
+
+  const { error: delErr } = await supabase
+    .from('ky_expenses')
+    .delete()
+    .eq('id', expenseId);
+  if (delErr) throw delErr;
 }

@@ -203,6 +203,20 @@ export type Expense = {
   amount: number;
   memo: string;
   receiptUrl: string | null;
+  sourceRecurringId: string | null;
+};
+
+/** 定期固定経費テンプレート（§42）。 */
+export type RecurringExpense = {
+  id: string;
+  tenantId: string;
+  name: string;
+  category: ExpenseCategory;
+  amount: number;
+  dayOfMonth: number;
+  startMonth: string;
+  endMonth: string | null;
+  isActive: boolean;
 };
 
 /** 席種・席料（§29）。 */

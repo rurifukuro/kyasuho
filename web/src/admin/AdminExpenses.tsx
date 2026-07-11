@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyExpense, KyTenant } from '../lib/types';
+import type { KyExpense, KyRecurringExpense, KyTenant } from '../lib/types';
 import {
   addExpense,
   deleteExpense,
@@ -12,6 +12,11 @@ import {
   fetchCustomExpenseCategories,
   addCustomExpenseCategory,
   deleteCustomExpenseCategory,
+  fetchRecurringExpenses,
+  upsertRecurringExpense,
+  deleteRecurringExpense,
+  materializeRecurringExpenses,
+  skipRecurringMonth,
 } from './adminApi';
 import type { KyExpenseCategory } from './adminApi';
 
@@ -99,6 +104,9 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
     setLoading(true);
     setError(null);
     try {
+      await materializeRecurringExpenses(tenant.id, yearMonth).catch((e) =>
+        console.warn('[kyasuho] materialize:', e),
+      );
       const [exp, sales, payroll, cats] = await Promise.all([
         fetchExpenses(tenant.id, start, end),
         fetchMonthlySalesTotal(tenant.id, start, end),
@@ -114,7 +122,7 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
     } finally {
       setLoading(false);
     }
-  }, [tenant.id, start, end]);
+  }, [tenant.id, start, end, yearMonth]);
 
   useEffect(() => {
     void loadData();
@@ -176,6 +184,21 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
       }
     },
     [loadData],
+  );
+
+  const handleSkipRecurring = useCallback(
+    async (exp: KyExpense) => {
+      if (!exp.source_recurring_id) return;
+      if (!confirm(`この月の固定費「${exp.memo}」を削除しますか？\n（翌月以降は再び自動生成されます）`))
+        return;
+      try {
+        await skipRecurringMonth(exp.source_recurring_id, exp.id, yearMonth);
+        await loadData();
+      } catch (e) {
+        alert(`削除失敗: ${String(e)}`);
+      }
+    },
+    [yearMonth, loadData],
   );
 
   const handleReceiptUpload = useCallback(
@@ -560,7 +583,14 @@ ${catRows}
                   {expenses.map((exp) => (
                     <tr key={exp.id}>
                       <td>{exp.date}</td>
-                      <td>{categoryLabel(exp.category)}</td>
+                      <td>
+                        {categoryLabel(exp.category)}
+                        {exp.source_recurring_id && (
+                          <span style={{ marginLeft: 6, fontSize: 11, background: '#dbeafe', color: '#1e40af', padding: '1px 6px', borderRadius: 4 }}>
+                            固定費
+                          </span>
+                        )}
+                      </td>
                       <td style={{ textAlign: 'right' }}>{formatYen(exp.amount)}</td>
                       <td>{exp.memo || '—'}</td>
                       <td>
@@ -602,13 +632,23 @@ ${catRows}
                         )}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="admin-btn danger"
-                          onClick={() => void handleDelete(exp)}
-                        >
-                          削除
-                        </button>
+                        {exp.source_recurring_id ? (
+                          <button
+                            type="button"
+                            className="admin-btn danger"
+                            onClick={() => void handleSkipRecurring(exp)}
+                          >
+                            この月だけ削除
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="admin-btn danger"
+                            onClick={() => void handleDelete(exp)}
+                          >
+                            削除
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -618,6 +658,8 @@ ${catRows}
           )}
         </>
       )}
+
+      <RecurringExpenseSection tenantId={tenant.id} allCategories={allCategories} onMutate={loadData} />
 
       {viewingReceipt && (
         <div
@@ -644,6 +686,267 @@ ${catRows}
               style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8 }}
             />
           </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function RecurringExpenseSection({
+  tenantId,
+  allCategories,
+  onMutate,
+}: {
+  tenantId: string;
+  allCategories: { key: string; label: string }[];
+  onMutate: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<KyRecurringExpense[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [edit, setEdit] = useState<Partial<KyRecurringExpense> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchRecurringExpenses(tenantId);
+      setItems(data);
+    } catch (e) {
+      console.warn('[kyasuho] fetchRecurringExpenses:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (open && items.length === 0) void load();
+  }, [open, load]);
+
+  const handleSave = useCallback(async () => {
+    if (!edit) return;
+    const name = (edit.name ?? '').trim();
+    if (!name || (edit.amount ?? 0) < 0 || !(edit.start_month ?? '').trim()) {
+      setMsg('名称・金額・開始月は必須です。');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await upsertRecurringExpense(tenantId, {
+        ...edit,
+        name,
+        category: edit.category ?? 'misc',
+        amount: edit.amount ?? 0,
+        day_of_month: edit.day_of_month ?? 1,
+        start_month: edit.start_month!,
+      });
+      setEdit(null);
+      await load();
+      await onMutate();
+    } catch (e) {
+      console.warn('[kyasuho] upsertRecurringExpense:', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setBusy(false);
+    }
+  }, [tenantId, edit, load, onMutate]);
+
+  const handleDeleteRec = useCallback(async (r: KyRecurringExpense) => {
+    if (!window.confirm(`固定費「${r.name}」を削除しますか？\n既に計上済みの経費行は残ります。`)) return;
+    try {
+      await deleteRecurringExpense(r.id);
+      await load();
+    } catch (e) {
+      window.alert('削除に失敗しました。');
+    }
+  }, [load]);
+
+  const currentMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`;
+  })();
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>
+        <button
+          type="button"
+          className="admin-btn"
+          onClick={() => setOpen(!open)}
+          style={{ fontSize: 13 }}
+        >
+          {open ? '▲ 固定費設定を閉じる' : '▼ 固定費設定（毎月自動計上）'}
+        </button>
+      </h3>
+
+      {open && (
+        <div className="admin-card" style={{ marginBottom: 16 }}>
+          {loading ? (
+            <div className="admin-empty">読み込み中…</div>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                設定した固定費は毎月自動で経費に計上されます。金額を変更しても過去の月は変わりません。
+              </p>
+
+              {items.length > 0 && (
+                <div className="admin-table-wrap" style={{ marginBottom: 12 }}>
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>名称</th>
+                        <th>カテゴリ</th>
+                        <th>金額</th>
+                        <th>計上日</th>
+                        <th>期間</th>
+                        <th>状態</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((r) => (
+                        <tr key={r.id}>
+                          <td>{r.name}</td>
+                          <td>{allCategories.find((c) => c.key === r.category)?.label ?? r.category}</td>
+                          <td style={{ textAlign: 'right' }}>{formatYen(r.amount)}</td>
+                          <td>毎月{r.day_of_month}日</td>
+                          <td>
+                            {r.start_month.substring(0, 7)}〜
+                            {r.end_month ? r.end_month.substring(0, 7) : '継続中'}
+                          </td>
+                          <td>{r.is_active ? '有効' : '停止'}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="admin-btn" onClick={() => setEdit({ ...r })}>編集</button>
+                              <button className="admin-btn danger" onClick={() => void handleDeleteRec(r)}>削除</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="admin-btn"
+                onClick={() => setEdit({
+                  name: '',
+                  category: 'rent',
+                  amount: 0,
+                  day_of_month: 1,
+                  start_month: currentMonth,
+                  end_month: null,
+                  is_active: true,
+                })}
+              >
+                ＋ 固定費を追加
+              </button>
+
+              {edit && (
+                <div
+                  style={{
+                    marginTop: 16,
+                    padding: 16,
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    background: 'var(--bg-secondary, #f9fafb)',
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                    {edit.id ? '固定費を編集' : '固定費を追加'}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="admin-field">
+                      <label>名称</label>
+                      <input
+                        type="text"
+                        value={edit.name ?? ''}
+                        onChange={(e) => setEdit((p) => p ? { ...p, name: e.target.value } : p)}
+                        placeholder="家賃、Wi-Fi 等"
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>カテゴリ</label>
+                      <select
+                        value={edit.category ?? 'misc'}
+                        onChange={(e) => setEdit((p) => p ? { ...p, category: e.target.value } : p)}
+                      >
+                        {allCategories.map((c) => (
+                          <option key={c.key} value={c.key}>{c.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>金額（円）</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={edit.amount ?? 0}
+                        onChange={(e) => setEdit((p) => p ? { ...p, amount: Number(e.target.value) } : p)}
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>計上日（毎月）</label>
+                      <select
+                        value={edit.day_of_month ?? 1}
+                        onChange={(e) => setEdit((p) => p ? { ...p, day_of_month: Number(e.target.value) } : p)}
+                      >
+                        {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                          <option key={d} value={d}>{d}日</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>開始月</label>
+                      <input
+                        type="month"
+                        value={(edit.start_month ?? '').substring(0, 7)}
+                        onChange={(e) => setEdit((p) => p ? { ...p, start_month: `${e.target.value}-01` } : p)}
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>終了月（空欄＝継続）</label>
+                      <input
+                        type="month"
+                        value={(edit.end_month ?? '').substring(0, 7)}
+                        onChange={(e) => setEdit((p) => p ? { ...p, end_month: e.target.value ? `${e.target.value}-01` : null } : p)}
+                      />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={edit.is_active ?? true}
+                        onChange={(e) => setEdit((p) => p ? { ...p, is_active: e.target.checked } : p)}
+                      />
+                      有効
+                    </label>
+                  </div>
+                  {edit.id && (
+                    <p style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
+                      変更は未生成の月（通常は翌月）以降に反映されます。過去の月は変わりません。
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button className="admin-btn primary" disabled={busy} onClick={() => void handleSave()}>
+                      {busy ? '保存中…' : '保存'}
+                    </button>
+                    <button className="admin-btn" onClick={() => { setEdit(null); setMsg(null); }}>キャンセル</button>
+                    {msg && (
+                      <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#e67e22' }}>
+                        {msg}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </>
