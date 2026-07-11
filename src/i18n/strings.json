@@ -711,5 +711,26 @@
   "timer.overdue": { "ja": "超過" },
   "timer.extend": { "ja": "セット延長" },
   "timer.extendOrCheckout": { "ja": "このお客様の次のアクションを選んでください" },
-  "timer.goCheckout": { "ja": "お会計へ" }
+  "timer.goCheckout": { "ja": "お会計へ" },
+
+  "closeDay.title": { "ja": "営業日を締める" },
+  "closeDay.openOrdersWarning": { "ja": "会計未了の伝票が{count}件あります。先に会計を完了してください。" },
+  "closeDay.summary": { "ja": "本日の集計" },
+  "closeDay.revenue": { "ja": "売上合計" },
+  "closeDay.orderCount": { "ja": "組数" },
+  "closeDay.guestCount": { "ja": "客数" },
+  "closeDay.cashExpected": { "ja": "現金売上（予定）" },
+  "closeDay.cashActual": { "ja": "レジ現金（実査額）" },
+  "closeDay.cashActualPlaceholder": { "ja": "実際のレジ残高を入力" },
+  "closeDay.cashDiff": { "ja": "過不足" },
+  "closeDay.memo": { "ja": "メモ（引き継ぎ・気づき）" },
+  "closeDay.memoPlaceholder": { "ja": "任意" },
+  "closeDay.confirm": { "ja": "締める" },
+  "closeDay.confirmAlert": { "ja": "この営業日を締めますか？" },
+  "closeDay.confirmBody": { "ja": "締め後の伝票編集はできなくなります。" },
+  "closeDay.done": { "ja": "営業日を締めました。" },
+  "closeDay.alreadyClosed": { "ja": "本日はすでに締め済みです。" },
+  "closeDay.noOrders": { "ja": "本日の会計済み伝票がありません。" },
+  "closeDay.unit.orders": { "ja": "{count}組" },
+  "closeDay.unit.guests": { "ja": "{count}名" }
 }

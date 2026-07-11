@@ -26,6 +26,7 @@ import { CheckoutModal } from '../components/CheckoutModal';
 import { ChangeResultModal } from '../components/ChangeResultModal';
 import { MenuEditModal } from '../components/MenuEditModal';
 import CustomerPickerModal from '../components/CustomerPickerModal';
+import { CloseDayModal } from '../components/CloseDayModal';
 import * as ordersService from '../services/orders';
 import * as menuItemsService from '../services/menuItems';
 import { fetchCasts } from '../services/casts';
@@ -79,6 +80,7 @@ export function RegisterScreen() {
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [showCloseDay, setShowCloseDay] = useState(false);
   const [stampSettings, setStampSettings] = useState<StampSettings | null>(null);
 
   const tenantId = tenant?.id ?? '';
@@ -368,7 +370,10 @@ export function RegisterScreen() {
     return (
       <View style={[s.root, { paddingTop: Platform.OS === 'android' ? insets.top : insets.top }]}>
         <View style={[s.headerBar, { borderBottomColor: theme.border }]}>
-          <Text style={[s.headerTitle, { color: theme.text }]}>{t('register.title')}</Text>
+          <Text style={[s.headerTitle, { color: theme.text, flex: 1 }]}>{t('register.title')}</Text>
+          <TouchableOpacity onPress={() => setShowCloseDay(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginRight: 12 }}>
+            <MaterialCommunityIcons name="calendar-lock" size={22} color={theme.primary} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => setView('menu')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <MaterialCommunityIcons name="food-variant" size={22} color={theme.primary} />
           </TouchableOpacity>
@@ -448,6 +453,12 @@ export function RegisterScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        <CloseDayModal
+          visible={showCloseDay}
+          onClose={() => setShowCloseDay(false)}
+          onClosed={loadOrders}
+        />
       </View>
     );
   }
