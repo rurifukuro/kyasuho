@@ -552,3 +552,21 @@ export type ShiftReminderSettings = {
   remindHour: number;
   updatedAt: string;
 };
+
+/** ポイント設定（ky_point_settings・§41）。 */
+export type PointSettings = {
+  tenantId: string;
+  enabled: boolean;
+  yenPerPoint: number;
+};
+
+/** 景品カタログ（ky_point_rewards・§41）。 */
+export type PointReward = {
+  id: string;
+  tenantId: string;
+  pointsRequired: number;
+  name: string;
+  description: string;
+  isActive: boolean;
+  sortOrder: number;
+};

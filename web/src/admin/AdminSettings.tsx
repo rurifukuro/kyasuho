@@ -6,7 +6,13 @@ import {
   updateTenantFlags,
   updateTenantProfile,
   upsertReminderSettings,
+  fetchPointSettings,
+  upsertPointSettings,
+  fetchPointRewards,
+  upsertPointReward,
+  deletePointReward,
 } from './adminApi';
+import type { KyPointReward } from '../lib/types';
 import { lookupPostalCode } from '../lib/postalLookup';
 import { resolveArea } from '../lib/areaDict';
 
@@ -258,6 +264,9 @@ export function AdminSettings({
 
       {/* シフト提出リマインダー */}
       <ShiftReminderSection tenantId={tenant.id} />
+
+      {/* ポイント・景品設定（§41） */}
+      <PointSettingsSection tenantId={tenant.id} />
 
       {/* オプション機能 */}
       <h3 className="admin-section-title" style={{ marginTop: 24 }}>オプション機能</h3>
@@ -678,6 +687,282 @@ function ShiftReminderSection({ tenantId }: { tenantId: string }) {
           </>
         )}
       </div>
+    </>
+  );
+}
+
+function PointSettingsSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [enabled, setEnabled] = useState(false);
+  const [yenPerPoint, setYenPerPoint] = useState(500);
+
+  const [rewards, setRewards] = useState<KyPointReward[]>([]);
+  const [editReward, setEditReward] = useState<Partial<KyPointReward> | null>(null);
+  const [rewardBusy, setRewardBusy] = useState(false);
+  const [rewardMsg, setRewardMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetchPointSettings(tenantId),
+      fetchPointRewards(tenantId),
+    ])
+      .then(([s, r]) => {
+        if (s) {
+          setEnabled(s.enabled);
+          setYenPerPoint(s.yen_per_point);
+        }
+        setRewards(r);
+      })
+      .catch((e) => console.warn('[kyasuho] fetchPointSettings:', e))
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  const handleSave = useCallback(async () => {
+    if (yenPerPoint < 1) {
+      setMsg('単価は1以上を指定してください。');
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    try {
+      await upsertPointSettings(tenantId, {
+        enabled,
+        yen_per_point: yenPerPoint,
+      });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (e) {
+      console.warn('[kyasuho] upsertPointSettings:', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, enabled, yenPerPoint]);
+
+  const handleRewardSave = useCallback(async () => {
+    if (!editReward) return;
+    const name = (editReward.name ?? '').trim();
+    const pts = editReward.points_required ?? 0;
+    if (!name || pts < 1) {
+      setRewardMsg('景品名と必要ポイント(1以上)は必須です。');
+      return;
+    }
+    setRewardBusy(true);
+    setRewardMsg(null);
+    try {
+      await upsertPointReward(tenantId, {
+        ...editReward,
+        name,
+        points_required: pts,
+      });
+      const fresh = await fetchPointRewards(tenantId);
+      setRewards(fresh);
+      setEditReward(null);
+    } catch (e) {
+      console.warn('[kyasuho] upsertPointReward:', e);
+      setRewardMsg('保存に失敗しました。');
+    } finally {
+      setRewardBusy(false);
+    }
+  }, [tenantId, editReward]);
+
+  const handleRewardDelete = useCallback(async (id: string) => {
+    if (!window.confirm('この景品を削除しますか？')) return;
+    try {
+      await deletePointReward(id);
+      setRewards((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      console.warn('[kyasuho] deletePointReward:', e);
+      window.alert('削除に失敗しました。');
+    }
+  }, []);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>ポイント・景品設定</h3>
+      <div className="admin-card">
+        {loading ? (
+          <div className="admin-empty">読み込み中…</div>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>
+                <strong>ポイント制度を有効にする</strong>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  来店金額に応じてポイントを付与し、景品と交換できます。
+                </span>
+              </span>
+            </label>
+
+            {enabled && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div className="admin-field">
+                    <label htmlFor="pt-yen">ポイント単価（円/1pt）</label>
+                    <input
+                      id="pt-yen"
+                      type="number"
+                      min={1}
+                      value={yenPerPoint}
+                      onChange={(e) => setYenPerPoint(Number(e.target.value))}
+                      style={{ width: 120 }}
+                    />
+                  </div>
+                  <div className="admin-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', paddingBottom: 8 }}>
+                      例: ¥{(yenPerPoint * 10).toLocaleString()} の会計 → 10pt
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? '保存中…' : 'ポイント設定を保存'}
+              </button>
+              {msg && (
+                <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+                  {msg}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {enabled && (
+        <>
+          <h3 className="admin-section-title" style={{ marginTop: 24 }}>景品カタログ</h3>
+          <div className="admin-card">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>景品名</th>
+                    <th>必要ポイント</th>
+                    <th>説明</th>
+                    <th>有効</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rewards.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        景品が登録されていません
+                      </td>
+                    </tr>
+                  )}
+                  {rewards.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.name}</td>
+                      <td>{r.points_required}pt</td>
+                      <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.description || '—'}
+                      </td>
+                      <td>{r.is_active ? '有効' : '無効'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="admin-btn" onClick={() => setEditReward({ ...r })}>編集</button>
+                          <button className="admin-btn danger" onClick={() => void handleRewardDelete(r.id)}>削除</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button
+              type="button"
+              className="admin-btn"
+              style={{ marginTop: 12 }}
+              onClick={() => setEditReward({ name: '', points_required: 10, description: '', is_active: true, sort_order: rewards.length })}
+            >
+              ＋ 景品を追加
+            </button>
+
+            {editReward && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 16,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--bg-secondary, #f9fafb)',
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  {editReward.id ? '景品を編集' : '景品を追加'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="admin-field">
+                    <label>景品名</label>
+                    <input
+                      type="text"
+                      value={editReward.name ?? ''}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                      required
+                    />
+                  </div>
+                  <div className="admin-field">
+                    <label>必要ポイント</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={editReward.points_required ?? 10}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, points_required: Number(e.target.value) } : prev)}
+                    />
+                  </div>
+                  <div className="admin-field" style={{ gridColumn: 'span 2' }}>
+                    <label>説明（任意）</label>
+                    <input
+                      type="text"
+                      value={editReward.description ?? ''}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                    />
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={editReward.is_active ?? true}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, is_active: e.target.checked } : prev)}
+                    />
+                    有効
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="admin-btn primary" disabled={rewardBusy} onClick={() => void handleRewardSave()}>
+                    {rewardBusy ? '保存中…' : '保存'}
+                  </button>
+                  <button className="admin-btn" onClick={() => { setEditReward(null); setRewardMsg(null); }}>キャンセル</button>
+                  {rewardMsg && (
+                    <span style={{ fontSize: 13, color: rewardMsg.includes('失敗') ? '#dc2626' : '#e67e22' }}>
+                      {rewardMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -24,6 +24,8 @@ import type {
   KyTenant,
   KyUnlockWindow,
   KyVoucher,
+  KyPointSettings,
+  KyPointReward,
   MakeReservationResult,
 } from '../lib/types';
 import { calcMinutesWorked, calcPayroll, monthRange } from './payrollCalc';
@@ -1476,5 +1478,77 @@ export async function upsertReminderSettings(
       },
       { onConflict: 'tenant_id' },
     );
+  if (error) throw error;
+}
+
+// ── ポイント設定・景品カタログ（§41） ──
+
+export async function fetchPointSettings(
+  tenantId: string,
+): Promise<KyPointSettings | null> {
+  const { data, error } = await supabase
+    .from('ky_point_settings')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as KyPointSettings | null) ?? null;
+}
+
+export async function upsertPointSettings(
+  tenantId: string,
+  settings: { enabled: boolean; yen_per_point: number },
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_point_settings')
+    .upsert(
+      {
+        tenant_id: tenantId,
+        ...settings,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'tenant_id' },
+    );
+  if (error) throw error;
+}
+
+export async function fetchPointRewards(
+  tenantId: string,
+): Promise<KyPointReward[]> {
+  const { data, error } = await supabase
+    .from('ky_point_rewards')
+    .select('*')
+    .eq('tenant_id', tenantId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as KyPointReward[];
+}
+
+export async function upsertPointReward(
+  tenantId: string,
+  reward: Partial<KyPointReward> & { name: string; points_required: number },
+): Promise<void> {
+  const row = {
+    tenant_id: tenantId,
+    name: reward.name,
+    points_required: reward.points_required,
+    description: reward.description ?? '',
+    is_active: reward.is_active ?? true,
+    sort_order: reward.sort_order ?? 0,
+    updated_at: new Date().toISOString(),
+    ...(reward.id ? { id: reward.id } : {}),
+  };
+  const { error } = await supabase
+    .from('ky_point_rewards')
+    .upsert(row, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+export async function deletePointReward(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('ky_point_rewards')
+    .delete()
+    .eq('id', id);
   if (error) throw error;
 }

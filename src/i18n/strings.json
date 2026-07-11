@@ -679,5 +679,19 @@
   "voucher.reactivateConfirm": { "ja": "この券を有効に戻しますか？" },
   "voucher.deleteConfirm": { "ja": "この券を削除しますか？" },
   "voucher.required": { "ja": "券名とお客様名は必須です" },
-  "voucher.countInvalid": { "ja": "枚数は1以上を指定してください" }
+  "voucher.countInvalid": { "ja": "枚数は1以上を指定してください" },
+
+  "settings.sectionPoint": { "ja": "ポイント" },
+  "points.title": { "ja": "ポイント・景品設定" },
+  "points.settingsSub": { "ja": "来店ポイントと交換景品の管理" },
+  "points.enable": { "ja": "ポイント制度を有効にする" },
+  "points.enableHint": { "ja": "来店金額に応じてポイントを付与し、景品と交換できます。" },
+  "points.yenPerPoint": { "ja": "ポイント単価（円/1pt）" },
+  "points.yenExample": { "ja": "例: ¥{amount} の会計 → 10pt" },
+  "points.yenInvalid": { "ja": "単価は1以上を指定してください" },
+  "points.rewardCatalog": { "ja": "景品カタログ" },
+  "points.noRewards": { "ja": "景品が登録されていません" },
+  "points.rewardHint": { "ja": "景品の追加・編集はPC管理画面から行えます。" },
+  "points.active": { "ja": "有効" },
+  "points.inactive": { "ja": "無効" }
 }

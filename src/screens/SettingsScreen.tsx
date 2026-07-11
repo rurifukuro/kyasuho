@@ -22,6 +22,7 @@ import StoreProfileModal from '../components/StoreProfileModal';
 import PcWorkModal from '../components/PcWorkModal';
 import CustomerListModal from '../components/CustomerListModal';
 import { ShiftReminderModal } from '../components/ShiftReminderModal';
+import { PointSettingsModal } from '../components/PointSettingsModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -39,6 +40,7 @@ export function SettingsScreen() {
   const [showContact, setShowContact] = useState(false);
   const [showCustomers, setShowCustomers] = useState(false);
   const [showShiftReminder, setShowShiftReminder] = useState(false);
+  const [showPointSettings, setShowPointSettings] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -99,6 +101,21 @@ export function SettingsScreen() {
             <View style={s.rowContent}>
               <Text style={[s.rowLabel, { color: theme.text }]}>{t('customer.title')}</Text>
               <Text style={[s.rowSub, { color: theme.subtext }]}>{t('customer.settingsSub')}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ポイント・景品（§41） */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionPoint')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowPointSettings(true)}>
+            <MaterialCommunityIcons name="star-circle-outline" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('points.title')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('points.settingsSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -219,6 +236,15 @@ export function SettingsScreen() {
         <ShiftReminderModal
           visible={showShiftReminder}
           onClose={() => setShowShiftReminder(false)}
+          theme={theme}
+          t={t}
+          tenantId={tenant.id}
+        />
+      )}
+      {tenant && (
+        <PointSettingsModal
+          visible={showPointSettings}
+          onClose={() => setShowPointSettings(false)}
           theme={theme}
           t={t}
           tenantId={tenant.id}

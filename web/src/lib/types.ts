@@ -365,3 +365,22 @@ export interface KyShiftReminderSettings {
   remind_hour: number;
   updated_at: string;
 }
+
+export interface KyPointSettings {
+  tenant_id: string;
+  enabled: boolean;
+  yen_per_point: number;
+  updated_at: string;
+}
+
+export interface KyPointReward {
+  id: string;
+  tenant_id: string;
+  points_required: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
