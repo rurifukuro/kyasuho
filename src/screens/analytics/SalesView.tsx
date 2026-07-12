@@ -19,6 +19,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FormModalShell } from '../../components/common/FormModalShell';
 import * as salesService from '../../services/sales';
 import { shareCsv } from '../../utils/csv';
+import { printSales } from '../../services/print';
 import { NumberField, parseNum } from './NumberField';
 import { dayLabel, formatYen, todayStr } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
@@ -88,6 +89,21 @@ export function SalesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
     }
   }, [salesList, yearMonth, t]);
 
+  const handlePrint = useCallback(async () => {
+    if (salesList.length === 0) {
+      Alert.alert(t('common.error'), t('csv.empty'));
+      return;
+    }
+    try {
+      await printSales(
+        { title: t('sales.printTitle'), storeName: tenant.name, yearMonth },
+        salesList,
+      );
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    }
+  }, [salesList, tenant.name, yearMonth, t]);
+
   if (loading && salesList.length === 0) {
     return <ActivityIndicator color={theme.primary} style={v.spinner} />;
   }
@@ -109,13 +125,22 @@ export function SalesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps) {
                   {formatYen(summary.total)}
                 </Text>
               </View>
-              <TouchableOpacity
-                style={[v.csvBtn, { borderColor: theme.primary }]}
-                onPress={handleCsv}
-              >
-                <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
-                <Text style={[v.csvBtnText, { color: theme.primary }]}>{t('sales.csv')}</Text>
-              </TouchableOpacity>
+              <View style={v.btnRow}>
+                <TouchableOpacity
+                  style={[v.csvBtn, { borderColor: theme.primary }]}
+                  onPress={handlePrint}
+                >
+                  <MaterialCommunityIcons name="printer-outline" size={15} color={theme.primary} />
+                  <Text style={[v.csvBtnText, { color: theme.primary }]}>{t('common.print')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[v.csvBtn, { borderColor: theme.primary }]}
+                  onPress={handleCsv}
+                >
+                  <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
+                  <Text style={[v.csvBtnText, { color: theme.primary }]}>{t('sales.csv')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <View style={v.summaryGrid}>
               <SummaryCell label={t('sales.dayCount')} value={t('sales.days', { count: String(summary.days) })} theme={theme} />
@@ -323,6 +348,7 @@ const v = StyleSheet.create({
   summaryTopRow: { flexDirection: 'row', alignItems: 'flex-start' },
   summaryLabel: { fontSize: 12, fontWeight: '500' },
   summaryTotal: { fontSize: 26, fontWeight: '700', marginTop: 2 },
+  btnRow: { flexDirection: 'row', gap: 8 },
   csvBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, gap: 4 },
   csvBtnText: { fontSize: 12, fontWeight: '600' },
   summaryGrid: { flexDirection: 'row', marginTop: 12 },

@@ -158,18 +158,10 @@ export async function skipRecurringMonth(
   expenseId: string,
   month: string,
 ): Promise<void> {
-  const monthFirst = monthFirstDay(month);
-  const { error: skipErr } = await supabase
-    .from('ky_recurring_expense_skips')
-    .upsert(
-      { recurring_id: recurringId, month: monthFirst },
-      { onConflict: 'recurring_id,month' },
-    );
-  if (skipErr) throw skipErr;
-
-  const { error: delErr } = await supabase
-    .from('ky_expenses')
-    .delete()
-    .eq('id', expenseId);
-  if (delErr) throw delErr;
+  const { error } = await supabase.rpc('ky_skip_recurring_month', {
+    p_recurring_id: recurringId,
+    p_expense_id: expenseId,
+    p_month: monthFirstDay(month),
+  });
+  if (error) throw error;
 }

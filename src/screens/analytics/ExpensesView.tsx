@@ -20,6 +20,7 @@ import type { DropOption } from '../../components/AnchoredDropdown';
 import * as expenseService from '../../services/expenses';
 import * as receiptService from '../../services/receipts';
 import { shareCsv } from '../../utils/csv';
+import { printExpenses } from '../../services/print';
 import { formatYen, todayStr, monthDates } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
 import type { TKey } from '../../i18n';
@@ -203,6 +204,19 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
     }
   }, [expenses, yearMonth, t]);
 
+  const handlePrint = useCallback(async () => {
+    if (expenses.length === 0) return;
+    try {
+      await printExpenses(
+        { title: t('expense.printTitle'), storeName: tenant.name, yearMonth },
+        expenses,
+        categoryLabel,
+      );
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    }
+  }, [expenses, tenant.name, yearMonth, t, categoryLabel]);
+
   return (
     <View style={es.root}>
       <View style={[es.summaryCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
@@ -225,6 +239,14 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
         >
           <MaterialCommunityIcons name="plus" size={16} color="#fff" />
           <Text style={es.actionBtnText}>{t('expense.add')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[es.actionBtn, { backgroundColor: theme.primary + '20' }]}
+          onPress={handlePrint}
+          disabled={expenses.length === 0}
+        >
+          <MaterialCommunityIcons name="printer-outline" size={16} color={theme.primary} />
+          <Text style={[es.actionBtnText, { color: theme.primary }]}>{t('common.print')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[es.actionBtn, { backgroundColor: theme.primary + '20' }]}

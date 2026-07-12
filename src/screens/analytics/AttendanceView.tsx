@@ -21,6 +21,7 @@ import { FormModalShell } from '../../components/common/FormModalShell';
 import * as attendanceService from '../../services/attendance';
 import * as castService from '../../services/casts';
 import { shareCsv } from '../../utils/csv';
+import { printAttendance } from '../../services/print';
 import { dayLabel, monthDates, pad2, todayStr } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
 import type {
@@ -151,6 +152,22 @@ export function AttendanceView({ tenant, theme, t, yearMonth }: AnalyticsViewPro
     }
   }, [attendance, castNameById, yearMonth, t]);
 
+  const handlePrint = useCallback(async () => {
+    if (attendance.length === 0) {
+      Alert.alert(t('common.error'), t('csv.empty'));
+      return;
+    }
+    try {
+      await printAttendance(
+        { title: t('attendance.printTitle'), storeName: tenant.name, yearMonth },
+        attendance,
+        castNameById,
+      );
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    }
+  }, [attendance, castNameById, tenant.name, yearMonth, t]);
+
   if (loading && attendance.length === 0 && casts.length === 0) {
     return <ActivityIndicator color={theme.primary} style={av.spinner} />;
   }
@@ -237,13 +254,22 @@ export function AttendanceView({ tenant, theme, t, yearMonth }: AnalyticsViewPro
               <Text style={[av.summaryTitle, { color: theme.text }]}>
                 {t('attendance.monthSummary')}
               </Text>
-              <TouchableOpacity
-                style={[av.csvBtn, { borderColor: theme.primary }]}
-                onPress={handleCsv}
-              >
-                <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
-                <Text style={[av.csvBtnText, { color: theme.primary }]}>{t('attendance.csv')}</Text>
-              </TouchableOpacity>
+              <View style={av.btnRow}>
+                <TouchableOpacity
+                  style={[av.csvBtn, { borderColor: theme.primary }]}
+                  onPress={handlePrint}
+                >
+                  <MaterialCommunityIcons name="printer-outline" size={15} color={theme.primary} />
+                  <Text style={[av.csvBtnText, { color: theme.primary }]}>{t('common.print')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[av.csvBtn, { borderColor: theme.primary }]}
+                  onPress={handleCsv}
+                >
+                  <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
+                  <Text style={[av.csvBtnText, { color: theme.primary }]}>{t('attendance.csv')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             {monthlySummary.map(({ cast, worked, late, absent, rate }) => (
               <View
@@ -628,6 +654,7 @@ const av = StyleSheet.create({
   unrecorded: { fontSize: 12 },
   summaryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 },
   summaryTitle: { fontSize: 16, fontWeight: '700' },
+  btnRow: { flexDirection: 'row', gap: 8 },
   csvBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, gap: 4 },
   csvBtnText: { fontSize: 12, fontWeight: '600' },
   summaryRow: { borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 6 },

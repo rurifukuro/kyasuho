@@ -21,6 +21,7 @@ import * as attendanceService from '../../services/attendance';
 import * as castService from '../../services/casts';
 import { calcPayroll, splitMinutes } from '../../utils/payrollCalc';
 import { shareCsv } from '../../utils/csv';
+import { printPayroll } from '../../services/print';
 import { NumberField, parseNum } from './NumberField';
 import { dayLabel, formatYen, pad2 } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
@@ -165,6 +166,22 @@ export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps)
     }
   }, [perCast, castNameById, yearMonth, t]);
 
+  const handlePrint = useCallback(async () => {
+    if (payroll.length === 0) {
+      Alert.alert(t('common.error'), t('csv.empty'));
+      return;
+    }
+    try {
+      await printPayroll(
+        { title: t('payroll.printTitle'), storeName: tenant.name, yearMonth },
+        payroll,
+        castNameById,
+      );
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), String(e));
+    }
+  }, [payroll, castNameById, tenant.name, yearMonth, t]);
+
   if (loading && payroll.length === 0 && casts.length === 0) {
     return <ActivityIndicator color={theme.primary} style={pv.spinner} />;
   }
@@ -199,10 +216,16 @@ export function PayrollView({ tenant, theme, t, yearMonth }: AnalyticsViewProps)
             <Text style={[pv.totalLabel, { color: theme.subtext }]}>{t('payroll.monthTotal')}</Text>
             <Text style={[pv.totalValue, { color: theme.primary }]}>{formatYen(monthTotal)}</Text>
           </View>
-          <TouchableOpacity style={[pv.csvBtn, { borderColor: theme.primary }]} onPress={handleCsv}>
-            <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
-            <Text style={[pv.csvBtnText, { color: theme.primary }]}>{t('payroll.csv')}</Text>
-          </TouchableOpacity>
+          <View style={pv.btnRow}>
+            <TouchableOpacity style={[pv.csvBtn, { borderColor: theme.primary }]} onPress={handlePrint}>
+              <MaterialCommunityIcons name="printer-outline" size={15} color={theme.primary} />
+              <Text style={[pv.csvBtnText, { color: theme.primary }]}>{t('common.print')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[pv.csvBtn, { borderColor: theme.primary }]} onPress={handleCsv}>
+              <MaterialCommunityIcons name="file-delimited-outline" size={15} color={theme.primary} />
+              <Text style={[pv.csvBtnText, { color: theme.primary }]}>{t('payroll.csv')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -607,6 +630,7 @@ const pv = StyleSheet.create({
   totalCard: { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 10 },
   totalLabel: { fontSize: 12, fontWeight: '500' },
   totalValue: { fontSize: 26, fontWeight: '700', marginTop: 2 },
+  btnRow: { flexDirection: 'row', gap: 8 },
   csvBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5, gap: 4 },
   csvBtnText: { fontSize: 12, fontWeight: '600' },
   generateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10, gap: 6, marginBottom: 14 },
