@@ -22,6 +22,7 @@ import { AdminEvents } from './AdminEvents';
 import { AdminBottleKeep } from './AdminBottleKeep';
 import { AdminVouchers } from './AdminVouchers';
 import { AdminSettings } from './AdminSettings';
+import { AdminBilling } from './AdminBilling';
 import './admin.css';
 
 export default function AdminApp() {
@@ -132,6 +133,7 @@ export default function AdminApp() {
         <Route path="events" element={<AdminEvents tenant={tenant} />} />
         <Route path="bottle-keep" element={<AdminBottleKeep tenant={tenant} />} />
         <Route path="vouchers" element={<AdminVouchers tenant={tenant} />} />
+        <Route path="billing" element={<AdminBilling tenant={tenant} />} />
         <Route path="settings" element={<AdminSettings tenant={tenant} onTenantUpdate={handleTenantUpdate} />} />
         <Route path="*" element={<Navigate to="/admin/reservations" replace />} />
       </Route>
