@@ -25,7 +25,7 @@ create index if not exists ky_inventory_items_tenant_idx
 drop trigger if exists ky_inventory_items_set_updated_at on public.ky_inventory_items;
 create trigger ky_inventory_items_set_updated_at
   before update on public.ky_inventory_items
-  for each row execute function public.set_updated_at();
+  for each row execute function public.ky_set_updated_at();
 
 alter table public.ky_inventory_items enable row level security;
 

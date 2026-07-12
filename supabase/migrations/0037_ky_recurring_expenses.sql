@@ -22,7 +22,7 @@ ALTER TABLE ky_recurring_expenses ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ky_recurring_expenses_owner ON ky_recurring_expenses
   FOR ALL USING (
-    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_id = auth.uid())
+    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_user_id = auth.uid())
   );
 
 CREATE INDEX IF NOT EXISTS idx_ky_recurring_expenses_tenant
@@ -43,7 +43,7 @@ CREATE POLICY ky_recurring_expense_skips_owner ON ky_recurring_expense_skips
   FOR ALL USING (
     recurring_id IN (
       SELECT id FROM ky_recurring_expenses
-      WHERE tenant_id IN (SELECT id FROM ky_tenants WHERE owner_id = auth.uid())
+      WHERE tenant_id IN (SELECT id FROM ky_tenants WHERE owner_user_id = auth.uid())
     )
   );
 
@@ -52,5 +52,5 @@ ALTER TABLE ky_expenses
   ADD COLUMN IF NOT EXISTS source_recurring_id UUID REFERENCES ky_recurring_expenses(id) ON DELETE SET NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ky_expenses_recurring_month
-  ON ky_expenses (source_recurring_id, date_trunc('month', date))
+  ON ky_expenses (source_recurring_id, date_trunc('month', date::timestamp))
   WHERE source_recurring_id IS NOT NULL;

@@ -28,7 +28,7 @@ create index if not exists ky_daily_reports_tenant_date_idx
 drop trigger if exists ky_daily_reports_set_updated_at on public.ky_daily_reports;
 create trigger ky_daily_reports_set_updated_at
   before update on public.ky_daily_reports
-  for each row execute function public.set_updated_at();
+  for each row execute function public.ky_set_updated_at();
 
 alter table public.ky_daily_reports enable row level security;
 

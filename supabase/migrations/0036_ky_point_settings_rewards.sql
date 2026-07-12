@@ -15,7 +15,7 @@ ALTER TABLE ky_point_settings ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ky_point_settings_owner ON ky_point_settings
   FOR ALL USING (
-    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_id = auth.uid())
+    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_user_id = auth.uid())
   );
 
 -- ── ky_point_rewards ──────────────────────────────
@@ -35,7 +35,7 @@ ALTER TABLE ky_point_rewards ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY ky_point_rewards_owner ON ky_point_rewards
   FOR ALL USING (
-    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_id = auth.uid())
+    tenant_id IN (SELECT id FROM ky_tenants WHERE owner_user_id = auth.uid())
   );
 
 CREATE INDEX IF NOT EXISTS idx_ky_point_rewards_tenant
