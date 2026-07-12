@@ -20,6 +20,11 @@ function json(status: number, body: unknown): Response {
 
 const MONTHLY_LIMIT = 20;
 
+function jstYearMonth(): string {
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return now.toISOString().slice(0, 7);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
@@ -46,11 +51,12 @@ Deno.serve(async (req: Request) => {
   if (!tenants.length) return json(403, { error: 'no_tenant' });
   const tenantId = tenants[0].id;
 
-  const body = await req.json() as { image: string };
+  const body = await req.json() as { image: string; media_type?: string };
   if (!body.image) return json(400, { error: 'image_required' });
+  const mediaType = body.media_type ?? 'image/jpeg';
 
-  // 月次使用量チェック＋インクリメント
-  const yearMonth = new Date().toISOString().slice(0, 7);
+  // 月次使用量チェック＋インクリメント（JST基準）
+  const yearMonth = jstYearMonth();
   const upsertRes = await fetch(
     `${supabaseUrl}/rest/v1/rpc/ky_menu_ocr_increment`,
     {
@@ -94,7 +100,7 @@ If no items can be extracted, return {"items": []}`;
       messages: [{
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'base64', media_type: 'image/png', data: body.image } },
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: body.image } },
           { type: 'text', text: prompt },
         ],
       }],

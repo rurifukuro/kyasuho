@@ -4,8 +4,13 @@ import { supabase } from '../config/supabase';
 
 const MONTHLY_LIMIT = 20;
 
+function jstYearMonth(): string {
+  const now = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return now.toISOString().slice(0, 7);
+}
+
 export async function fetchMenuOcrUsage(tenantId: string): Promise<number> {
-  const ym = new Date().toISOString().slice(0, 7);
+  const ym = jstYearMonth();
   const { data } = await supabase
     .from('ky_menu_ocr_usage')
     .select('usage_count')
@@ -29,9 +34,10 @@ export type OcrMenuItem = {
 export async function ocrMenuImage(
   tenantId: string,
   imageBase64: string,
+  mediaType: string = 'image/jpeg',
 ): Promise<OcrMenuItem[]> {
   const { data, error } = await supabase.functions.invoke('ky-menu-ocr', {
-    body: { tenant_id: tenantId, image: imageBase64 },
+    body: { tenant_id: tenantId, image: imageBase64, media_type: mediaType },
   });
   if (error) throw error;
   const result = data as { items: { name: string; price: number; remote_price: number | null; category: string }[] };
