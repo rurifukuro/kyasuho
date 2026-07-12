@@ -834,6 +834,7 @@ export async function upsertMenuItem(
     category: string;
     name: string;
     price: number;
+    remotePrice: number | null;
     needsCast: boolean;
     sortOrder: number;
     isActive: boolean;
@@ -847,6 +848,7 @@ export async function upsertMenuItem(
     category: input.category,
     name: input.name,
     price: input.price,
+    remote_price: input.remotePrice,
     needs_cast: input.needsCast,
     sort_order: input.sortOrder,
     is_active: input.isActive,
@@ -859,6 +861,30 @@ export async function upsertMenuItem(
     ? await supabase.from('ky_menu_items').update(row).eq('id', input.id)
     : await supabase.from('ky_menu_items').insert(row);
   if (error) throw error;
+}
+
+export async function fetchMenuOcrUsage(tenantId: string): Promise<number> {
+  const ym = new Date().toISOString().slice(0, 7);
+  const { data } = await supabase
+    .from('ky_menu_ocr_usage')
+    .select('usage_count')
+    .eq('tenant_id', tenantId)
+    .eq('year_month', ym)
+    .maybeSingle();
+  return data?.usage_count ?? 0;
+}
+
+export async function ocrMenuImage(tenantId: string, imageBase64: string): Promise<{ name: string; price: number; remotePrice: number | null; category: string }[]> {
+  const { data, error } = await supabase.functions.invoke('ky-menu-ocr', {
+    body: { tenant_id: tenantId, image: imageBase64 },
+  });
+  if (error) throw error;
+  return (data as { items: { name: string; price: number; remote_price: number | null; category: string }[] }).items.map((r) => ({
+    name: r.name,
+    price: r.price,
+    remotePrice: r.remote_price,
+    category: r.category,
+  }));
 }
 
 export async function deleteMenuItem(id: string): Promise<void> {

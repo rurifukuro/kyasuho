@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
@@ -19,6 +20,18 @@ import { CastsScreen } from './src/screens/CastsScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { WebView } from 'react-native-webview';
+import { supabase } from './src/config/supabase';
+
+type DevRole = null | 'owner' | 'cast' | 'customer';
+const DEV_CYCLE: DevRole[] = [null, 'owner', 'cast', 'customer'];
+const DEV_LABELS: Record<string, string> = { auto: '自', owner: 'O', cast: 'C', customer: '客' };
+const DEV_COLORS: Record<string, string> = {
+  auto: 'rgba(100,100,100,0.85)',
+  owner: 'rgba(37,99,235,0.85)',
+  cast: 'rgba(217,70,239,0.85)',
+  customer: 'rgba(34,197,94,0.85)',
+};
 
 export type RootTabParamList = {
   Reservations: undefined;
@@ -94,27 +107,101 @@ function Tabs() {
 }
 
 function RootGate() {
-  const { isReady, session, role, roleLoading } = useAuth();
+  const { isReady, session, role, roleLoading, roleResult } = useAuth();
   const { t } = useLanguage();
+  const insets = useSafeAreaInsets();
+  const [devRole, setDevRole] = useState<DevRole>(null);
+  const [devSlug, setDevSlug] = useState('shop-kysmoke');
+
+  const cycleDevRole = useCallback(() => {
+    setDevRole(prev => {
+      const idx = DEV_CYCLE.indexOf(prev);
+      return DEV_CYCLE[(idx + 1) % DEV_CYCLE.length];
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const tid = roleResult && 'tenantId' in roleResult ? roleResult.tenantId : null;
+    if (!tid) return;
+    supabase.from('ky_tenants').select('slug').eq('id', tid).single()
+      .then(({ data }) => { if (data) setDevSlug(data.slug as string); });
+  }, [roleResult]);
 
   if (!isReady) return <LoadingScreen label={t('common.loading')} />;
   if (!session) return <AuthScreen />;
-
   if (roleLoading) return <LoadingScreen label={t('role.roleLoading')} />;
 
-  if (role === 'cast') return <CastHomeScreen />;
-  if (role === 'none') return <RoleSelectScreen />;
+  const effectiveRole = (__DEV__ && devRole) || role;
 
-  return (
-    <TenantProvider>
-      <NotificationProvider>
-        <NavigationContainer>
-          <Tabs />
-        </NavigationContainer>
-      </NotificationProvider>
-    </TenantProvider>
-  );
+  let content: React.ReactNode;
+  if (effectiveRole === 'customer') {
+    content = (
+      <WebView
+        source={{ uri: `https://rurifukuro.github.io/kyasuho/#/${devSlug}` }}
+        style={{ flex: 1 }}
+      />
+    );
+  } else if (effectiveRole === 'cast') {
+    content = <CastHomeScreen />;
+  } else if (effectiveRole === 'none') {
+    content = <RoleSelectScreen />;
+  } else {
+    content = (
+      <TenantProvider>
+        <NotificationProvider>
+          <NavigationContainer>
+            <Tabs />
+          </NavigationContainer>
+        </NotificationProvider>
+      </TenantProvider>
+    );
+  }
+
+  if (__DEV__) {
+    const key = devRole ?? 'auto';
+    return (
+      <View style={{ flex: 1 }}>
+        {content}
+        <TouchableOpacity
+          style={[
+            devFab.btn,
+            { backgroundColor: DEV_COLORS[key], bottom: insets.bottom + 70 },
+          ]}
+          onPress={cycleDevRole}
+          activeOpacity={0.7}
+        >
+          <Text style={devFab.label}>{DEV_LABELS[key]}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return <>{content}</>;
 }
+
+const devFab = StyleSheet.create({
+  btn: {
+    position: 'absolute',
+    left: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  label: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+});
 
 export default function App() {
   return (

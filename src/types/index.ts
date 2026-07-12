@@ -327,6 +327,7 @@ export type MenuItem = {
   category: MenuCategory;
   name: string;
   price: number;
+  remotePrice: number | null;
   needsCast: boolean;
   sortOrder: number;
   isActive: boolean;

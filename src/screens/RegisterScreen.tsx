@@ -304,11 +304,11 @@ export function RegisterScreen() {
   // ── メニュー管理 ──
 
   const handleMenuSave = async (data: {
-    category: MenuCategory; name: string; price: number;
+    category: MenuCategory; name: string; price: number; remotePrice: number | null;
     needsCast: boolean; sortOrder: number; isActive: boolean;
   }) => {
     if (!tenantId) return;
-    const withBack = { ...data, backRate: editingMenuItem?.backRate ?? null, backAmount: editingMenuItem?.backAmount ?? null, nominationKind: editingMenuItem?.nominationKind ?? null };
+    const withBack = { ...data, remotePrice: data.remotePrice ?? editingMenuItem?.remotePrice ?? null, backRate: editingMenuItem?.backRate ?? null, backAmount: editingMenuItem?.backAmount ?? null, nominationKind: editingMenuItem?.nominationKind ?? null };
     if (editingMenuItem) {
       await menuItemsService.updateMenuItem(editingMenuItem.id, withBack);
     } else {

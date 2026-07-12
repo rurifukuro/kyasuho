@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import type { FormEvent, ChangeEvent } from 'react';
 import type { KyMenuItem, KyMenuCategory, KyTenant } from '../lib/types';
-import { fetchMenuItems, upsertMenuItem, deleteMenuItem } from './adminApi';
+import { fetchMenuItems, upsertMenuItem, deleteMenuItem, fetchMenuOcrUsage, ocrMenuImage } from './adminApi';
 
 const NOMINATION_KINDS: { value: string; label: string }[] = [
   { value: '', label: '種別なし' },
@@ -42,18 +42,28 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
   const [fNeedsCast, setFNeedsCast] = useState(false);
   const [fSortOrder, setFSortOrder] = useState('0');
   const [fIsActive, setFIsActive] = useState(true);
+  const [fRemotePrice, setFRemotePrice] = useState('');
   const [fBackType, setFBackType] = useState<'default' | 'rate' | 'amount'>('default');
   const [fBackValue, setFBackValue] = useState('');
   const [fNominationKind, setFNominationKind] = useState('');
   const [formBusy, setFormBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [ocrUsage, setOcrUsage] = useState(0);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrResults, setOcrResults] = useState<{ name: string; price: number; remotePrice: number | null; category: string; selected: boolean }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMenuItems(tenant.id);
+      const [data, usage] = await Promise.all([
+        fetchMenuItems(tenant.id),
+        fetchMenuOcrUsage(tenant.id),
+      ]);
       setItems(data);
+      setOcrUsage(usage);
     } catch (e) {
       console.warn('[kyasuho] fetchMenuItems failed:', e);
       setError('メニューの取得に失敗しました。');
@@ -74,6 +84,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFCategory(item.category);
       setFName(item.name);
       setFPrice(String(item.price));
+      setFRemotePrice(item.remote_price != null ? String(item.remote_price) : '');
       setFNeedsCast(item.needs_cast);
       setFSortOrder(String(item.sort_order));
       setFIsActive(item.is_active);
@@ -93,6 +104,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
       setFCategory('drink');
       setFName('');
       setFPrice('');
+      setFRemotePrice('');
       setFNeedsCast(false);
       setFSortOrder('0');
       setFIsActive(true);
@@ -142,11 +154,13 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
     setFormBusy(true);
     setFormError(null);
     try {
+      const remotePrice = fRemotePrice.trim() ? Number(fRemotePrice) : null;
       await upsertMenuItem(tenant.id, {
         id: editId ?? undefined,
         category: fCategory,
         name,
         price,
+        remotePrice: (remotePrice != null && Number.isInteger(remotePrice)) ? remotePrice : null,
         needsCast: fNeedsCast,
         sortOrder,
         isActive: fIsActive,
@@ -178,6 +192,67 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
     }
   };
 
+  const handleOcrFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (ocrUsage >= 20) {
+      window.alert('今月の読取り回数上限（20回）に達しています。');
+      return;
+    }
+    setOcrBusy(true);
+    setOcrResults([]);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string | null;
+          if (!result) { reject(new Error('empty')); return; }
+          resolve(result.split(',')[1] ?? '');
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const results = await ocrMenuImage(tenant.id, base64);
+      setOcrResults(results.map((r) => ({ name: r.name, price: r.price, remotePrice: r.remotePrice, category: r.category, selected: true })));
+      setOcrUsage((prev) => prev + 1);
+    } catch (err) {
+      console.warn('[kyasuho] ocrMenuImage failed:', err);
+      window.alert('読取りに失敗しました。');
+    } finally {
+      setOcrBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleOcrImport = async () => {
+    const selected = ocrResults.filter((r) => r.selected);
+    if (selected.length === 0) return;
+    setFormBusy(true);
+    try {
+      for (const item of selected) {
+        await upsertMenuItem(tenant.id, {
+          category: item.category as KyMenuCategory,
+          name: item.name,
+          price: item.price,
+          remotePrice: item.remotePrice,
+          needsCast: false,
+          sortOrder: 0,
+          isActive: true,
+          backRate: null,
+          backAmount: null,
+          nominationKind: null,
+        });
+      }
+      setOcrResults([]);
+      await load();
+    } catch (err) {
+      console.warn('[kyasuho] ocrImport failed:', err);
+      window.alert('一括追加に失敗しました。');
+    } finally {
+      setFormBusy(false);
+    }
+  };
+
   return (
     <div>
       <h2 className="admin-page-title">メニュー管理</h2>
@@ -192,10 +267,64 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
           </select>
         </div>
         <span className="admin-spacer" />
+        <button type="button" className="admin-btn" onClick={() => fileInputRef.current?.click()} disabled={ocrBusy || ocrUsage >= 20}>
+          {ocrBusy ? '読取り中…' : `お品書き読取り (${ocrUsage}/20)`}
+        </button>
+        <input ref={fileInputRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }} onChange={handleOcrFile} />
         <button type="button" className="admin-btn primary" onClick={() => openForm(null)}>
           メニューを追加
         </button>
       </div>
+
+      {ocrResults.length > 0 && (
+        <div className="admin-card" style={{ marginBottom: 12 }}>
+          <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
+            読取り結果（{ocrResults.filter((r) => r.selected).length}/{ocrResults.length}件選択中）
+          </div>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 30 }}></th>
+                  <th>品名</th>
+                  <th className="num">価格</th>
+                  <th className="num">遠隔</th>
+                  <th>カテゴリ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ocrResults.map((r, i) => (
+                  <tr key={i}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={r.selected}
+                        onChange={(e) => {
+                          setOcrResults((prev) => prev.map((item, idx) =>
+                            idx === i ? { name: item.name, price: item.price, remotePrice: item.remotePrice, category: item.category, selected: e.target.checked } : item
+                          ));
+                        }}
+                      />
+                    </td>
+                    <td>{r.name}</td>
+                    <td className="num">{yen(r.price)}</td>
+                    <td className="num">{r.remotePrice != null ? yen(r.remotePrice) : '—'}</td>
+                    <td>{CATEGORY_LABEL.get(r.category as KyMenuCategory) ?? r.category}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="admin-btn-row" style={{ marginTop: 8 }}>
+            <button type="button" className="admin-btn primary" onClick={handleOcrImport} disabled={formBusy}>
+              {formBusy ? '追加中…' : '選択したメニューを一括追加'}
+            </button>
+            <button type="button" className="admin-btn" onClick={() => setOcrResults([])}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       {formOpen ? (
         <form className="admin-card" onSubmit={handleSubmit}>
@@ -218,6 +347,10 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
             <div className="admin-field">
               <label htmlFor="menu-price">価格（円）</label>
               <input id="menu-price" type="number" className="w-md" value={fPrice} onChange={(e) => setFPrice(e.target.value)} required />
+            </div>
+            <div className="admin-field">
+              <label htmlFor="menu-remote-price">遠隔価格（円・空欄＝対応なし）</label>
+              <input id="menu-remote-price" type="number" className="w-md" value={fRemotePrice} onChange={(e) => setFRemotePrice(e.target.value)} placeholder="遠隔時の価格" />
             </div>
             <div className="admin-field">
               <label htmlFor="menu-sort">表示順</label>
@@ -311,6 +444,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
                 <th>カテゴリ</th>
                 <th>品名</th>
                 <th className="num">価格</th>
+                <th className="num">遠隔</th>
                 <th>キャスト</th>
                 <th>バック</th>
                 <th>状態</th>
@@ -331,6 +465,7 @@ export function AdminMenu({ tenant }: { tenant: KyTenant }) {
                     )}
                   </td>
                   <td className="num">{yen(item.price)}</td>
+                  <td className="num">{item.remote_price != null ? yen(item.remote_price) : '—'}</td>
                   <td>{item.needs_cast ? '要' : '—'}</td>
                   <td>
                     {item.back_amount != null ? (

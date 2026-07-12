@@ -192,6 +192,7 @@ export interface KyMenuItem {
   category: KyMenuCategory;
   name: string;
   price: number;
+  remote_price: number | null;
   needs_cast: boolean;
   sort_order: number;
   is_active: boolean;

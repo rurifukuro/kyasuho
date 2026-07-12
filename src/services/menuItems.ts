@@ -9,6 +9,7 @@ type MenuItemRow = {
   category: MenuCategory;
   name: string;
   price: number;
+  remote_price: number | null;
   needs_cast: boolean;
   sort_order: number;
   is_active: boolean;
@@ -24,6 +25,7 @@ function rowToMenuItem(row: MenuItemRow): MenuItem {
     category: row.category,
     name: row.name,
     price: row.price,
+    remotePrice: row.remote_price,
     needsCast: row.needs_cast,
     sortOrder: row.sort_order,
     isActive: row.is_active,
@@ -48,6 +50,7 @@ export type MenuItemInput = {
   category: MenuCategory;
   name: string;
   price: number;
+  remotePrice: number | null;
   needsCast: boolean;
   sortOrder: number;
   isActive: boolean;
@@ -67,6 +70,7 @@ export async function createMenuItem(
       category: input.category,
       name: input.name,
       price: input.price,
+      remote_price: input.remotePrice,
       needs_cast: input.needsCast,
       sort_order: input.sortOrder,
       is_active: input.isActive,
@@ -88,6 +92,7 @@ export async function updateMenuItem(
   if (input.category !== undefined) updates.category = input.category;
   if (input.name !== undefined) updates.name = input.name;
   if (input.price !== undefined) updates.price = input.price;
+  if (input.remotePrice !== undefined) updates.remote_price = input.remotePrice;
   if (input.needsCast !== undefined) updates.needs_cast = input.needsCast;
   if (input.sortOrder !== undefined) updates.sort_order = input.sortOrder;
   if (input.isActive !== undefined) updates.is_active = input.isActive;

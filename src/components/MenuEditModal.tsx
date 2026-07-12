@@ -28,6 +28,7 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
     category: MenuCategory;
     name: string;
     price: number;
+    remotePrice: number | null;
     needsCast: boolean;
     sortOrder: number;
     isActive: boolean;
@@ -41,6 +42,7 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
   const [category, setCategory] = useState<MenuCategory>('set');
   const [name, setName] = useState('');
   const [priceStr, setPriceStr] = useState('');
+  const [remotePriceStr, setRemotePriceStr] = useState('');
   const [needsCast, setNeedsCast] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [sortStr, setSortStr] = useState('0');
@@ -52,6 +54,7 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
         setCategory(editing.category);
         setName(editing.name);
         setPriceStr(String(editing.price));
+        setRemotePriceStr(editing.remotePrice != null ? String(editing.remotePrice) : '');
         setNeedsCast(editing.needsCast);
         setIsActive(editing.isActive);
         setSortStr(String(editing.sortOrder));
@@ -59,6 +62,7 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
         setCategory('set');
         setName('');
         setPriceStr('');
+        setRemotePriceStr('');
         setNeedsCast(false);
         setIsActive(true);
         setSortStr('0');
@@ -75,10 +79,12 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
     }
     setSubmitting(true);
     try {
+      const rp = remotePriceStr.trim();
       await onSave({
         category,
         name: trimmed,
         price: parseInt(priceStr, 10) || 0,
+        remotePrice: rp ? parseInt(rp, 10) : null,
         needsCast,
         sortOrder: parseInt(sortStr, 10) || 0,
         isActive,
@@ -127,6 +133,16 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
           value={priceStr}
           onChangeText={(v) => setPriceStr(v.replace(/[^0-9-]/g, ''))}
           placeholder={t('menu.pricePlaceholder')}
+          placeholderTextColor={theme.subtext}
+          keyboardType="number-pad"
+        />
+
+        <Text style={[s.label, { color: theme.subtext }]}>{t('menu.remotePrice')}</Text>
+        <TextInput
+          style={[s.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
+          value={remotePriceStr}
+          onChangeText={(v) => setRemotePriceStr(v.replace(/[^0-9-]/g, ''))}
+          placeholder={t('menu.remotePricePlaceholder')}
           placeholderTextColor={theme.subtext}
           keyboardType="number-pad"
         />
