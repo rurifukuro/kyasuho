@@ -23,6 +23,7 @@ import PcWorkModal from '../components/PcWorkModal';
 import CustomerListModal from '../components/CustomerListModal';
 import { ShiftReminderModal } from '../components/ShiftReminderModal';
 import { PointSettingsModal } from '../components/PointSettingsModal';
+import { HelpChatModal } from '../components/HelpChatModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -41,6 +42,7 @@ export function SettingsScreen() {
   const [showCustomers, setShowCustomers] = useState(false);
   const [showShiftReminder, setShowShiftReminder] = useState(false);
   const [showPointSettings, setShowPointSettings] = useState(false);
+  const [showHelpChat, setShowHelpChat] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -131,6 +133,21 @@ export function SettingsScreen() {
             <View style={s.rowContent}>
               <Text style={[s.rowLabel, { color: theme.text }]}>{t('settings.pcWork')}</Text>
               <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.pcWorkSub')}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ヘルプ（Q&A AIアシスタント＝§46） */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionHelp')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowHelpChat(true)}>
+            <MaterialCommunityIcons name="robot-happy-outline" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('faq.title')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('faq.settingsSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -232,6 +249,7 @@ export function SettingsScreen() {
       <StoreProfileModal visible={showProfile} onClose={() => setShowProfile(false)} />
       <PcWorkModal visible={showPcWork} onClose={() => setShowPcWork(false)} />
       <CustomerListModal visible={showCustomers} onClose={() => setShowCustomers(false)} />
+      <HelpChatModal visible={showHelpChat} onClose={() => setShowHelpChat(false)} />
       {tenant && (
         <ShiftReminderModal
           visible={showShiftReminder}

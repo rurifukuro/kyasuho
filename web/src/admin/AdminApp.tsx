@@ -24,6 +24,7 @@ import { AdminVouchers } from './AdminVouchers';
 import { AdminInventory } from './AdminInventory';
 import { AdminDailyReports } from './AdminDailyReports';
 import { AdminSettings } from './AdminSettings';
+import { AdminHelp } from './AdminHelp';
 import './admin.css';
 
 export default function AdminApp() {
@@ -136,6 +137,7 @@ export default function AdminApp() {
         <Route path="daily-reports" element={<AdminDailyReports tenant={tenant} />} />
         <Route path="bottle-keep" element={<AdminBottleKeep tenant={tenant} />} />
         <Route path="vouchers" element={<AdminVouchers tenant={tenant} />} />
+        <Route path="help" element={<AdminHelp tenant={tenant} />} />
         <Route path="settings" element={<AdminSettings tenant={tenant} onTenantUpdate={handleTenantUpdate} />} />
         <Route path="*" element={<Navigate to="/admin/reservations" replace />} />
       </Route>

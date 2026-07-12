@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: 'bottle-keep', label: 'ボトルキープ', flag: 'enable_bottle_keep' },
   { path: 'vouchers', label: '回数券・クーポン券', flag: 'enable_vouchers' },
   { path: 'shift-image', label: 'シフト表作成' },
+  { path: 'help', label: 'ヘルプ' },
   { path: 'settings', label: '機能設定' },
 ];
 

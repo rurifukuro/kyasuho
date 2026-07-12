@@ -720,3 +720,75 @@
   font-size: 16px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- ヘルプ（Q&A AIアシスタント・§46） ---- */
+
+.admin-help-card {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 170px);
+  min-height: 380px;
+  max-width: 760px;
+}
+
+.admin-help-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 12px;
+}
+
+.admin-help-bubble {
+  max-width: 85%;
+  border-radius: 14px;
+  padding: 10px 13px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.admin-help-bubble.user {
+  align-self: flex-end;
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.admin-help-bubble.assistant {
+  align-self: flex-start;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.admin-help-bubble.thinking {
+  color: var(--text-secondary);
+}
+
+.admin-help-disclaimer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding: 6px 2px;
+}
+
+.admin-help-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.admin-help-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+}

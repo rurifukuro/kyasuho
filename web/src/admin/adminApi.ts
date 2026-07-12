@@ -2021,3 +2021,49 @@ export async function deleteDailyReport(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
+
+// ── Q&A AIアシスタント（Edge Function `ky-faq-ai`・§46） ─────────────
+
+export type FaqChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type FaqAiResult = {
+  answer: string;
+  layerUsed: 'faq' | 'sonnet' | 'web' | 'refused';
+};
+
+export const FAQ_DAILY_LIMIT = 20;
+
+/**
+ * 3層アーキテクチャ（FAQ照合→Sonnet→Web検索）はサーバー側で完結。
+ * 日次上限（20回/日）超過は message='daily_limit_exceeded' の Error を投げる。
+ */
+export async function askFaqAi(
+  question: string,
+  history: FaqChatMessage[],
+  context?: string,
+): Promise<FaqAiResult> {
+  const { data, error } = await supabase.functions.invoke('ky-faq-ai', {
+    body: {
+      question,
+      history,
+      ...(context ? { context } : {}),
+    },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        code = ((await ctx.json()) as { error?: string }).error ?? '';
+      }
+    } catch (e) {
+      console.warn('[kyasuho] ky-faq-ai error body unreadable:', e);
+    }
+    throw new Error(code || error.message);
+  }
+  const result = data as { answer: string; layer_used: FaqAiResult['layerUsed'] };
+  return { answer: result.answer, layerUsed: result.layer_used };
+}
