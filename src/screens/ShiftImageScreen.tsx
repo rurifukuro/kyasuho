@@ -92,7 +92,7 @@ export function ShiftImageScreen({
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert(t('common.error'), 'Xを開けませんでした');
+      Alert.alert(t('common.error'), t('sns.openXFailed'));
     }
   }, [buildPostText, t]);
 
@@ -105,7 +105,7 @@ export function ShiftImageScreen({
         await Linking.openURL('https://www.instagram.com/');
       }
     } catch {
-      Alert.alert(t('common.error'), 'Instagramを開けませんでした');
+      Alert.alert(t('common.error'), t('sns.openInstagramFailed'));
     }
   }, [t]);
 
