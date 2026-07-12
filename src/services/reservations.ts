@@ -61,6 +61,29 @@ export async function updateStatus(id: string, status: ReservationStatus): Promi
   if (error) throw error;
 }
 
+// AUD-8（0047）: checked_in / 取消は管理Webと同じRPCを通す＝伝票自動作成/voidを含むアトミック操作
+export async function checkinReservation(reservationId: string, tenantId: string): Promise<{ orderId: string; reused: boolean }> {
+  const { data, error } = await supabase.rpc('ky_checkin_reservation', {
+    p_reservation_id: reservationId,
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const result = data as { ok: boolean; error?: string; order_id?: string; reused?: boolean } | null;
+  if (!result?.ok) throw new Error(result?.error ?? 'checkin_failed');
+  return { orderId: result.order_id!, reused: result.reused ?? false };
+}
+
+export async function revertCheckin(reservationId: string, tenantId: string): Promise<{ voidedCount: number; closedCount: number }> {
+  const { data, error } = await supabase.rpc('ky_revert_checkin', {
+    p_reservation_id: reservationId,
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const result = data as { ok: boolean; error?: string; voided_count?: number; closed_count?: number } | null;
+  if (!result?.ok) throw new Error(result?.error ?? 'revert_failed');
+  return { voidedCount: result.voided_count ?? 0, closedCount: result.closed_count ?? 0 };
+}
+
 export async function makeReservation(
   tenantId: string,
   date: string,

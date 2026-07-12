@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyExpense, KyRecurringExpense, KyTenant } from '../lib/types';
+import { downloadCsv } from './csv';
 import {
   addExpense,
   deleteExpense,
@@ -233,25 +234,16 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
   );
 
   const handleCsvExport = useCallback(() => {
-    const header = '日付,カテゴリ,金額,メモ';
-    const rows = expenses.map(
-      (e) =>
-        `${e.date},${categoryLabel(e.category)},${e.amount},"${e.memo.replace(/"/g, '""')}"`,
-    );
-    const bom = '﻿';
-    const csv = bom + [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `経費_${yearMonth}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const rows: string[][] = [
+      ['日付', 'カテゴリ', '金額', 'メモ'],
+      ...expenses.map((e) => [e.date, categoryLabel(e.category), String(e.amount), e.memo]),
+    ];
+    downloadCsv(`経費_${yearMonth}.csv`, rows);
   }, [expenses, yearMonth]);
 
   const handleAnnualCsvExport = useCallback(async () => {
     const year = yearMonth.split('-')[0];
-    const rows: string[] = [];
+    const rows: string[][] = [];
     for (let m = 1; m <= 12; m++) {
       const ym = `${year}-${pad2(m)}`;
       const r = monthRange(ym);
@@ -264,25 +256,10 @@ export function AdminExpenses({ tenant }: { tenant: KyTenant }) {
       const catCols = allCategories.map((c) =>
         exp.filter((e) => e.category === c.key).reduce((s, e) => s + e.amount, 0),
       );
-      rows.push([m, sales, expTotal, ...catCols, payroll, sales - expTotal - payroll].join(','));
+      rows.push([String(m), String(sales), String(expTotal), ...catCols.map(String), String(payroll), String(sales - expTotal - payroll)]);
     }
-    const header = [
-      '月',
-      '総売上',
-      '経費計',
-      ...allCategories.map((c) => c.label),
-      '人件費',
-      '差引収支',
-    ].join(',');
-    const bom = '﻿';
-    const csv = bom + [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `年次収支_${year}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const header = ['月', '総売上', '経費計', ...allCategories.map((c) => c.label), '人件費', '差引収支'];
+    downloadCsv(`年次収支_${year}.csv`, [header, ...rows]);
   }, [tenant.id, yearMonth, allCategories]);
 
   const handleAddCategory = useCallback(async () => {

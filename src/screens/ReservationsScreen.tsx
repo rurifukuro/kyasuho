@@ -104,14 +104,24 @@ export function ReservationsScreen() {
 
   const handleStatusChange = useCallback(
     async (id: string, status: ReservationStatus) => {
+      if (!tenant) return;
       try {
-        await reservationService.updateStatus(id, status);
+        if (status === 'checked_in') {
+          await reservationService.checkinReservation(id, tenant.id);
+        } else if (status === 'reserved') {
+          const { closedCount } = await reservationService.revertCheckin(id, tenant.id);
+          if (closedCount > 0) {
+            Alert.alert('', '会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。');
+          }
+        } else {
+          await reservationService.updateStatus(id, status);
+        }
         await loadReservations();
       } catch (e: unknown) {
         Alert.alert(t('common.error'), String(e));
       }
     },
-    [loadReservations, t],
+    [tenant, loadReservations, t],
   );
 
   const handleAdd = useCallback(

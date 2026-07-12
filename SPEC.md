@@ -2318,15 +2318,15 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
   applyStamp（stamp_count/total_visits を読んで+Nして書く）・useVoucher（**クライアントから渡された currentRemaining-1 を書く**＝src/services/vouchers.ts:95, web側同名も同じ）。2端末同時操作で片方消える。
   - 是正: atomic increment のRPC化（`update ... set stamp_count = stamp_count + p_n where ...` 形）or ky_close_order統合（AUD-4）に含める。
 
-- **AUD-6: AdminExpenses の CSV が共通ヘルパー非経由（SEC-11穴）**
+- **AUD-6: AdminExpenses の CSV が共通ヘルパー非経由（SEC-11穴）** ✅是正済み（Rev120・月次/年次の両CSVを downloadCsv 経由へ置換＝escapeCell による式インジェクション無害化・カンマ含むカテゴリ名でも列ズレしない）
   web/src/admin/AdminExpenses.tsx:267,276 は `.join(',')` 手組み。**ユーザー定義の経費カテゴリ名（allCategories[].label）が無エスケープでヘッダーへ**＝ラベルに「,」で列ズレ・先頭「=」でExcel式実行。月次CSV（同ファイル内）も同様。
   - 是正: downloadCsv（web/src/admin/csv.ts）経由へ書き換え。他の手組みCSVがないか `.join(',')` を定期grep。
 
-- **AUD-7: 招待コード生成が Math.random ＋ app/web重複実装**
+- **AUD-7: 招待コード生成が Math.random ＋ app/web重複実装** ✅是正済み（Rev120・crypto.getRandomValues 化＝app/web両面。レート制限は課金開始前に別Revで対応予定＝0030 S3パターン流用）
   src/services/castInvites.ts:8 と web/src/admin/adminApi.ts:784 に同一ロジックが二重にあり、乱数が非暗号学的。コードは7日期限＋authenticated限定照合で実害は低いが、**照合RPC ky_redeem_cast_invite にはPIN照合のようなレート制限がない**。
   - 是正: `crypto.getRandomValues` 化（RN側は expo-crypto）＋照合失敗の試行制限（0030 S3パターン流用）。優先度は課金開始前まで。
 
-- **AUD-8: アプリ側「来店」がstatus更新のみ＝管理Webと挙動乖離**
+- **AUD-8: アプリ側「来店」がstatus更新のみ＝管理Webと挙動乖離** ✅是正済み（Rev120・ReservationsScreen の handleStatusChange を checked_in → ky_checkin_reservation RPC / reserved → ky_revert_checkin RPC に分岐＝管理Webと同じサーバーロジックを通る形に統一）
   Rev114で管理Webの来店は伝票自動作成＋preorderプリフィルになったが、アプリ側 ReservationsScreen の来店はupdateStatusを呼ぶだけ。同じ操作で結果が違う＝店側の混乱と集計漏れの温床。
   - 是正: AUD-3のRPC化と同時にアプリ側も同RPCを呼ぶ（両面が同じサーバーロジックを通る形が最終形）。
 
