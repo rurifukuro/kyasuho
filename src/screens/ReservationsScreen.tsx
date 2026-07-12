@@ -194,7 +194,7 @@ export function ReservationsScreen() {
               style={[s.dateChip, { backgroundColor: active ? theme.primary : theme.card, borderColor: theme.border }]}
               onPress={() => setSelectedDate(key)}
             >
-              <Text style={[s.dateChipText, { color: active ? '#fff' : theme.text }]}>{dateLabel(item)}</Text>
+              <Text numberOfLines={1} style={[s.dateChipText, { color: active ? '#fff' : theme.text }]}>{dateLabel(item)}</Text>
             </TouchableOpacity>
           );
         }}
@@ -548,7 +548,7 @@ const s = StyleSheet.create({
   badgeText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   dateStrip: { maxHeight: 52, borderBottomWidth: 1 },
   dateStripContent: { paddingHorizontal: 8, alignItems: 'center' },
-  dateChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginHorizontal: 4, borderWidth: 1, minWidth: 68, alignItems: 'center' },
+  dateChip: { paddingHorizontal: 4, paddingVertical: 8, borderRadius: 20, marginHorizontal: 4, borderWidth: 1, width: 68, alignItems: 'center' },
   dateChipText: { fontSize: 13, fontWeight: '600' },
   body: { flex: 1 },
   bodyContent: { padding: 16, paddingBottom: 40 },
