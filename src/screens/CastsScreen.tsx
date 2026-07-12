@@ -1462,8 +1462,9 @@ function ShiftRequestsView({
       ]);
       setRequests(reqs);
       setSubmissions(subs);
-    } catch {
-      // silently fail
+    } catch (e) {
+      // silently fail: シフト希望一覧は表示補助＝失敗しても管理画面は機能する
+      if (__DEV__) console.warn('[kyasuho] fetchTenantShiftRequests:', e);
     } finally {
       setLoading(false);
     }

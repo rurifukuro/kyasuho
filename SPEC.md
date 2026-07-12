@@ -2338,7 +2338,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 
 - **AUD-10: 型定義とselect列リストの同期漏れクラス**（Rev114事故の一般化）: 型に列を足したら同テーブルの `select('...')` 明示列を全grepして同期する。anon面=明示列必須（AUD-1）・authenticated面=`select('*')`可、という使い分けを標準とする。
 - **AUD-11: adminApi.ts 2,018行のモノリス**: ドメイン別分割（reservationsApi/castsApi/payrollApi/...）。§50-2の命名規約と合わせ、**次に大きくadminApiを触るRevのついでに段階分割**（一括リネームはしない＝§50-4）。
-- **AUD-12: 「silently fail」catch**: CastHomeScreen等に意図的黙殺が5箇所（push token登録等）。意図的なものは `// silently fail（理由）` の理由明記＋`__DEV__`時のconsole.warnを標準に。※全数調査済み: 黙殺以外の空catchは全てsetError/Alert等の処理あり＝BE-2準拠。
+- **AUD-12: 「silently fail」catch** ✅是正済み（Rev120・5箇所すべてに理由コメント＋`__DEV__` console.warn を追加。黙殺以外の空catchは全てsetError/Alert等の処理あり＝BE-2準拠を再確認済み）
 - **AUD-13: shiftTemplates definitions.ts の双子コピー同期**: 現状は正準コメント運用で乖離なし（差分はWeb専用ShiftPlacementのみ＝設計どおり）。§50-3 D-3の「同期元コメント必須」を既に満たす。**現状維持・対応不要**（監査済みの記録として残す）。
 
 ### 51-3. 将来実装（§19の㊸〜57・§40〜§50）への事前注意

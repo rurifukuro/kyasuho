@@ -149,8 +149,9 @@ export function CastHomeScreen() {
         if (!active) return;
         if (nameRes.data) setCastName((nameRes.data as { name: string }).name);
         setShifts((shiftRes.data as ShiftRow[] | null) ?? []);
-      } catch {
-        // silently fail
+      } catch (e) {
+        // silently fail: 初期ロードの失敗はUI空表示で自明＝キャストに不要なエラー表示を出さない
+        if (__DEV__) console.warn('[kyasuho] CastHomeScreen initial load:', e);
       } finally {
         if (active) setLoading(false);
       }
@@ -165,8 +166,9 @@ export function CastHomeScreen() {
       try {
         const att = await timecardService.fetchTodayAttendance(castId);
         if (active) setTodayAttendance(att);
-      } catch {
-        // silently fail
+      } catch (e) {
+        // silently fail: 打刻取得は表示補助＝失敗しても打刻ボタンは動作する
+        if (__DEV__) console.warn('[kyasuho] fetchTodayAttendance:', e);
       }
     })();
     return () => { active = false; };
@@ -230,8 +232,9 @@ export function CastHomeScreen() {
         }
         setSelectedDays(sel);
         setCustomTimes(cust);
-      } catch {
-        // silently fail
+      } catch (e) {
+        // silently fail: シフト希望の読込失敗は空カレンダー表示＝再操作で再取得
+        if (__DEV__) console.warn('[kyasuho] fetchShiftRequests:', e);
       }
     })();
     return () => { active = false; };
@@ -251,8 +254,9 @@ export function CastHomeScreen() {
         .lte('date', monthEnd)
         .order('date');
       setPayroll((data as PayrollRow[] | null) ?? []);
-    } catch {
-      // silently fail
+    } catch (e) {
+      // silently fail: 給与明細は閲覧専用＝リロードで再試行可能
+      if (__DEV__) console.warn('[kyasuho] loadPayroll:', e);
     } finally {
       setPayrollLoading(false);
     }
