@@ -793,6 +793,9 @@ web/src/
 60. **銀行振込・請求書払い（BILL-3）**（`ky-billing-invoice`・Stripeバーチャル口座・半年/年の一括前受けのみ・`ky-billing-sweep`＋未入金督促＝§52-4）
 61. **IAP ON化パック（BILL-4）**（`IAP_ENABLED=true`・アプリ内購入UI＝PlanCard/ModuleSelector（横断ゲート③）・リンクなしテキスト誘導文言（0%）・リンクアウト採用可否のユーザー判断＝§52-4/52-5。**W21ビルド種別すり合わせ必須＝IAPはExpo Go不可・dev build/TestFlightで検証**）
 62. **遠隔価格＋お品書きOCR読取り**（migration 0049: ky_menu_items.remote_price＋ky_menu_ocr_usage/increment RPC・Edge Function `ky-menu-ocr`（Claude Vision月20回制限）・アプリMenuEditModal遠隔価格欄・管理WebのAdminMenu遠隔列＋OCR読取りボタン＝§53。**実装済みRev123**）
+63. **シフト表フォント選択20書体**（Google Fonts OFL・woff2サブセット同梱・custom_settings.fonts保存・ドロップダウン各項目をそのフォントで表示＝§22-6）
+64. **セル背景透明選択＋プレビュー注記**（cellBg='transparent'・プレビュー薄白15%＋点線ボーダー＋注記バナー・出力時完全透明・SNS黒背景警告ダイアログ＝§22-7）
+65. **シフト表プレビュー拡大表示**（アプリ＝PinchImageViewer流用ShiftPreviewModal・Web＝ShiftPreviewOverlay wheel+drag＝§22-8。urehan/PinchImageViewer Z-1〜Z-15パターン）
 
 ---
 
@@ -995,6 +998,104 @@ type ShiftPlacementV2 = {
 
 - **✅ Rev67（2026-07-07）**：モードA廃止・モードB（`gridDetect.ts`）＋モードC（`defaultFreeformPlacement`＋可読性ガード`cellBgAlpha`/`textOutline`）実装済み。`AdminShiftImage.tsx` UIを2択ボタンに改修。`ShiftTableRenderer.tsx` に `cellBgWithAlpha()`/`outlineStyle()` 追加。
 - **残（後Rev）**：ShiftPlacementV2（境界配列方式＋不均等グリッド対応）＋境界線ドラッグ＋セル個別オフセット。
+
+### 22-6. フォント選択機能＝20書体（コンカフェ向け含む）（2026-07-12ユーザー指示）
+
+シフト表のヘッダー・日付・キャスト名・時間テキストの各フォントをユーザーが選択できるようにする。
+
+#### データモデル
+
+```typescript
+type ShiftFontConfig = {
+  header: string;   // ヘッダー（月名・店名）のフォント
+  body: string;     // 本文（キャスト名・時間）のフォント
+};
+// ShiftTemplateDefinition.fonts を UI で変更可能にする
+// 保存先: ky_shift_templates.custom_settings.fonts（既存 jsonb 内・DB migration不要）
+```
+
+#### フォント20種の分類
+
+| カテゴリ | 書体例（同梱候補） | 用途・コンカフェ適性 |
+|---|---|---|
+| シンプル（5種） | Noto Sans JP / Noto Serif JP / M PLUS 1p / M PLUS Rounded 1c / Zen Kaku Gothic New | 汎用・読みやすさ優先 |
+| ポップ・丸文字（4種） | Kosugi Maru / Yusei Magic / Reggae One / Rampart One | カジュアル・ポップ系店舗向け |
+| エレガント・手書き風（4種） | Klee One / Zen Old Mincho / Shippori Mincho / Sawarabi Mincho | 高級感・ラウンジ寄り |
+| ゴシック・ネオン（4種） | RocknRoll One / DotGothic16 / Hachi Maru Pop / Dela Gothic One | ゴスロリ・コンカフェ暗め内装 |
+| 装飾・個性派（3種） | Kaisei Opti / Zen Antique / Stick | 生誕祭・イベント告知向け |
+
+- **全て Google Fonts（OFL ライセンス）＝無料商用利用可・アプリ同梱可（FONT-JP ルール準拠）**
+- Web側：CSS `@font-face`（`woff2` サブセット化で容量削減・主要日本語漢字＋仮名＋英数＝各200KB以下目標）
+- アプリ側：`expo-font` で `useFonts()` ロード＋`Font.isLoaded` ガード（未ロード時はNoto Sans JPフォールバック）
+- テンプレ定義の `fonts.header` / `fonts.body` 既定値は各テンプレで固定（現行40種の定義を変更しない）→ユーザーが上書き選択した値だけ `custom_settings.fonts` に保存
+- **プレビューはフォント選択後即時反映**（レンダラーの CSS font-family / RN fontFamily を動的変更）
+
+#### UI設計
+
+- 管理Web `AdminShiftImage`：テンプレカスタマイズパネル内に「フォント」セクション追加
+  - 「ヘッダーフォント」「本文フォント」の2ドロップダウン（既定＝テンプレ定義値）
+  - ドロップダウン各項目は**そのフォントで表示**（font-family 直接適用＝選びやすさ）
+- アプリ `ShiftImageScreen`：フォントピッカーモーダル（カテゴリ別リスト＋プレビュー文字サンプル「出勤 19:00〜24:00」）
+
+### 22-7. セル背景「透明」選択肢＋プレビュー表示ガイド（2026-07-12ユーザー指示）
+
+日別セルの背景色に「透明（出力時は完全透明）」を選択可能にする。背景画像が見えるレイアウトや、印刷物に重ねる用途を想定。
+
+#### 仕様
+
+- **`cellBg` に特殊値 `'transparent'` を許容**（既存の `#RRGGBB` 文字列と排他）
+  - 選択UI：カラーピッカーに「透明」チェックボックスまたはプリセット最左に「🚫」チップを追加
+  - 保存：`custom_settings.placement.cellBg = 'transparent'`（既存jsonb・migration不要）
+- **プレビュー表示ルール**（透明そのままだとプレビュー上で文字が読めない場合がある）：
+  - `cellBg === 'transparent'` の場合、**プレビュー上のみ `rgba(255,255,255,0.15)`（薄い白15%）で描画**
+  - セルに **点線ボーダー（`border: 1px dashed rgba(150,150,150,0.5)`）** を表示して「セル範囲はここ」を視覚化
+  - プレビュー上部に注記バナーを表示：「透明セル：プレビューでは薄い白で表示していますが、出力画像では完全に透明になります」（i18n キー `shift.transparentCellNote`）
+- **PNG出力時**：`cellBg === 'transparent'` → `rgba(0,0,0,0)` を描画（背景が透過する。`html-to-image` の `backgroundColor: null` + `pixelRatio` 設定）
+  - ⚠️ `toPng()` は透過PNG対応。ただし SNS投稿（X/Instagram）に透過PNGを投稿すると黒背景化する場合がある → **共有シート呼び出し前に注意ダイアログ**：「透明セルを使用中です。SNSでは黒背景で表示される場合があります。白背景版も保存しますか？」→「透明のまま」「白背景で保存」の2択
+- **既存の `cellBgAlpha` スライダー（§22-5・モードC可読性ガード）との関係**：
+  - `cellBg = 'transparent'` 選択時は `cellBgAlpha` スライダーを無効化（意味が無い＝transparent × alpha = 透明のまま）
+  - `cellBg` が通常色の場合は従来通り `cellBgAlpha` で半透明度を調整可能
+
+### 22-8. シフト表プレビューのクリック拡大表示（2026-07-12ユーザー指示）
+
+#### 概要
+
+シフト表プレビュー画像をクリック/タップすると全画面モーダルで拡大表示＋ピンチズーム操作ができる機能。とれはんっ！/レジさぽっ！のお品書き画像ビューア（`PinchImageViewer`）パターンを流用。
+
+#### 流用元
+
+- **アプリ**：`../urehan/src/components/PinchImageViewer.tsx`（レジさぽっ！＝最新版。reanimated 4 + Gesture API + 焦点追従ズーム・メモリ `pinch_zoom_rules.md` Z-1〜Z-15 準拠）
+- **管理Web**：CSSベースの軽量実装（`transform: scale()` + wheel event + drag pan。Webにはreanimatedが無いため純CSS/JS実装）
+
+#### アプリ側設計
+
+- `src/components/ShiftPreviewModal.tsx`（新規）：
+  - `PinchImageViewer` をラップしたフルスクリーンモーダル（`Modal` + `SafeAreaView`）
+  - 入力：`source: { uri: string }` （シフト表プレビューのPNG URI＝`react-native-view-shot` の `captureRef` 結果）
+  - 閉じる：右上×ボタン or 背景タップ
+  - ピンチ拡大（Z-1〜Z-15 標準パターン）：minScale=1 / maxScale=4 / ダブルタップで2倍⇄リセット
+- `ShiftImageScreen` のプレビュー `<Image>` に `onPress` → `ShiftPreviewModal` open を追加
+- 依存：`react-native-reanimated` / `react-native-gesture-handler`（既にプロジェクトに導入済み）
+
+#### 管理Web側設計
+
+- `web/src/admin/ShiftPreviewOverlay.tsx`（新規）：
+  - オーバーレイ（`position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.85)`）
+  - 中央に画像（`<img>` + CSS `transform: scale(zoomLevel) translate(panX, panY)`）
+  - 操作：
+    - **ホイールスクロール**でズームイン/アウト（scale 1〜5・delta の正負で方向判定）
+    - **ドラッグ**でパン移動（`mousedown`→`mousemove`→`mouseup`）
+    - **ダブルクリック**で2倍⇄リセットのトグル
+  - 閉じる：Escape / オーバーレイ背景クリック / 右上×ボタン
+  - レスポンシブ：画像の初期サイズは `max-width: 90vw; max-height: 90vh; object-fit: contain`
+- `AdminShiftImage` のプレビュー画像コンテナに `onClick` → overlay open を追加
+- カーソル：プレビュー画像ホバー時 `cursor: zoom-in`（拡大中は `cursor: grab` / ドラッグ中 `cursor: grabbing`）
+
+#### 共通注意事項
+
+- 拡大表示は**閲覧専用**（編集操作は元のプレビュー画面でのみ行う＝モーダル内で配置変更等はしない）
+- プレビュー画像が未生成（テンプレ未選択等）の場合はクリック無効（`disabled` 状態・cursor: default）
+- アプリ側は Z-11（ダブルタップ誤爆防止=300msディレイ）/ Z-12（境界クランプ）を厳守
 
 ---
 
@@ -2390,7 +2491,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 
 ### 52-2. 商品モデル＝モジュール選択型×契約期間（全機能の帰属マッピング）
 
-- 商品軸（Rev69ユーザー決定）: **モジュール自由選択（アラカルト）× 選択個数で単価逓減 × 契約期間（月／半年≒8%OFF／年≒17%OFF目安・実額はBILL-0）**
+- 商品軸（Rev69ユーザー決定）: **モジュール自由選択（アラカルト）× 選択個数で単価逓減 × 契約期間（月／半年／年）**。**実額は§52-2bで確定済み（2026-07-12）**。半年≒8%OFF／年≒17%OFF目安の期間割引率はBILL-0残（§52-8#2注記）
 - **モジュールカタログ確定版＝9本**。§34〜§50で増えた全機能の帰属を以下に確定する（**帰属の最終承認＝BILL-0ユーザーゲート＝§52-8#1**）:
 
 | モジュール | 帰属する機能（§） |
@@ -2410,6 +2511,39 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 - 無料コアの上限数値（§14叩き台＝キャスト3人・予約100件/月・シフト画像月3回透かし付き）はBILL-0で確定（§52-8#3）
 - SKU: Web直販は動的（Stripe quantity＋metadata.selected_modules）・**IAP/Playは有限SKU＝簡略9案を既定**（BILLING_DESIGN §15-6・フル21案との選択=§52-8#4）
 
+#### 52-2b. 価格実額（✅2026-07-12ユーザー確定・LP/管理Web/billingConfigの正）
+
+**単品モジュール月額（税別・Web直販=Stripe）**:
+
+| モジュール | Web単価 | Store版(×1.2) |
+|---|---|---|
+| base（予約台帳/受付/キャスト/客Web/通知/Q&A AI/管理Web基盤） | ¥12,800 | ¥15,800 |
+| register（オーダー/伝票/会計/席料/日報/印刷/在庫） | ¥9,800 | ¥11,800 |
+| shift（テンプレ40種/AIデザイン月100回/デイリー/SNS投稿） | ¥8,800 | ¥10,800 |
+| sales（売上/給与/バック/スライド時給） | ¥8,800 | ¥10,800 |
+| analytics（期間集計/ランキング/グラフ/ダッシュボード） | ¥7,800 | ¥9,800 |
+| customer（お客様モード/ポイント/景品/スタンプ） | ¥7,800 | ¥9,800 |
+| attendance（打刻/欠勤遅刻早退/月次集計） | ¥5,800 | ¥6,800 |
+| expense（経費/定期固定経費/OCR月300枚） | ¥5,800 | ¥6,800 |
+
+**個数割引ラダー（自動適用・どの組合せでも）**: 1個=定価 / 2個=10%OFF / 3個=20%OFF / 4-5個=25%OFF / 6-7個=30%OFF / **8個全部=¥39,800固定（実質41%OFF）**
+
+**パックプリセット（人気組合せのワンクリック選択）**:
+| パック | 構成 | Web月額 | Store月額 |
+|---|---|---|---|
+| 🏪接客 | base+register+customer | ¥24,800 | ¥29,800 |
+| 👥スタッフ | base+shift+attendance | ¥21,800 | ¥25,800 |
+| 📈経営 | sales+expense+analytics | ¥17,800 | ¥21,800 |
+| 👑オールイン | 全8モジュール | ¥39,800 | ¥47,800 |
+
+**追加課金パック（都度購入・月内使い切り）**:
+- AI生成 追加50回 = ¥1,980（Stripe単発 / ストアconsumable IAP）
+- OCR 追加300枚 = ¥980（同上）
+
+**Store上乗せ率＝×1.2**（心理的価格丸め・手数料15%÷0.85≒×1.18の切り上げ）。IAP/PlayはSKU固定のため自由組合せ割引不可＝Web直販(Stripe)のみアラカルト。
+
+**税表記＝税別**（B2B SaaS標準。直接競合NIGHTCORE/コンカフェGoも税別）。
+
 ### 52-3. トライアル・クーポン（承認済み確定事項）
 
 - **サーバーサイド・トライアル一本化**（✅2026-07-10 Rev70ユーザー承認）: `channel='promo'` の台帳行（status='trialing'・selected_modules=**全モジュール**・30日→クーポンコードで60日）。**ASC Introductory Offer／Play free trialはストア側に設定しない**（promoとスタックし実質3ヶ月化する事故防止）
@@ -2420,7 +2554,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 ### 52-4. チャネル別実装要点とスマホ新法
 
 - **アプリ内（IAP/Play）**: 購入UIは `IAP_ENABLED` フラグ配下（横断ゲート③）。価格表示は `productsById[sku].localizedPrice` のみ（PRICE・R29・R35地域倍率）。**Webへの誘導はリンクなしテキストのみ**（例:「PCでは『きゃすりん Web』で検索」＝スマホ新法下で手数料0%）。**QRコードはアプリ内に置かない**（保守判定）。リンクアウト（Small Business 10%）の採用可否はBILL-4時点のユーザー判断（§52-8#10）
-- **チャネル別価格差**: IAP/Play価格＝Web価格÷0.85≒**×1.18上乗せ**（実額とストア価格Tierへの丸めはBILL-0＝§52-8#5）。**料金案内はLPに一元化**し、アプリ内では価格差・他チャネルの安さに言及しない（steering回避＝審査安全）
+- **チャネル別価格差**: IAP/Play価格＝Web価格**×1.2**（✅確定・§52-2bの表参照）。**料金案内はLPに一元化**し、アプリ内では価格差・他チャネルの安さに言及しない（steering回避＝審査安全）
 - **Stripe構成**: Billing（サブスク）＋Checkout（**カード情報非保持＝SAQ A**・割販法対応）＋Invoicing（振込請求書）＋Customer Portal（支払方法変更・解約のセルフサービス）
 - **二重課金防止3層**: ①購入系RPC/Checkout作成前に台帳のアクティブ契約有無をチェック ②チャネル跨ぎ変更は「解約→満了→新チャネルで申込」を正規動線として案内 ③満了同日切替は `billing_cycle_anchor` 指定の予約作成（BILL-3後続改善・MVPは②の案内で足りる）
 - 返金: 期間末まで利用可・日割返金なし・データは消さない（BILLING_DESIGN §11）。経理は ky_billing_invoices＋Stripeダッシュボード＋ストアレポートの三帳簿を月次突合（同§12）
@@ -2459,10 +2593,10 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 | # | 決定事項 | 状態 |
 |---|---|---|
 | 1 | **モジュール帰属の最終承認**（§52-2表・customer新設・Q&A AI無料コア扱い含む） | ⏳本§で提案済み |
-| 2 | **価格実額**（モジュール単価・個数逓減テーブル・半年≒8%/年≒17%割引率の確定） | ⏳ |
+| 2 | **価格実額**（モジュール単価・個数逓減テーブル） | ✅確定（2026-07-12・§52-2b） |
 | 3 | 無料コアの上限数値（キャスト3人・予約100件/月・シフト画像月3回の叩き台確定） | ⏳ |
 | 4 | IAP SKUラインナップ（**簡略9案=既定** or フル21案） | ⏳ |
-| 5 | Apple/Play上乗せ率の実額（÷0.85≒×1.18目安）とストア価格Tierへの丸め | ⏳ |
+| 5 | Apple/Play上乗せ率＝×1.2（心理的価格丸め） | ✅確定（2026-07-12・§52-2b） |
 | 6 | インボイス（適格請求書発行事業者）登録の要否 | ⏳ |
 | 7 | 特商法（通販）表記ページ＝事業者名・住所・連絡先の表示方法 | ⏳ |
 | 8 | **Stripeアカウント開設（ユーザー本人操作）** | ⏳ |
