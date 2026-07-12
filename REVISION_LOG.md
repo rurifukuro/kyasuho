@@ -2965,3 +2965,33 @@ voidせず手動対応とする。操作前に確認ダイアログを表示。
 ### 検証
 - Web `npx tsc -b` EXIT:0 ／ アプリ側(src/)は変更なし（anon面なし・authenticatedは全列GRANT維持＝影響なし）
 - **Migration 0045改修・0046は本番未適用**（承認ゲート）。適用時に anon RESTプローブ（`?select=owner_user_id` が permission denied になること／客Web予約ページが正常動作すること）で再検証する
+
+---
+
+## Rev118 — AUD-3/AUD-4是正＝チェックイン・会計後続処理のRPC化（2026-07-12）
+
+### 概要
+§51監査の🔴残り2件（AUD-3/AUD-4）を是正＋作業中に発見したapply-blocker（AUD-14）を是正。BE-4（多段mutationはRPC化）/BE-5（atomic increment）を実地適用。
+- **AUD-3**: 管理Webのチェックイン（status更新→伝票INSERT→明細INSERT の3段）と来店取消（status更新→伝票void）がクライアント逐次実行＝途中失敗で「checked_inなのに伝票なし」等の不整合 → `ky_checkin_reservation` / `ky_revert_checkin` RPC（1トランザクション）へ移設。二重チェックイン防止＝既存open伝票があれば再利用（reused:true・明細再投入なし）。
+- **AUD-4**: closeOrder のRPC成功後にクライアントが autoUpsertSales → autoDeductInventory → applyStamp を逐次実行＝途中の通信断で「会計確定済みなのに売上集計・在庫・スタンプが欠落」＋在庫エラー黙殺（BE-2違反） → `ky_close_order` v3 へ3処理を同一トランザクション統合（明細はDBから読む＝クライアントstate `_items` 引数を廃止）。
+- **AUD-14（作業中に発見）**: 0040/0041 のRLSポリシーが実在しない列 `ky_tenants.user_id`（正: owner_user_id）を参照＝本番適用時に CREATE POLICY が42703で失敗するブロッカー → 両ファイル直接修正（未適用のため可）。
+- **AUD-5の顧客系を前倒し**: スタンプ加算を `stamp_count = stamp_count + N` のatomic UPDATEに（旧applyStampはread-modify-write）。あわせて last_visit_date を UTC slice → JST（Asia/Tokyo）日付へ是正。Rev119の残りは vouchers.useVoucher のみ。
+
+### 設計判断（SPEC AUD-3原文との差分）
+preorder→明細転記は「AUD-2と同じサーバー再解決に統一」ではなく**スナップショット原則（Rev113＝予約時価格の保証）を尊重**。Rev117で preorder はRPC内サーバー著者値になったため、再解決は予約時の1回で完結しており、チェックイン時の再解決は価格変更耐性を壊すだけ。RPC内は型/範囲の防御検証のみ（object以外・qty 1〜99逸脱・price負値は転記スキップ＝チェックイン自体は成立）。削除済みメニュー/離脱キャストはFK違反回避のためnullフォールバック。
+
+### 変更ファイル
+- `supabase/migrations/0047_ky_checkin_close_rpc.sql`（新規）:
+  - **ky_checkin_reservation**(p_reservation_id, p_tenant_id): owner検証→予約for update→status検証（reserved/checked_in以外はnot_checkinable）→checked_in化→既存open伝票再利用 or 伝票INSERT＋preorder転記（防御検証つき）
+  - **ky_revert_checkin**(p_reservation_id, p_tenant_id): status='reserved'戻し＋open伝票一括void。closed伝票は触らずcountで返却（会計済みの扱いは店の手動判断）
+  - **ky_close_order v3**（CREATE OR REPLACE・シグネチャ不変）: 0035版ロジック（owner/open検証・FIN-3 subtotal再計算・§39 back_each解決）維持＋①§25-4売上集計（entry_mode='manual'は非上書き・集計仕様は旧autoUpsertSalesと1:1）②§47在庫sale減算（DB明細×ky_inventory_items JOIN→ky_record_inventory_move）③§31スタンプ（atomic increment＋JST日付＋reward閾値判定）。返却jsonbにstamp結果を同梱
+- `supabase/migrations/0040_ky_inventory.sql` / `0041_ky_daily_reports.sql`: RLSポリシーの `user_id` → `owner_user_id`（AUD-14・ヘッダーに是正注記）
+- `web/src/admin/adminApi.ts`: checkinReservation / revertCheckin をRPC呼び出しへ置換（revertCheckinは voidedCount/closedCount を返す）
+- `web/src/admin/AdminReservations.tsx`: 取消時に closedCount>0 なら「会計済み伝票はレジから手動対応」アラート
+- `src/services/orders.ts`: closeOrder から `_items` 引数除去・RPC返却のstampをStampResultへマップ。autoUpsertSales / autoDeductInventory / applyStamp の3関数を削除（RPC内へ移設）
+- `src/screens/RegisterScreen.tsx`: closeOrder呼び出しの第4引数 orderItems を除去
+
+### 検証
+- アプリ `npx tsc --noEmit` EXIT:0 ／ Web `npx tsc -b` EXIT:0
+- closeOrder の利用箇所は RegisterScreen.tsx のみ・web側に同名相方なし（WEB13クリア）を全grepで確認
+- **Migration 0040/0041是正・0047は本番未適用**（承認ゲート）。適用時はチェックイン→伝票確認→取消→会計→ky_sales/在庫/スタンプ反映の実UI一巡で再検証する

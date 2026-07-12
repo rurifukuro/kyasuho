@@ -1,5 +1,7 @@
 -- §49-2 日報＝営業日クローズ
 -- 売上/組数/客数/キャスト実績/レジ現金/メモを確定＝日報一覧・CSV・月次レポート連携の土台
+-- 2026-07-12 本番適用前に是正（Rev118）: RLSポリシーの ky_tenants.user_id は実在しない列
+-- （正: owner_user_id）＝CREATE POLICY が適用時に失敗するバグを修正
 
 create table if not exists public.ky_daily_reports (
   id               uuid          primary key default gen_random_uuid(),
@@ -33,5 +35,5 @@ alter table public.ky_daily_reports enable row level security;
 drop policy if exists ky_daily_reports_owner_all on public.ky_daily_reports;
 create policy ky_daily_reports_owner_all on public.ky_daily_reports
   for all using (
-    tenant_id in (select id from public.ky_tenants where user_id = auth.uid())
+    tenant_id in (select id from public.ky_tenants where owner_user_id = auth.uid())
   );

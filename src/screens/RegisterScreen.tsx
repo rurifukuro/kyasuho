@@ -277,7 +277,7 @@ export function RegisterScreen() {
     const stampResult = await ordersService.closeOrder(activeOrderId, tenantId, {
       subtotal, deposit, change, paymentMethod, note,
       customerId: selectedCustomer?.id ?? null,
-    }, orderItems);
+    });
     setShowCheckout(false);
     setChangeResult({ subtotal, deposit, change });
 

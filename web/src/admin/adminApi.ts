@@ -85,71 +85,48 @@ export async function updateReservationStatus(
 }
 
 /**
- * 来店チェックイン＝ステータス更新＋伝票自動作成＋preorder明細プリフィル。
- * preorderがあれば予約時のスナップショットからオーダー明細を初期投入する。
- * 伝票はopen状態で作成され、RegisterScreenのレーンに即座に表示される。
+ * 来店チェックイン＝ky_checkin_reservation RPC（1トランザクション・AUD-3）。
+ * status更新＋伝票自動作成＋preorder明細プリフィル＋二重チェックイン防止
+ * （既存open伝票があれば再利用）をサーバー側でまとめて行う。
  */
 export async function checkinReservation(
   tenantId: string,
   reservation: KyReservationFull,
 ): Promise<void> {
-  await updateReservationStatus(reservation.id, 'checked_in');
-
-  const { data: orderData, error: orderErr } = await supabase
-    .from('ky_orders')
-    .insert({
-      tenant_id: tenantId,
-      biz_date: reservation.date,
-      seat_no: reservation.seat_no,
-      reservation_id: reservation.id,
-      customer_label: reservation.customer_name,
-      status: 'open',
-    })
-    .select('id')
-    .single();
-  if (orderErr) throw orderErr;
-  const orderId = (orderData as { id: string }).id;
-
-  if (reservation.preorder && reservation.preorder.length > 0) {
-    const items = reservation.preorder.map((p) => ({
-      order_id: orderId,
-      tenant_id: tenantId,
-      menu_item_id: p.menu_item_id,
-      category: p.category,
-      name: p.name,
-      price: p.price,
-      qty: p.qty,
-      cast_id: p.cast_id ?? null,
-    }));
-    const { error: itemErr } = await supabase
-      .from('ky_order_items')
-      .insert(items);
-    if (itemErr) throw itemErr;
-  }
+  const { data, error } = await supabase.rpc('ky_checkin_reservation', {
+    p_reservation_id: reservation.id,
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const result = data as { ok: boolean; error?: string } | null;
+  if (!result?.ok) throw new Error(result?.error ?? 'checkin_failed');
 }
 
 /**
- * 来店取消＝ステータスをreservedに戻し、紐付きopen伝票をvoidにする。
- * closed伝票がある場合は会計済みのためvoidしない（手動対応を案内）。
+ * 来店取消＝ky_revert_checkin RPC（1トランザクション・AUD-3）。
+ * ステータスをreservedに戻し、紐付きopen伝票をvoidにする。
+ * closed伝票（会計済み）はvoidしない＝closedCountで件数を返す（手動対応の案内用）。
  */
-export async function revertCheckin(reservationId: string): Promise<void> {
-  await updateReservationStatus(reservationId, 'reserved');
-
-  const { data: orders, error: fetchErr } = await supabase
-    .from('ky_orders')
-    .select('id, status')
-    .eq('reservation_id', reservationId);
-  if (fetchErr) throw fetchErr;
-
-  for (const row of (orders ?? []) as { id: string; status: string }[]) {
-    if (row.status === 'open') {
-      const { error: voidErr } = await supabase
-        .from('ky_orders')
-        .update({ status: 'void' })
-        .eq('id', row.id);
-      if (voidErr) throw voidErr;
-    }
-  }
+export async function revertCheckin(
+  tenantId: string,
+  reservationId: string,
+): Promise<{ voidedCount: number; closedCount: number }> {
+  const { data, error } = await supabase.rpc('ky_revert_checkin', {
+    p_reservation_id: reservationId,
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const result = data as {
+    ok: boolean;
+    error?: string;
+    voided_count?: number;
+    closed_count?: number;
+  } | null;
+  if (!result?.ok) throw new Error(result?.error ?? 'revert_checkin_failed');
+  return {
+    voidedCount: result.voided_count ?? 0,
+    closedCount: result.closed_count ?? 0,
+  };
 }
 
 export async function removeReservation(id: string): Promise<void> {

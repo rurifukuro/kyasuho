@@ -157,7 +157,10 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     if (!window.confirm(`${row.customer_name} 様を予約中に戻しますか？\n紐付きの未会計伝票は取消されます。`)) return;
     setBusyId(row.id);
     try {
-      await revertCheckin(row.id);
+      const { closedCount } = await revertCheckin(tenant.id, row.id);
+      if (closedCount > 0) {
+        window.alert('会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。');
+      }
       await load();
     } catch (e) {
       console.warn('[kyasuho] revertCheckin failed:', e);

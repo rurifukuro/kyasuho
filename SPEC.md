@@ -2300,13 +2300,17 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
   - 是正（**0045改修で対応＝適用前の今が最安**）: RPC内でサーバー側再解決＝(a)配列長上限（20要素）(b)各要素の menu_item_id が自テナント＋is_active であることを検証 (c)**price/name/category は ky_menu_items から引き直してスナップショット**（客送信値は捨てる）(d)qty は 1〜99 にクランプ (e)cast_id は自テナント所属検証。不正要素は error='bad_request' で拒否。
   - 原則（FIN-9として51-4でルール化）: **「anonが書いた値を金銭・伝票系へ転記する経路では、金額系フィールドは必ずサーバーがマスタから引き直す」**。
 
-- **AUD-3: チェックイン／来店取消がクライアント多段実行で非アトミック**
+- **AUD-3: チェックイン／来店取消がクライアント多段実行で非アトミック** ✅是正済み（Rev118・0047の ky_checkin_reservation / ky_revert_checkin RPC化＋二重チェックイン防止=既存open伝票再利用。**設計判断**: preorder→明細転記は下記の「サーバー再解決に統一」ではなく**スナップショット原則（Rev113）を尊重**＝Rev117でpreorderは予約時にサーバー著者値化済みのため、再解決は予約時の1回で完結。RPC内は型/範囲の防御検証のみ・不正要素は転記スキップでチェックイン自体は成立）
   web/src/admin/adminApi.ts の checkinReservation は「status更新→伝票INSERT→明細INSERT」の3段、revertCheckin は「status更新→伝票SELECT→void UPDATE」をクライアントから逐次実行。途中失敗で「checked_inなのに伝票なし」「伝票だけ残る」等の不整合が起きる。
   - 是正: `ky_checkin_reservation` / `ky_revert_checkin` RPC化（1トランザクション）。preorder→明細の転記もRPC内でAUD-2と同じサーバー再解決に統一。二重チェックイン防止（既存open伝票があれば再利用 or エラー）もRPC内で。
 
-- **AUD-4: closeOrder の後続処理（売上集計・在庫減算・スタンプ）が非アトミック＋失敗黙殺**
+- **AUD-4: closeOrder の後続処理（売上集計・在庫減算・スタンプ）が非アトミック＋失敗黙殺** ✅是正済み（Rev118・第2段を直接実施＝0047の ky_close_order v3 へ売上upsert（entry_mode='manual'は非上書き）/在庫sale減算（明細はDBから読む＝_items引数廃止）/スタンプを1トランザクション統合。スタンプは atomic increment 化＝AUD-5の顧客系を前倒し・last_visit_dateはJST日付へ是正）
   src/services/orders.ts:231 closeOrder は RPC成功後にクライアントから autoUpsertSales → autoDeductInventory → applyStamp を逐次実行。①途中でアプリ終了/通信断すると**会計は確定済みなのに売上集計・在庫・スタンプが欠落**し、リトライ導線がない ②autoDeductInventory は invErr を握りつぶして return（在庫減算スキップが無音＝BE-2違反）③在庫減算がクライアントstateの `_items` 引数依存＝DB明細と乖離しうる。
   - 是正: 第1段=エラー可視化（在庫減算失敗をトースト表示＋console.warn）。第2段=ky_close_order RPCへ売上upsert/在庫減算/スタンプを統合（明細はサーバーで読む）。§47・§41の実装Revで段階対応。
+
+- **AUD-14: 0040/0041 のRLSポリシーが実在しない列 `ky_tenants.user_id` を参照（apply-blocker）** ✅是正済み（Rev118）
+  Rev118作業中に発見。0040_ky_inventory.sql（2箇所）と0041_ky_daily_reports.sql（1箇所）のRLSポリシーが `where user_id = auth.uid()` と書かれていたが、ky_tenants の実列は **owner_user_id**（0001）。両migrationは本番未適用のため実害ゼロだが、**適用時に CREATE POLICY が42703で失敗**し0040以降が全て積み上がらないブロッカーだった。
+  - 是正: 未適用migrationのため両ファイルを直接修正（`owner_user_id = auth.uid()`）＋ヘッダーに是正注記。教訓＝**migrationは書いた時点でなく適用直前にも列名を0001と突合する**（未適用が溜まる相乗り運用特有のリスク）。
 
 #### 🟡 中（堅牢性・整合性）
 

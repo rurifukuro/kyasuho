@@ -1,5 +1,7 @@
 -- §47 在庫管理: 品目マスタ + 入出庫台帳（append-only）
 -- stock_qty はキャッシュ＝真実の残高は Σ(ky_inventory_moves.qty)
+-- 2026-07-12 本番適用前に是正（Rev118）: RLSポリシーの ky_tenants.user_id は実在しない列
+-- （正: owner_user_id）＝CREATE POLICY が適用時に失敗するバグを修正
 
 -- ── ky_inventory_items（品目マスタ） ──
 
@@ -30,7 +32,7 @@ alter table public.ky_inventory_items enable row level security;
 drop policy if exists ky_inventory_items_owner_all on public.ky_inventory_items;
 create policy ky_inventory_items_owner_all on public.ky_inventory_items
   for all using (
-    tenant_id in (select id from public.ky_tenants where user_id = auth.uid())
+    tenant_id in (select id from public.ky_tenants where owner_user_id = auth.uid())
   );
 
 -- ── ky_inventory_moves（入出庫台帳・append-only） ──
@@ -57,7 +59,7 @@ alter table public.ky_inventory_moves enable row level security;
 drop policy if exists ky_inventory_moves_owner_all on public.ky_inventory_moves;
 create policy ky_inventory_moves_owner_all on public.ky_inventory_moves
   for all using (
-    tenant_id in (select id from public.ky_tenants where user_id = auth.uid())
+    tenant_id in (select id from public.ky_tenants where owner_user_id = auth.uid())
   );
 
 -- ── stock_qty 同期更新RPC ──
