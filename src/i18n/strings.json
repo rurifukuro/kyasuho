@@ -758,5 +758,6 @@
   "expense.cat.supplies": { "ja": "消耗品・備品" },
   "expense.cat.outsourcing": { "ja": "外注・システム利用料" },
   "expense.cat.misc": { "ja": "雑費" },
+  "csv.expense.headers": { "ja": "日付,カテゴリ,金額,メモ" },
   "reservation.revertClosedWarning": { "ja": "会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。" }
 }

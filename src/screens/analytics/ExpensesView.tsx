@@ -22,26 +22,26 @@ import * as receiptService from '../../services/receipts';
 import { shareCsv } from '../../utils/csv';
 import { formatYen, todayStr, monthDates } from './common';
 import type { AnalyticsViewProps, TFunc } from './common';
+import type { TKey } from '../../i18n';
 import type { Expense, ExpenseCategory, CustomExpenseCategory, ThemeColor } from '../../types';
 
-const EXPENSE_HEADER = ['日付', 'カテゴリ', '金額', 'メモ'];
-
-const BUILTIN_CATEGORIES: { key: ExpenseCategory; label: string }[] = [
-  { key: 'purchase', label: '仕入（酒・食材）' },
-  { key: 'rent', label: '家賃' },
-  { key: 'utilities', label: '水道光熱費' },
-  { key: 'communication', label: '通信費' },
-  { key: 'advertising', label: '広告宣伝費' },
-  { key: 'costume', label: '衣装・美装費' },
-  { key: 'supplies', label: '消耗品・備品' },
-  { key: 'outsourcing', label: '外注・システム利用料' },
-  { key: 'misc', label: '雑費' },
+const BUILTIN_CATEGORY_KEYS: { key: ExpenseCategory; labelKey: TKey }[] = [
+  { key: 'purchase', labelKey: 'expense.cat.purchase' },
+  { key: 'rent', labelKey: 'expense.cat.rent' },
+  { key: 'utilities', labelKey: 'expense.cat.utilities' },
+  { key: 'communication', labelKey: 'expense.cat.communication' },
+  { key: 'advertising', labelKey: 'expense.cat.advertising' },
+  { key: 'costume', labelKey: 'expense.cat.costume' },
+  { key: 'supplies', labelKey: 'expense.cat.supplies' },
+  { key: 'outsourcing', labelKey: 'expense.cat.outsourcing' },
+  { key: 'misc', labelKey: 'expense.cat.misc' },
 ];
 
 function mergeCategories(
+  builtinCats: { key: string; label: string }[],
   custom: CustomExpenseCategory[],
 ): { key: string; label: string }[] {
-  const merged: { key: string; label: string }[] = [...BUILTIN_CATEGORIES];
+  const merged: { key: string; label: string }[] = [...builtinCats];
   for (const c of custom) {
     if (!merged.some((m) => m.key === c.key)) {
       merged.push({ key: c.key, label: c.label });
@@ -58,7 +58,10 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [customCategories, setCustomCategories] = useState<CustomExpenseCategory[]>([]);
 
-  const allCategories = useMemo(() => mergeCategories(customCategories), [customCategories]);
+  const allCategories = useMemo(() => {
+    const builtinCats = BUILTIN_CATEGORY_KEYS.map((c) => ({ key: c.key, label: t(c.labelKey) }));
+    return mergeCategories(builtinCats, customCategories);
+  }, [customCategories, t]);
 
   const categoryLabel = useCallback(
     (key: string) => allCategories.find((c) => c.key === key)?.label ?? key,
@@ -190,7 +193,7 @@ export function ExpensesView({ tenant, theme, t, yearMonth }: AnalyticsViewProps
 
   const handleCsvExport = useCallback(async () => {
     const rows: string[][] = [
-      EXPENSE_HEADER,
+      t('csv.expense.headers').split(','),
       ...expenses.map((e) => [e.date, categoryLabel(e.category), String(e.amount), e.memo]),
     ];
     try {
