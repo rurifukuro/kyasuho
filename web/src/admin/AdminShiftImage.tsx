@@ -50,6 +50,7 @@ import { updateSnsPostTemplates } from './adminApi';
 import type { KyPayrollSettings, SnsPostTemplate, SnsPostTemplates } from '../lib/types';
 import { estimateLaborCost } from '../domain/payroll/estimateLaborCost';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
+import { ShiftPreviewOverlay } from './ShiftPreviewOverlay';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
 
@@ -168,6 +169,18 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [showTmplEditor, setShowTmplEditor] = useState(false);
 
   const exportRef = useRef<HTMLDivElement>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+
+  const handlePreviewClick = useCallback(async () => {
+    const node = exportRef.current;
+    if (!node) return;
+    try {
+      const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
+      setPreviewSrc(dataUrl);
+    } catch (e) {
+      console.warn('[kyasuho] preview capture failed:', e);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -549,14 +562,18 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         <div className="shift-preview-col">
           <div
             className="shift-preview-box"
-            style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
+            style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE, cursor: 'zoom-in' }}
+            onClick={() => void handlePreviewClick()}
+            role="button"
+            tabIndex={0}
+            aria-label="クリックで拡大表示"
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
               <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
             </div>
           </div>
           <p className="admin-note">
-            プレビュー（縮小表示）。ダウンロードは {def.size.w}×{def.size.h}px で出力されます。
+            クリックで拡大表示。ダウンロードは {def.size.w}×{def.size.h}px で出力されます。
           </p>
         </div>
 
@@ -937,6 +954,10 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
           <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
         </div>
       </div>
+
+      {previewSrc && (
+        <ShiftPreviewOverlay src={previewSrc} onClose={() => setPreviewSrc(null)} />
+      )}
     </div>
   );
 }

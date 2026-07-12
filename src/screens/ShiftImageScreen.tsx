@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -33,6 +34,7 @@ import * as castService from '../services/casts';
 import * as eventService from '../services/events';
 import { requestAiShiftDesign } from '../services/aiDesign';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
+import { ShiftPreviewModal } from '../components/ShiftPreviewModal';
 import type { Cast, Shift, Tenant, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 
@@ -116,6 +118,7 @@ export function ShiftImageScreen({
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
   const [aiMood, setAiMood] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -161,6 +164,20 @@ export function ShiftImageScreen({
   const previewW = winW - 32;
   const scale = previewW / def.size.w;
   const previewH = def.size.h * scale;
+
+  const handlePreviewPress = useCallback(async () => {
+    try {
+      const uri = await captureRef(shotRef, {
+        format: 'png',
+        quality: 1,
+        width: def.size.w,
+        height: def.size.h,
+      });
+      setPreviewUri(uri);
+    } catch (e) {
+      console.warn('[kyasuho] preview capture failed:', e);
+    }
+  }, [def.size.w, def.size.h]);
 
   const doCapture = useCallback(async (): Promise<string> => {
     return await captureRef(shotRef, {
@@ -390,36 +407,38 @@ export function ShiftImageScreen({
           })}
         </ScrollView>
 
-        {/* プレビュー */}
+        {/* プレビュー（タップで拡大） */}
         {loading ? (
           <ActivityIndicator color={theme.primary} style={s.spinner} />
         ) : (
-          <View
-            style={[
-              s.previewFrame,
-              { width: previewW, height: previewH, borderColor: theme.border },
-            ]}
-          >
+          <Pressable onPress={handlePreviewPress}>
             <View
-              style={{
-                width: def.size.w,
-                height: def.size.h,
-                transform: [
-                  { translateX: (-def.size.w * (1 - scale)) / 2 },
-                  { translateY: (-def.size.h * (1 - scale)) / 2 },
-                  { scale },
-                ],
-              }}
+              style={[
+                s.previewFrame,
+                { width: previewW, height: previewH, borderColor: theme.border },
+              ]}
             >
-              <ShiftTableRenderer
-                def={def}
-                days={days}
-                yearMonth={yearMonth}
-                storeName={tenant.name}
-                eventDays={eventDays}
-              />
+              <View
+                style={{
+                  width: def.size.w,
+                  height: def.size.h,
+                  transform: [
+                    { translateX: (-def.size.w * (1 - scale)) / 2 },
+                    { translateY: (-def.size.h * (1 - scale)) / 2 },
+                    { scale },
+                  ],
+                }}
+              >
+                <ShiftTableRenderer
+                  def={def}
+                  days={days}
+                  yearMonth={yearMonth}
+                  storeName={tenant.name}
+                  eventDays={eventDays}
+                />
+              </View>
             </View>
-          </View>
+          </Pressable>
         )}
         {!loading && shifts.length === 0 ? (
           <Text style={[s.emptyHint, { color: theme.subtext }]}>{t('shiftImage.empty')}</Text>
@@ -498,6 +517,14 @@ export function ShiftImageScreen({
 
       {/* Z-KBD: AI雰囲気入力（TextInput）があるため必須。KAVなし＝ルート直下の兄弟に置く */}
       <KeyboardDoneBar />
+
+      {previewUri && (
+        <ShiftPreviewModal
+          visible={!!previewUri}
+          uri={previewUri}
+          onClose={() => setPreviewUri(null)}
+        />
+      )}
     </View>
   );
 }

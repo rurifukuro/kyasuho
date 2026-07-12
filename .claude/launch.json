@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5175,
       "cwd": "web"
+    },
+    {
+      "name": "kyasuho-web-deploy",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5175,
+      "cwd": "../kyasuho-web-deploy"
     }
   ]
 }
