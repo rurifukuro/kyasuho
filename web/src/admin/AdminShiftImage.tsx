@@ -310,12 +310,26 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setOv({}); // テンプレを切り替えたらカスタマイズはリセット（そのテンプレ本来の姿を見せる）
   };
 
+  const hasTransparentCell = placement?.cellBg === 'transparent';
+
   const handleDownload = async () => {
     const node = exportRef.current;
     if (!node || exporting) return;
+
+    let useWhiteBg = false;
+    if (hasTransparentCell) {
+      useWhiteBg = !window.confirm(
+        '透明セルを使用中です。SNSでは黒背景で表示される場合があります。\n\n' +
+        '「OK」→ 透明のままダウンロード\n' +
+        '「キャンセル」→ 白背景でダウンロード',
+      );
+    }
+
     setExporting(true);
     try {
-      const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
+      const opts: Parameters<typeof toPng>[1] = { pixelRatio: 1, cacheBust: true };
+      if (useWhiteBg) opts.backgroundColor = '#FFFFFF';
+      const dataUrl = await toPng(node, opts);
       const a = document.createElement('a');
       a.href = dataUrl;
       if (viewMode === 'daily' && dailyTotalPages > 1) {
@@ -569,7 +583,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             aria-label="クリックで拡大表示"
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
+              <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} isPreview />
             </div>
           </div>
           <p className="admin-note">
@@ -1013,7 +1027,11 @@ function PlacementEditor({
       <div className="shift-color-row">
         <label className="shift-color-item">
           セル背景
-          <input type="color" value={pl.cellBg} onChange={(e) => onChange({ ...pl, cellBg: e.target.value })} />
+          <input type="color" value={pl.cellBg === 'transparent' ? '#ffffff' : pl.cellBg} disabled={pl.cellBg === 'transparent'} onChange={(e) => onChange({ ...pl, cellBg: e.target.value })} />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+          <input type="checkbox" checked={pl.cellBg === 'transparent'} onChange={(e) => onChange({ ...pl, cellBg: e.target.checked ? 'transparent' : '#FFFFFF' })} />
+          透明
         </label>
         <label className="shift-color-item">
           テキスト
@@ -1032,7 +1050,7 @@ function PlacementEditor({
         可読性ガード
       </div>
       <div className="placement-slider-grid">
-        <label>セル不透明度 <input type="range" min="0" max="100" value={Math.round((pl.cellBgAlpha ?? 1) * 100)} onChange={(e) => onChange({ ...pl, cellBgAlpha: Number(e.target.value) / 100 })} /> {Math.round((pl.cellBgAlpha ?? 1) * 100)}%</label>
+        <label style={{ opacity: pl.cellBg === 'transparent' ? 0.4 : 1 }}>セル不透明度 <input type="range" min="0" max="100" value={Math.round((pl.cellBgAlpha ?? 1) * 100)} disabled={pl.cellBg === 'transparent'} onChange={(e) => onChange({ ...pl, cellBgAlpha: Number(e.target.value) / 100 })} /> {pl.cellBg === 'transparent' ? '—' : `${Math.round((pl.cellBgAlpha ?? 1) * 100)}%`}</label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={pl.textOutline ?? false} onChange={(e) => onChange({ ...pl, textOutline: e.target.checked })} />
           文字の縁取り（背景画像上で読みやすくする）

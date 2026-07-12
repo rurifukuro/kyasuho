@@ -10,12 +10,25 @@ import type { ShiftFontKey, ShiftPlacement, ShiftTemplateDefinition } from './de
 import { MOTIF_CHARS } from './definitions';
 
 function cellBgWithAlpha(hex: string, alpha?: number): string {
+  if (hex === 'transparent') return 'rgba(0,0,0,0)';
   if (alpha === undefined || alpha >= 1) return hex;
+  if (hex.startsWith('rgba')) return hex;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   if (isNaN(r)) return hex;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function resolveTransparentBg(cellBg: string, alpha: number | undefined, isPreview: boolean): string {
+  if (cellBg === 'transparent') {
+    return isPreview ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0)';
+  }
+  return cellBgWithAlpha(cellBg, alpha);
+}
+
+function transparentBorder(cellBg: string, isPreview: boolean): string | undefined {
+  return isPreview && cellBg === 'transparent' ? '1px dashed rgba(150,150,150,0.5)' : undefined;
 }
 
 function outlineStyle(color: string): string {
@@ -80,9 +93,10 @@ type Props = {
   placement?: ShiftPlacement | null; // §22-3: AI解析による配置情報
   eventDays?: ShiftEventDay[];
   pageInfo?: { page: number; total: number };
+  isPreview?: boolean; // §22-7: trueならtransparentセルをガイド表示
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays, pageInfo }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays, pageInfo, isPreview }: Props) {
   const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
@@ -220,6 +234,7 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
           storeName={storeName}
           placement={placement}
           dailyDate={dailyDate}
+          isPreview={isPreview}
         />
       ) : def.layout === 'daily-lineup' && dailyDate ? (
         <DailyLineup def={def} days={days} dailyDate={dailyDate} eventMap={eventMap} />
@@ -972,6 +987,7 @@ function CustomPlacement({
   storeName,
   placement: pl,
   dailyDate,
+  isPreview,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
@@ -979,6 +995,7 @@ function CustomPlacement({
   storeName: string;
   placement: ShiftPlacement;
   dailyDate?: string;
+  isPreview?: boolean;
 }) {
   const W = def.size.w;
   const H = def.size.h;
@@ -1011,8 +1028,22 @@ function CustomPlacement({
 
   const maxPerCell = Math.max(1, Math.floor((cellH - inset * 2 - 24) / 28));
 
+  const isTransparent = pl.cellBg === 'transparent';
+  const cellBgResolved = resolveTransparentBg(pl.cellBg, pl.cellBgAlpha, !!isPreview);
+  const cellBorder = transparentBorder(pl.cellBg, !!isPreview);
+
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H }}>
+      {/* §22-7: 透明セル注記バナー（プレビューのみ） */}
+      {isPreview && isTransparent ? (
+        <div style={{
+          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10, background: 'rgba(0,0,0,0.6)', color: '#fff',
+          padding: '4px 12px', borderRadius: 4, fontSize: 11, whiteSpace: 'nowrap',
+        }}>
+          透明セル：出力画像では完全に透明になります
+        </div>
+      ) : null}
       {/* タイトル領域: 元テキストを覆い、新しいタイトルを描画 */}
       <div
         style={{
@@ -1021,7 +1052,8 @@ function CustomPlacement({
           top: titleY + inset,
           width: titleW - inset * 2,
           height: titleH - inset * 2,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved,
+          border: cellBorder,
           borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
@@ -1067,7 +1099,8 @@ function CustomPlacement({
                 top: gridY + inset,
                 width: cellW - inset * 2,
                 height: cellH - inset * 2,
-                backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+                backgroundColor: cellBgResolved,
+                border: cellBorder,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1084,8 +1117,8 @@ function CustomPlacement({
 
       {/* データセル */}
       {isDaily
-        ? renderDailyCells(dailyCasts, pl, gridX, gridY + (pl.hasHeaderRow ? cellH : 0), cellW, cellH, inset, maxPerCell)
-        : renderMonthlyCells(byDate, yearMonth, total, offset, pl, gridX, gridY + dataRowStart * cellH, cellW, cellH, inset, maxPerCell)}
+        ? renderDailyCells(dailyCasts, pl, gridX, gridY + (pl.hasHeaderRow ? cellH : 0), cellW, cellH, inset, maxPerCell, cellBgResolved, cellBorder)
+        : renderMonthlyCells(byDate, yearMonth, total, offset, pl, gridX, gridY + dataRowStart * cellH, cellW, cellH, inset, maxPerCell, cellBgResolved, cellBorder)}
     </div>
   );
 }
@@ -1102,6 +1135,8 @@ function renderMonthlyCells(
   cellH: number,
   inset: number,
   maxPerCell: number,
+  cellBgResolved?: string,
+  cellBorder?: string,
 ): React.JSX.Element[] {
   const elements: React.JSX.Element[] = [];
   for (let day = 1; day <= total; day++) {
@@ -1129,7 +1164,8 @@ function renderMonthlyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved ?? cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          border: cellBorder,
           overflow: 'hidden',
           padding: '3px 5px',
           boxSizing: 'border-box',
@@ -1192,6 +1228,8 @@ function renderDailyCells(
   cellH: number,
   inset: number,
   _maxPerCell: number,
+  cellBgResolved?: string,
+  cellBorder?: string,
 ): React.JSX.Element[] {
   const elements: React.JSX.Element[] = [];
   const totalSlots = pl.cols * pl.rows;
@@ -1215,7 +1253,8 @@ function renderDailyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved ?? cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          border: cellBorder,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
