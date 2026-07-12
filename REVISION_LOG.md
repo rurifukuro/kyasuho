@@ -2914,3 +2914,30 @@ voidせず手動対応とする。操作前に確認ダイアログを表示。
 
 ### 検証
 - Web `npx tsc -b` EXIT:0
+
+## Rev116 — §51コード品質・セキュリティ全体監査と是正計画を新設（2026-07-12）
+
+### 概要
+プロジェクト全コードの批判的監査（第14次）を実施し、結果をSPEC §51として文書化。
+**監査のみ＝コード変更なし**。是正実装（AUD-1〜13）は別Revで行う。
+
+### 監査の軸と主要発見
+- 6軸: SEC/FIN標準照合・アトミック性・app/webドリフト・エラーハンドリング・CSV無害化・型とクエリ同期
+- 🔴 AUD-1: anon向けRLSポリシーの全列露出（ky_tenants/ky_casts/ky_menu_items）→列GRANT横展開（0045改修＋0046新設）
+- 🔴 AUD-2: ky_make_reservation v2のp_preorder jsonb素通し→RPC内サーバー再解決
+- 🔴 AUD-3/4: チェックイン・会計後続処理のクライアント多段実行→RPC化
+- 🟡 AUD-5〜9: ロスト更新/手組みCSV/Math.random招待コード/app-web挙動乖離/二重実装63本
+- 🟢 AUD-10〜13: SELECT同期/モノリス分割/空catch残5箇所/shiftTemplates双子は設計通り
+- 51-3: 将来実装（㊸〜57・§40-§50）への事前注意10行の表を併記
+
+### 変更ファイル
+- `SPEC.md`: §51新設（51-1監査方法／51-2是正項目AUD-1〜13／51-3将来実装への事前注意／51-4ルール反映一覧）
+- `REVISION_LOG.md`: 本エントリ
+
+### ルール反映（メモリ側・本Revと同時実施）
+- saas_init_playbook.md: SEC-15（anonポリシー×列GRANTセット）・FIN-9（客入力金銭のサーバー再解決）・分離チェックリスト4b（cron棚卸し）
+- app_dev_rules.md: BE-4（多段mutationのRPC化）・BE-5（atomic increment）・SELECT-SYNC（select列リスト同期）
+- web_dev_rules.md: WEB13（app/web二重実装の相方ゲート）・WEB14（CSV共通ヘルパー必須）
+
+### 検証
+- コード変更なし（文書のみ）。SPEC §51挿入位置・目次整合を確認済み
