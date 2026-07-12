@@ -133,7 +133,7 @@ export function VouchersView({ tenant, theme, t }: Props) {
         {
           text: t('voucher.use'),
           onPress: async () => {
-            await vcService.useVoucher(v.id, v.remainingCount);
+            await vcService.useVoucher(v.id);
             await load();
           },
         },

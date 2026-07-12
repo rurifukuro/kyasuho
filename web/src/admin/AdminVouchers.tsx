@@ -121,7 +121,7 @@ export function AdminVouchers({ tenant }: { tenant: KyTenant }) {
     if (v.remaining_count <= 0) return;
     setBusyId(v.id);
     try {
-      await useVoucher(v.id, v.remaining_count);
+      await useVoucher(v.id);
       await load();
     } catch {
       window.alert('使用記録に失敗しました。');

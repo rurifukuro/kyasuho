@@ -92,13 +92,14 @@ export async function updateVoucher(
   if (error) throw error;
 }
 
-export async function useVoucher(id: string, currentRemaining: number): Promise<void> {
-  if (currentRemaining <= 0) return;
-  const { error } = await supabase
-    .from('ky_vouchers')
-    .update({ remaining_count: currentRemaining - 1 })
-    .eq('id', id);
+// AUD-5（0048）: atomic decrement RPC＝2端末同時操作でのロスト更新防止
+export async function useVoucher(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc('ky_use_voucher', {
+    p_voucher_id: id,
+  });
   if (error) throw error;
+  const result = data as { ok: boolean; error?: string } | null;
+  if (!result?.ok) throw new Error(result?.error ?? 'use_voucher_failed');
 }
 
 export async function deleteVoucher(id: string): Promise<void> {

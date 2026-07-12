@@ -2314,7 +2314,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 
 #### 🟡 中（堅牢性・整合性）
 
-- **AUD-5: read-modify-write競合（ロスト更新）**
+- **AUD-5: read-modify-write競合（ロスト更新）** ✅是正済み（顧客スタンプ=Rev118で0047の ky_close_order v3 に atomic increment 統合／回数券=Rev119・0048の ky_use_voucher RPC＝`remaining_count = remaining_count - 1` with `remaining_count > 0` ガード・app/web両面の useVoucher をRPC呼び出し化）
   applyStamp（stamp_count/total_visits を読んで+Nして書く）・useVoucher（**クライアントから渡された currentRemaining-1 を書く**＝src/services/vouchers.ts:95, web側同名も同じ）。2端末同時操作で片方消える。
   - 是正: atomic increment のRPC化（`update ... set stamp_count = stamp_count + p_n where ...` 形）or ky_close_order統合（AUD-4）に含める。
 
