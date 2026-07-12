@@ -2941,3 +2941,27 @@ voidせず手動対応とする。操作前に確認ダイアログを表示。
 
 ### 検証
 - コード変更なし（文書のみ）。SPEC §51挿入位置・目次整合を確認済み
+
+## Rev117 — AUD-1/AUD-2是正＝anon列GRANT横展開とpreorderサーバー再解決（2026-07-12）
+
+### 概要
+§51監査の🔴2件を是正。
+- **AUD-1（SEC-15横展開）**: anonの行ポリシーが全列露出だった ky_tenants / ky_casts / ky_menu_items に列レベルGRANTを適用。`?select=owner_user_id` / `?select=user_id` による匿名でのuid収集、back_rate/back_amount（キャストバック単価）の露出を遮断。
+- **AUD-2（FIN-9）**: ky_make_reservation v2 の p_preorder jsonb がクライアント申告の price/name/category をそのまま保存していた（チェックイン時に ky_order_items へ転記される金銭源泉）→ RPC内で menu_item_id と qty だけ受け取り、自テナントの有効メニューマスタから引き直して再構築するサーバー再解決に変更。
+
+### 変更ファイル
+- `supabase/migrations/0045_ky_preorder.sql`（本番未適用のため直接改修）:
+  - anonポリシーに停止テナント除外を追加（0030 S7と同型）
+  - ky_menu_items の列GRANT（id, tenant_id, category, name, price, needs_cast, sort_order, is_active, nomination_kind のみ）
+  - RPCに preorder サーバー再解決ブロック追加: 配列型・要素数≤20・qty 1〜99検証／不正はbad_request／cast_idは needs_cast=false・他テナントなら黙ってnull（予約自体は通す）／保存形状は既存 KyPreorderItem と完全互換
+- `supabase/migrations/0046_anon_column_grants.sql`（新規）:
+  - ky_tenants: anon列GRANT＝id, slug, name, genre, business_info, is_suspended（owner_user_id/plan/sns_post_templates等を遮断）
+  - ky_casts: anon列GRANT＝公開プロフィール列のみ（user_id遮断）
+  - 注意事項をコメント化: 行ポリシー内サブクエリは実行ロールの列権限で評価される＝参照される id/is_suspended は必ずGRANTに含める
+- `web/src/lib/types.ts`: `KyMenuItemPublic`（Omit型＝anonが読める列）新設、`KyCast.user_id` をoptional化（管理面のみ取得）
+- `web/src/hooks/useCasts.ts`: useCastsのselectを明示列化（user_id除去・sns_links追加）
+- `web/src/components/ReservationModal.tsx`: `select('*')` → 明示列（0045のGRANTと対で保守）、型を KyMenuItemPublic へ
+
+### 検証
+- Web `npx tsc -b` EXIT:0 ／ アプリ側(src/)は変更なし（anon面なし・authenticatedは全列GRANT維持＝影響なし）
+- **Migration 0045改修・0046は本番未適用**（承認ゲート）。適用時に anon RESTプローブ（`?select=owner_user_id` が permission denied になること／客Web予約ページが正常動作すること）で再検証する

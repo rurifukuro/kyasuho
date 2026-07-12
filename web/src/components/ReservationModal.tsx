@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { KyCast, KyMenuItem, KyReservation, KySeatType, KyShift, MakeReservationResult, KyPreorderItem } from '../lib/types';
+import type { KyCast, KyMenuItemPublic, KyReservation, KySeatType, KyShift, MakeReservationResult, KyPreorderItem } from '../lib/types';
 import { slotToMinutes, minutesToSlot, countAvailableSeats } from '../lib/timeUtils';
 
 const TIME_STEP = 10;
@@ -70,7 +70,7 @@ export function ReservationModal({
   const [result, setResult] = useState<{ id: string; seatNo: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [menuItems, setMenuItems] = useState<KyMenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<KyMenuItemPublic[]>([]);
   const [menuUndecided, setMenuUndecided] = useState(true);
   const [orderQty, setOrderQty] = useState<Record<string, number>>({});
   const [orderCastId, setOrderCastId] = useState<Record<string, string>>({});
@@ -78,12 +78,13 @@ export function ReservationModal({
   useEffect(() => {
     supabase
       .from('ky_menu_items')
-      .select('*')
+      // anon は列レベルGRANT（0045）＝select('*')不可。公開列を明示する。
+      .select('id, tenant_id, category, name, price, needs_cast, sort_order, is_active, nomination_kind')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .order('sort_order')
       .then(({ data }) => {
-        if (data) setMenuItems(data as KyMenuItem[]);
+        if (data) setMenuItems(data as KyMenuItemPublic[]);
       });
   }, [tenantId]);
 
@@ -93,7 +94,7 @@ export function ReservationModal({
   );
 
   const groupedMenu = useMemo(() => {
-    const map = new Map<string, KyMenuItem[]>();
+    const map = new Map<string, KyMenuItemPublic[]>();
     for (const item of preorderItems) {
       let list = map.get(item.category);
       if (!list) { list = []; map.set(item.category, list); }

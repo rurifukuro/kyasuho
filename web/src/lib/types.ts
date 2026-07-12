@@ -61,7 +61,8 @@ export interface KyCast {
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
-  user_id: string | null;
+  /** auth連携uid。管理面（authenticated）のみ取得＝anonの列GRANT外（0046）。 */
+  user_id?: string | null;
 }
 
 /** 経費（§27）。 */
@@ -198,6 +199,9 @@ export interface KyMenuItem {
   back_amount: number | null;
   nomination_kind: string | null;
 }
+
+/** anon（客Web）が読めるメニュー列＝back_rate/back_amount を除く（0045 列GRANTと対で保守）。 */
+export type KyMenuItemPublic = Omit<KyMenuItem, 'back_rate' | 'back_amount'>;
 
 /** 伝票ステータス（§25-2）。 */
 export type KyOrderStatus = 'open' | 'closed' | 'void';

@@ -2287,7 +2287,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
 
 #### 🔴 高（セキュリティ・金銭の正確性）
 
-- **AUD-1: anon向けRLSポリシーの全列露出（SEC-2違反の横展開漏れ）**
+- **AUD-1: anon向けRLSポリシーの全列露出（SEC-2違反の横展開漏れ）** ✅是正済み（Rev117・0045改修＋0046新設＋anon面select明示列化）
   0030 S1で ky_reservations には列GRANT（REVOKE→列指定GRANT）を適用済みだが、**同じ手当てが他のanon公開テーブルに未適用**。現状anonが `?select=` で読める機微列:
   - `ky_tenants`（0001）: **owner_user_id（auth UUID）**・plan・sns_post_templates（内部販促文言）・printer_config 等の経営設定列
   - `ky_casts`（0004）: **user_id（auth UUID）**
@@ -2295,7 +2295,7 @@ Rev115時点の全コード（src/ 約20,600行・web/src/ 約17,900行・migrat
   - 是正: ①ky_menu_items は**未適用の0045自体を改修**（ポリシー追加と同時に REVOKE SELECT → 客Webに必要な列のみGRANT: id, tenant_id, category, name, price, needs_cast, sort_order, is_active）②ky_tenants / ky_casts は新規 migration 0046 で同パターン適用。
   - **連動必須**: 列GRANT下では PostgREST の `select('*')` が permission denied になる＝**anon面のクエリを明示列指定へ書き換え**（web/src/components/ReservationModal.tsx:81 の `select('*')`・TenantPage等のky_tenants/ky_casts参照を全grep）。authenticated面（管理Web/アプリ）は全列GRANTのまま＝影響なし。
 
-- **AUD-2: ky_make_reservation v2 の p_preorder 無検証（金銭明細の源流が客入力）**
+- **AUD-2: ky_make_reservation v2 の p_preorder 無検証（金銭明細の源流が客入力）** ✅是正済み（Rev117・0045のRPC内サーバー再解決）
   0045のRPCは anon から受けた preorder jsonb を**素通しでINSERT**し、チェックイン時（Rev114）にその price/name/category が伝票明細 ky_order_items へ転記される。改ざんクライアントで①価格0円/負値の注文予定②他テナントのmenu_item_id（FK違反でチェックイン自体が壊れる）③巨大jsonb（容量攻撃）④不正カテゴリ が注入可能。
   - 是正（**0045改修で対応＝適用前の今が最安**）: RPC内でサーバー側再解決＝(a)配列長上限（20要素）(b)各要素の menu_item_id が自テナント＋is_active であることを検証 (c)**price/name/category は ky_menu_items から引き直してスナップショット**（客送信値は捨てる）(d)qty は 1〜99 にクランプ (e)cast_id は自テナント所属検証。不正要素は error='bad_request' で拒否。
   - 原則（FIN-9として51-4でルール化）: **「anonが書いた値を金銭・伝票系へ転記する経路では、金額系フィールドは必ずサーバーがマスタから引き直す」**。

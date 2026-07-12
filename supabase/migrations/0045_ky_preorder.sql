@@ -1,5 +1,9 @@
 -- 0045: §34(c) ご注文予定（事前オーダー）
 -- ky_reservations.preorder 列追加 + ky_menu_items の anon SELECT + RPC v2 拡張
+-- 2026-07-12 §51監査反映（本番適用前に改修＝AUD-1/AUD-2）:
+--   AUD-1: anon は列レベルGRANTで公開列のみ（back_rate/back_amount＝バック単価を露出しない・SEC-15）
+--          ＋停止テナント除外（0030 S7 と同型）
+--   AUD-2: p_preorder はサーバー再解決（価格・名称・カテゴリをマスタから引き直し＝FIN-9）
 
 -- ── ky_reservations.preorder 列（jsonb null） ──
 ALTER TABLE public.ky_reservations
@@ -11,7 +15,16 @@ DROP POLICY IF EXISTS ky_menu_items_anon_select ON public.ky_menu_items;
 CREATE POLICY ky_menu_items_anon_select ON public.ky_menu_items
   FOR SELECT
   TO anon
-  USING (is_active = true);
+  USING (
+    is_active = true
+    AND (SELECT is_suspended FROM public.ky_tenants t WHERE t.id = tenant_id) = false
+  );
+
+-- 列レベルGRANT（SEC-15）: バック設定（back_rate/back_amount）と作成日時は anon に見せない。
+-- anon 面のクエリは select('*') 不可＝明示列必須（ReservationModal.tsx と対）。
+REVOKE SELECT ON public.ky_menu_items FROM anon;
+GRANT SELECT (id, tenant_id, category, name, price, needs_cast, sort_order, is_active, nomination_kind)
+  ON public.ky_menu_items TO anon;
 
 -- ── ky_make_reservation RPC v2（preorder + menu_undecided 追加） ──
 DROP FUNCTION IF EXISTS public.ky_make_reservation(uuid, date, text, text, text, int, uuid, text, text, uuid);
@@ -42,6 +55,13 @@ declare
   v_seat_no      int;
   v_reservation_id uuid;
   v_suspended    boolean;
+  -- preorder サーバー再解決用（AUD-2）
+  v_preorder     jsonb := null;
+  v_elem         jsonb;
+  v_menu_id      uuid;
+  v_qty          int;
+  v_pre_cast     uuid;
+  v_mi           record;
 begin
   -- ── 入力検証（S8） ──
   if p_slot is null or p_slot !~ '^[0-9]{1,2}:[0-9]{2}$' then
@@ -79,6 +99,61 @@ begin
     where st.id = p_seat_type_id and st.tenant_id = p_tenant_id and st.is_active = true
   ) then
     return json_build_object('error', 'bad_request');
+  end if;
+
+  -- ── §34(c) preorder サーバー再解決（AUD-2 / FIN-9） ──
+  -- クライアントの price/name/category は信用せず捨てる。menu_item_id と qty だけ受け取り、
+  -- 自テナントの有効メニューをマスタから引き直して保存スナップショットを組み立てる。
+  -- （チェックイン時に伝票 ky_order_items へそのまま転記されるため＝金銭転記の源泉）
+  if not p_menu_undecided and p_preorder is not null then
+    if jsonb_typeof(p_preorder) <> 'array' or jsonb_array_length(p_preorder) > 20 then
+      return json_build_object('error', 'bad_request');
+    end if;
+    v_preorder := '[]'::jsonb;
+    for v_elem in select value from jsonb_array_elements(p_preorder) loop
+      if jsonb_typeof(v_elem) <> 'object' then
+        return json_build_object('error', 'bad_request');
+      end if;
+      begin
+        v_menu_id  := (v_elem->>'menu_item_id')::uuid;
+        v_qty      := (v_elem->>'qty')::int;
+        v_pre_cast := nullif(v_elem->>'cast_id', '')::uuid;
+      exception when others then
+        return json_build_object('error', 'bad_request');
+      end;
+      if v_menu_id is null or v_qty is null or v_qty < 1 or v_qty > 99 then
+        return json_build_object('error', 'bad_request');
+      end if;
+      select mi.id, mi.category, mi.name, mi.price, mi.needs_cast
+        into v_mi
+        from public.ky_menu_items mi
+       where mi.id = v_menu_id
+         and mi.tenant_id = p_tenant_id
+         and mi.is_active = true;
+      if not found then
+        return json_build_object('error', 'bad_request');
+      end if;
+      -- 指名キャストは needs_cast のメニューのみ・自テナント所属のみ（不正値は黙って外す）
+      if v_pre_cast is not null then
+        if not v_mi.needs_cast or not exists (
+          select 1 from public.ky_casts c
+          where c.id = v_pre_cast and c.tenant_id = p_tenant_id
+        ) then
+          v_pre_cast := null;
+        end if;
+      end if;
+      v_preorder := v_preorder || jsonb_build_array(jsonb_build_object(
+        'menu_item_id', v_mi.id,
+        'category',     v_mi.category,
+        'name',         v_mi.name,
+        'price',        v_mi.price,
+        'qty',          v_qty,
+        'cast_id',      v_pre_cast
+      ));
+    end loop;
+    if jsonb_array_length(v_preorder) = 0 then
+      v_preorder := null;
+    end if;
   end if;
 
   v_start_min := public.ky_slot_to_minutes(p_slot);
@@ -163,7 +238,7 @@ begin
   ) values (
     p_tenant_id, p_date, p_slot, v_set_minutes, v_seat_no,
     p_customer_name, p_contact, p_party_size, p_cast_id, p_seat_type_id, coalesce(p_note, ''),
-    p_preorder, p_menu_undecided
+    v_preorder, p_menu_undecided
   ) returning id into v_reservation_id;
 
   if p_pin is not null and p_pin ~ '^[0-9]{4}$' then
