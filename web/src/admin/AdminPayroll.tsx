@@ -463,6 +463,30 @@ export function AdminPayroll({ tenant }: { tenant: KyTenant }) {
         <button type="button" className="admin-btn" onClick={handleCsv}>
           CSVダウンロード
         </button>
+        <button type="button" className="admin-btn" onClick={() => {
+          if (perCast.length === 0) { window.alert('この月の給与明細がありません。'); return; }
+          const w = window.open('', '_blank');
+          if (!w) return;
+          const [y, m] = yearMonth.split('-');
+          const rows = perCast.map((agg) => {
+            const basePay = agg.rows.reduce((s, p) => s + p.base_pay, 0);
+            const nomBack = agg.rows.reduce((s, p) => s + p.nomination_back, 0);
+            const menuBack = agg.rows.reduce((s, p) => s + p.menu_back, 0);
+            const otherBack = agg.rows.reduce((s, p) => s + p.other_back, 0);
+            const deductions = agg.rows.reduce((s, p) => s + p.deductions, 0);
+            return `<tr><td>${castNameById.get(agg.castId) ?? '退店キャスト'}</td><td style="text-align:right">${agg.days}</td><td style="text-align:right">${fmtMinutes(agg.minutes)}</td><td style="text-align:right">${yen(basePay)}</td><td style="text-align:right">${yen(nomBack)}</td><td style="text-align:right">${yen(menuBack)}</td><td style="text-align:right">${yen(otherBack)}</td><td style="text-align:right">${yen(deductions)}</td><td style="text-align:right;font-weight:600">${yen(agg.total)}</td></tr>`;
+          }).join('');
+          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>給与明細 ${y}年${Number(m)}月 - ${tenant.name}</title>
+<style>body{font-family:sans-serif;padding:20px;max-width:900px;margin:0 auto}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px}th{background:#f3f4f6;text-align:left}h1{font-size:18px}.total{margin-top:12px;font-size:16px;font-weight:700}@media print{body{padding:0}}</style>
+</head><body>
+<h1>${tenant.name} 給与明細</h1><p>${y}年${Number(m)}月</p>
+<table><thead><tr><th>キャスト</th><th>出勤日数</th><th>勤務時間</th><th>基本給</th><th>指名バック</th><th>メニューバック</th><th>その他</th><th>控除</th><th>支給額</th></tr></thead><tbody>${rows}</tbody></table>
+<p class="total">合計支給額: ${yen(monthTotal)}</p>
+<script>window.print()</script></body></html>`);
+          w.document.close();
+        }}>
+          給与帳票印刷
+        </button>
         <button type="button" className="admin-btn primary" onClick={() => void handleGenerate()} disabled={generating}>
           {generating ? '生成中…' : '勤怠から自動生成'}
         </button>

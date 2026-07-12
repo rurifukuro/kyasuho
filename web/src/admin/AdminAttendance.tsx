@@ -215,6 +215,26 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
         <button type="button" className="admin-btn" onClick={handleCsv}>
           CSVダウンロード
         </button>
+        <button type="button" className="admin-btn" onClick={() => {
+          if (attendance.length === 0) { window.alert('この月の勤怠記録がありません。'); return; }
+          const w = window.open('', '_blank');
+          if (!w) return;
+          const [y, m] = yearMonth.split('-');
+          const rows = attendance.map((a) => {
+            const reasonLabel = a.reason_category ? REASON_LABELS[a.reason_category] : '';
+            const reason = [reasonLabel, a.reason_note].filter(Boolean).join(': ');
+            return `<tr><td>${a.date}</td><td>${castNameById.get(a.cast_id) ?? '—'}</td><td>${STATUS_LABELS[a.status]}</td><td>${a.check_in_at ?? ''}</td><td>${a.check_out_at ?? ''}</td><td>${reason}</td></tr>`;
+          }).join('');
+          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>勤怠帳票 ${y}年${Number(m)}月 - ${tenant.name}</title>
+<style>body{font-family:sans-serif;padding:20px;max-width:800px;margin:0 auto}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px}th{background:#f3f4f6;text-align:left}h1{font-size:18px}@media print{body{padding:0}}</style>
+</head><body>
+<h1>${tenant.name} 勤怠帳票</h1><p>${y}年${Number(m)}月（${attendance.length}件）</p>
+<table><thead><tr><th>日付</th><th>キャスト</th><th>状態</th><th>入店</th><th>退店</th><th>理由</th></tr></thead><tbody>${rows}</tbody></table>
+<script>window.print()</script></body></html>`);
+          w.document.close();
+        }}>
+          勤怠帳票印刷
+        </button>
         <button type="button" className="admin-btn primary" onClick={() => openForm(null)}>
           勤怠を記録
         </button>
