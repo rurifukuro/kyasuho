@@ -38,7 +38,63 @@ export type ShiftMotif =
   | 'none';
 
 /** 抽象フォントキー（Web=CSSスタック / RN=fontFamily へ各レンダラーが解決） */
-export type ShiftFontKey = 'sans-jp' | 'serif-jp' | 'rounded-jp';
+export type ShiftFontKey =
+  | 'sans-jp' | 'serif-jp' | 'rounded-jp'
+  | 'noto-sans-jp' | 'noto-serif-jp' | 'mplus-1p' | 'mplus-rounded-1c' | 'zen-kaku-gothic'
+  | 'kosugi-maru' | 'yusei-magic' | 'reggae-one' | 'rampart-one'
+  | 'klee-one' | 'zen-old-mincho' | 'shippori-mincho' | 'sawarabi-mincho'
+  | 'rocknroll-one' | 'dotgothic16' | 'hachi-maru-pop' | 'dela-gothic-one'
+  | 'kaisei-opti' | 'zen-antique' | 'stick';
+
+export type ShiftFontCategory = 'simple' | 'pop' | 'elegant' | 'gothic' | 'decorative';
+
+export type ShiftFontEntry = {
+  key: ShiftFontKey;
+  label: string;
+  family: string;
+  category: ShiftFontCategory;
+};
+
+export const FONT_CATEGORY_LABELS: Record<ShiftFontCategory, string> = {
+  simple: 'シンプル',
+  pop: 'ポップ・丸文字',
+  elegant: 'エレガント・手書き',
+  gothic: 'ゴシック・ネオン',
+  decorative: '装飾・個性派',
+};
+
+export const FONT_CATALOG: ShiftFontEntry[] = [
+  { key: 'noto-sans-jp', label: 'Noto Sans JP', family: "'Noto Sans JP', sans-serif", category: 'simple' },
+  { key: 'noto-serif-jp', label: 'Noto Serif JP', family: "'Noto Serif JP', serif", category: 'simple' },
+  { key: 'mplus-1p', label: 'M PLUS 1p', family: "'M PLUS 1p', sans-serif", category: 'simple' },
+  { key: 'mplus-rounded-1c', label: 'M PLUS Rounded 1c', family: "'M PLUS Rounded 1c', sans-serif", category: 'simple' },
+  { key: 'zen-kaku-gothic', label: 'Zen Kaku Gothic New', family: "'Zen Kaku Gothic New', sans-serif", category: 'simple' },
+  { key: 'kosugi-maru', label: 'Kosugi Maru', family: "'Kosugi Maru', sans-serif", category: 'pop' },
+  { key: 'yusei-magic', label: 'Yusei Magic', family: "'Yusei Magic', sans-serif", category: 'pop' },
+  { key: 'reggae-one', label: 'Reggae One', family: "'Reggae One', sans-serif", category: 'pop' },
+  { key: 'rampart-one', label: 'Rampart One', family: "'Rampart One', sans-serif", category: 'pop' },
+  { key: 'klee-one', label: 'Klee One', family: "'Klee One', sans-serif", category: 'elegant' },
+  { key: 'zen-old-mincho', label: 'Zen Old Mincho', family: "'Zen Old Mincho', serif", category: 'elegant' },
+  { key: 'shippori-mincho', label: 'Shippori Mincho', family: "'Shippori Mincho', serif", category: 'elegant' },
+  { key: 'sawarabi-mincho', label: 'Sawarabi Mincho', family: "'Sawarabi Mincho', serif", category: 'elegant' },
+  { key: 'rocknroll-one', label: 'RocknRoll One', family: "'RocknRoll One', sans-serif", category: 'gothic' },
+  { key: 'dotgothic16', label: 'DotGothic16', family: "'DotGothic16', sans-serif", category: 'gothic' },
+  { key: 'hachi-maru-pop', label: 'Hachi Maru Pop', family: "'Hachi Maru Pop', sans-serif", category: 'gothic' },
+  { key: 'dela-gothic-one', label: 'Dela Gothic One', family: "'Dela Gothic One', sans-serif", category: 'gothic' },
+  { key: 'kaisei-opti', label: 'Kaisei Opti', family: "'Kaisei Opti', serif", category: 'decorative' },
+  { key: 'zen-antique', label: 'Zen Antique', family: "'Zen Antique', serif", category: 'decorative' },
+  { key: 'stick', label: 'Stick', family: "'Stick', sans-serif", category: 'decorative' },
+];
+
+const LEGACY_FONT_MAP: Partial<Record<ShiftFontKey, ShiftFontKey>> = {
+  'sans-jp': 'noto-sans-jp',
+  'serif-jp': 'noto-serif-jp',
+  'rounded-jp': 'mplus-rounded-1c',
+};
+
+export function normalizeFontKey(key: ShiftFontKey): ShiftFontKey {
+  return LEGACY_FONT_MAP[key] ?? key;
+}
 
 /** banner = ribbonの派生ではなく別形状（両端に切込みテールが付く帯・Rev76追加） */
 export type ShiftHeaderStyle = 'ribbon' | 'plain' | 'underline' | 'banner';

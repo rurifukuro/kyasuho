@@ -1037,6 +1037,8 @@ type ShiftFontConfig = {
   - ドロップダウン各項目は**そのフォントで表示**（font-family 直接適用＝選びやすさ）
 - アプリ `ShiftImageScreen`：フォントピッカーモーダル（カテゴリ別リスト＋プレビュー文字サンプル「出勤 19:00〜24:00」）
 
+- **✅ Rev128（2026-07-12）Web側完了**：`ShiftFontKey` 20書体拡張（definitions.ts）＋`FONT_CATALOG`/`FONT_CATEGORY_LABELS`/`normalizeFontKey`追加＋Google Fonts CDN読み込み（index.html）＋`FONT_STACKS` 20書体対応（ShiftTableRenderer.tsx）＋AdminShiftImage カスタマイズパネルに「ヘッダーフォント」「本文フォント」ドロップダウン追加（5カテゴリ・optgroup分類・各オプションを該当フォントで表示）＋`ShiftOverrides.fontHeader/fontBody`＋`custom_settings`保存/復元対応。アプリ側`definitions.ts`/`ShiftTableRenderer.tsx`も同期（`FONT_FAMILIES`フォールバック拡張）。**残=アプリ側フォントピッカーUI・expo-fontロード（後Rev）**。
+
 ### 22-7. セル背景「透明」選択肢＋プレビュー表示ガイド（2026-07-12ユーザー指示）
 
 日別セルの背景色に「透明（出力時は完全透明）」を選択可能にする。背景画像が見えるレイアウトや、印刷物に重ねる用途を想定。
@@ -1055,6 +1057,8 @@ type ShiftFontConfig = {
 - **既存の `cellBgAlpha` スライダー（§22-5・モードC可読性ガード）との関係**：
   - `cellBg = 'transparent'` 選択時は `cellBgAlpha` スライダーを無効化（意味が無い＝transparent × alpha = 透明のまま）
   - `cellBg` が通常色の場合は従来通り `cellBgAlpha` で半透明度を調整可能
+
+- **✅ Rev127（2026-07-12）**：`cellBg='transparent'`対応。ShiftTableRendererに`resolveTransparentBg`/`transparentBorder`追加（isPreviewフラグでプレビュー=ガイド表示/出力=完全透明を切り分け）。AdminShiftImage PlacementEditorに「透明」チェックボックス＋cellBgAlphaスライダー無効化。SNSダウンロード時の注意ダイアログ（白背景版選択肢）実装。
 
 ### 22-8. シフト表プレビューのクリック拡大表示（2026-07-12ユーザー指示）
 
@@ -1096,6 +1100,8 @@ type ShiftFontConfig = {
 - 拡大表示は**閲覧専用**（編集操作は元のプレビュー画面でのみ行う＝モーダル内で配置変更等はしない）
 - プレビュー画像が未生成（テンプレ未選択等）の場合はクリック無効（`disabled` 状態・cursor: default）
 - アプリ側は Z-11（ダブルタップ誤爆防止=300msディレイ）/ Z-12（境界クランプ）を厳守
+
+- **✅ Rev126（2026-07-12）**：Web側`ShiftPreviewOverlay.tsx`新規作成（ホイールズーム/ドラッグパン/ダブルクリックトグル/Escape閉じ）。AdminShiftImageにクリック拡大UI追加。アプリ側`PinchImageViewer`（urehan正準コピー）＋`ShiftPreviewModal`＋`ShiftImageScreen`プレビュータップ対応。
 
 ---
 

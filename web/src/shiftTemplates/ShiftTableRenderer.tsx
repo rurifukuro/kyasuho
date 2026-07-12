@@ -7,7 +7,7 @@
 
 import type { CSSProperties } from 'react';
 import type { ShiftFontKey, ShiftPlacement, ShiftTemplateDefinition } from './definitions';
-import { MOTIF_CHARS } from './definitions';
+import { FONT_CATALOG, MOTIF_CHARS } from './definitions';
 
 function cellBgWithAlpha(hex: string, alpha?: number): string {
   if (hex === 'transparent') return 'rgba(0,0,0,0)';
@@ -47,15 +47,16 @@ import {
   yearMonthLabel,
 } from './shiftData';
 
-/** 抽象フォントキー → CSSフォントスタック（日本語システムフォント） */
+/** 抽象フォントキー → CSSフォントスタック */
 export const FONT_STACKS: Record<ShiftFontKey, string> = {
   'sans-jp':
     "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif",
   'serif-jp':
     "'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', 'MS PMincho', serif",
   'rounded-jp':
-    "'Hiragino Maru Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif",
-};
+    "'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Noto Sans JP', sans-serif",
+  ...Object.fromEntries(FONT_CATALOG.map(f => [f.key, f.family])),
+} as Record<ShiftFontKey, string>;
 
 const PADDING = 48;
 

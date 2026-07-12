@@ -11,7 +11,7 @@ import { Image, Platform, Text, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { ShiftFontKey, ShiftTemplateDefinition } from './definitions';
-import { MOTIF_CHARS } from './definitions';
+import { FONT_CATALOG, MOTIF_CHARS } from './definitions';
 import type { ShiftDayData, ShiftEventDay } from './shiftData';
 import {
   WEEKDAY_LABELS,
@@ -25,18 +25,28 @@ import {
  * 抽象フォントキー → RN fontFamily（WebのFONT_STACKSに対応する日本語システムフォント）。
  * Android は丸ゴシック非搭載のため sans-serif で代替（フォント同梱＝FONT-JP完全対応は後フェーズ）。
  */
-export const FONT_FAMILIES: Record<ShiftFontKey, string> =
-  Platform.OS === 'ios'
-    ? {
-        'sans-jp': 'Hiragino Sans',
-        'serif-jp': 'Hiragino Mincho ProN',
-        'rounded-jp': 'Hiragino Maru Gothic ProN',
-      }
-    : {
-        'sans-jp': 'sans-serif',
-        'serif-jp': 'serif',
-        'rounded-jp': 'sans-serif',
-      };
+const LEGACY_IOS: Record<string, string> = {
+  'sans-jp': 'Hiragino Sans',
+  'serif-jp': 'Hiragino Mincho ProN',
+  'rounded-jp': 'Hiragino Maru Gothic ProN',
+};
+const LEGACY_ANDROID: Record<string, string> = {
+  'sans-jp': 'sans-serif',
+  'serif-jp': 'serif',
+  'rounded-jp': 'sans-serif',
+};
+
+export const FONT_FAMILIES: Record<ShiftFontKey, string> = {
+  ...(Platform.OS === 'ios' ? LEGACY_IOS : LEGACY_ANDROID),
+  ...Object.fromEntries(
+    FONT_CATALOG.map(f => [
+      f.key,
+      f.category === 'elegant' && Platform.OS === 'ios'
+        ? 'Hiragino Mincho ProN'
+        : Platform.OS === 'ios' ? 'Hiragino Sans' : f.category === 'elegant' ? 'serif' : 'sans-serif',
+    ]),
+  ),
+} as Record<ShiftFontKey, string>;
 
 const PADDING = 48;
 

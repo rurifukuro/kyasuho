@@ -20,6 +20,7 @@ import {
   uploadShiftBackground,
 } from './adminApi';
 import type {
+  ShiftFontKey,
   ShiftLayout,
   ShiftMotif,
   ShiftPlacement,
@@ -28,11 +29,15 @@ import type {
 } from '../shiftTemplates/definitions';
 import {
   CATEGORY_LABELS,
+  FONT_CATALOG,
+  FONT_CATEGORY_LABELS,
   MOTIF_CHARS,
   SHIFT_TEMPLATES,
   defaultFreeformPlacement,
   findTemplate,
+  normalizeFontKey,
 } from '../shiftTemplates/definitions';
+import { FONT_STACKS } from '../shiftTemplates/ShiftTableRenderer';
 import { detectGridFromImage } from '../shiftTemplates/gridDetect';
 import { buildShiftDays, splitDailyPages } from '../shiftTemplates/shiftData';
 import type { ShiftEventDay } from '../shiftTemplates/shiftData';
@@ -77,6 +82,8 @@ type ShiftOverrides = {
   castName?: string;
   motif?: ShiftMotif;
   layout?: ShiftLayout;
+  fontHeader?: ShiftFontKey;
+  fontBody?: ShiftFontKey;
 };
 
 const MOTIF_OPTIONS: ShiftMotif[] = [
@@ -125,6 +132,10 @@ function parseCustomSettings(cs: Record<string, unknown>): { ov: ShiftOverrides;
   if (motif && (MOTIF_OPTIONS as string[]).includes(motif)) ov.motif = motif as ShiftMotif;
   const layout = str(cs['layout']);
   if (layout === 'month-grid' || layout === 'week-rows') ov.layout = layout;
+  const fontHeader = str(cs['fontHeader']);
+  if (fontHeader && fontHeader in FONT_STACKS) ov.fontHeader = fontHeader as ShiftFontKey;
+  const fontBody = str(cs['fontBody']);
+  if (fontBody && fontBody in FONT_STACKS) ov.fontBody = fontBody as ShiftFontKey;
   const aspect: Aspect = cs['aspect'] === '9:16' ? '9:16' : '4:5';
   return { ov, aspect };
 }
@@ -273,11 +284,16 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     if (ov.headerText) palette.headerText = ov.headerText;
     if (ov.castName) palette.castName = ov.castName;
     const layout = viewMode === 'daily' ? 'daily-lineup' as const : (ov.layout ?? base.layout);
+    const fonts = {
+      header: ov.fontHeader ?? base.fonts.header,
+      body: ov.fontBody ?? base.fonts.body,
+    };
     return {
       ...base,
       size,
       palette,
       layout,
+      fonts,
       decorations: { ...base.decorations, motif: ov.motif ?? base.decorations.motif ?? 'none' },
     };
   }, [base, ov, aspect, viewMode]);
@@ -733,6 +749,54 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="shift-control-row">
+              <span className="shift-control-label">ヘッダーフォント</span>
+              <select
+                className="admin-select"
+                value={normalizeFontKey(ov.fontHeader ?? base.fonts.header)}
+                onChange={(e) => {
+                  const v = e.target.value as ShiftFontKey;
+                  const baseNorm = normalizeFontKey(base.fonts.header);
+                  setOv((o) => v === baseNorm ? (() => { const { fontHeader: _, ...rest } = o; return rest; })() : { ...o, fontHeader: v });
+                }}
+                style={{ fontFamily: FONT_STACKS[ov.fontHeader ?? base.fonts.header] }}
+              >
+                {Object.entries(FONT_CATEGORY_LABELS).map(([cat, catLabel]) => (
+                  <optgroup key={cat} label={catLabel}>
+                    {FONT_CATALOG.filter(f => f.category === cat).map(f => (
+                      <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="shift-control-row">
+              <span className="shift-control-label">本文フォント</span>
+              <select
+                className="admin-select"
+                value={normalizeFontKey(ov.fontBody ?? base.fonts.body)}
+                onChange={(e) => {
+                  const v = e.target.value as ShiftFontKey;
+                  const baseNorm = normalizeFontKey(base.fonts.body);
+                  setOv((o) => v === baseNorm ? (() => { const { fontBody: _, ...rest } = o; return rest; })() : { ...o, fontBody: v });
+                }}
+                style={{ fontFamily: FONT_STACKS[ov.fontBody ?? base.fonts.body] }}
+              >
+                {Object.entries(FONT_CATEGORY_LABELS).map(([cat, catLabel]) => (
+                  <optgroup key={cat} label={catLabel}>
+                    {FONT_CATALOG.filter(f => f.category === cat).map(f => (
+                      <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
 
             <div className="shift-control-row">
