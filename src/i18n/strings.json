@@ -741,5 +741,22 @@
   "closeDay.alreadyClosed": { "ja": "本日はすでに締め済みです。" },
   "closeDay.noOrders": { "ja": "本日の会計済み伝票がありません。" },
   "closeDay.unit.orders": { "ja": "{count}組" },
-  "closeDay.unit.guests": { "ja": "{count}名" }
+  "closeDay.unit.guests": { "ja": "{count}名" },
+
+  "common.saveFailed": { "ja": "保存に失敗しました" },
+  "voucher.expiryLabel": { "ja": "期限: {date}" },
+  "voucher.activeCount": { "ja": "{count}件 有効" },
+  "bottle.remainingLabel": { "ja": "残量: {remaining}" },
+  "bottle.depositLabel": { "ja": "預: {date}" },
+  "bottle.activeCount": { "ja": "{count}件 保管中" },
+  "expense.cat.purchase": { "ja": "仕入（酒・食材）" },
+  "expense.cat.rent": { "ja": "家賃" },
+  "expense.cat.utilities": { "ja": "水道光熱費" },
+  "expense.cat.communication": { "ja": "通信費" },
+  "expense.cat.advertising": { "ja": "広告宣伝費" },
+  "expense.cat.costume": { "ja": "衣装・美装費" },
+  "expense.cat.supplies": { "ja": "消耗品・備品" },
+  "expense.cat.outsourcing": { "ja": "外注・システム利用料" },
+  "expense.cat.misc": { "ja": "雑費" },
+  "reservation.revertClosedWarning": { "ja": "会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。" }
 }

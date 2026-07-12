@@ -30,22 +30,9 @@ import { calcMinutesWorked } from '../utils/payrollCalc';
 import { guardFields } from '../utils/contentGuard';
 import type { Cast, Shift, CastInvite, CastEvaluation, CastWorkHistory, PayrollSettings, ShiftRequest, ShiftSubmission, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
+import { formatDateKey, dateLabel, pad2 } from '../utils/dateFormat';
 
 type TFunc = (key: TKey, params?: Record<string, string>) => string;
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
-function formatDate(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-function dateLabel(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
-}
 
 function buildDateList(past: number, future: number): Date[] {
   const list: Date[] = [];
@@ -363,7 +350,7 @@ function CastDetailView({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(formatDateKey(new Date()));
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [addShiftVisible, setAddShiftVisible] = useState(false);
@@ -506,14 +493,14 @@ function CastDetailView({
       <FlatList
         horizontal
         data={DATE_LIST}
-        keyExtractor={(d) => formatDate(d)}
+        keyExtractor={(d) => formatDateKey(d)}
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={INITIAL_DATE_INDEX}
         getItemLayout={(_, index) => ({ length: 72, offset: 72 * index, index })}
         style={[s.dateStrip, { borderBottomColor: theme.border }]}
         contentContainerStyle={s.dateStripContent}
         renderItem={({ item }) => {
-          const key = formatDate(item);
+          const key = formatDateKey(item);
           const active = key === selectedDate;
           return (
             <TouchableOpacity

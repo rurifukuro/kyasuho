@@ -23,17 +23,7 @@ import { fetchSeatTypes } from '../services/seatTypes';
 import { guardFields } from '../utils/contentGuard';
 import type { Cast, SeatType, Reservation, ReservationStatus, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-function formatDate(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-function dateLabel(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
-}
+import { formatDateKey, dateLabel, pad2 } from '../utils/dateFormat';
 
 function buildDateList(past: number, future: number): Date[] {
   const list: Date[] = [];
@@ -61,7 +51,7 @@ export function ReservationsScreen() {
   const { tenant } = useTenant();
   const insets = useSafeAreaInsets();
 
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(formatDateKey(new Date()));
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
@@ -111,7 +101,7 @@ export function ReservationsScreen() {
         } else if (status === 'reserved') {
           const { closedCount } = await reservationService.revertCheckin(id, tenant.id);
           if (closedCount > 0) {
-            Alert.alert('', '会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。');
+            Alert.alert('', t('reservation.revertClosedWarning'));
           }
         } else {
           await reservationService.updateStatus(id, status);
@@ -180,14 +170,14 @@ export function ReservationsScreen() {
       <FlatList
         horizontal
         data={DATE_LIST}
-        keyExtractor={(d) => formatDate(d)}
+        keyExtractor={(d) => formatDateKey(d)}
         showsHorizontalScrollIndicator={false}
         style={[s.dateStrip, { borderBottomColor: theme.border }]}
         contentContainerStyle={s.dateStripContent}
         initialScrollIndex={7}
         getItemLayout={(_, index) => ({ length: 76, offset: 76 * index, index })}
         renderItem={({ item }) => {
-          const key = formatDate(item);
+          const key = formatDateKey(item);
           const active = key === selectedDate;
           return (
             <TouchableOpacity

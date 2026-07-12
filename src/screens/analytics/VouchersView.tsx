@@ -116,7 +116,7 @@ export function VouchersView({ tenant, theme, t }: Props) {
       setModalVisible(false);
       await load();
     } catch {
-      Alert.alert('保存に失敗しました');
+      Alert.alert(t('common.saveFailed'));
     }
   };
 
@@ -129,7 +129,7 @@ export function VouchersView({ tenant, theme, t }: Props) {
         after: String(after),
       }),
       [
-        { text: 'キャンセル', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
           text: t('voucher.use'),
           onPress: async () => {
@@ -144,9 +144,9 @@ export function VouchersView({ tenant, theme, t }: Props) {
   const toggleActive = (v: Voucher) => {
     const msg = v.isActive ? t('voucher.deactivateConfirm') : t('voucher.reactivateConfirm');
     Alert.alert('', msg, [
-      { text: 'キャンセル', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'OK',
+        text: t('common.ok'),
         onPress: async () => {
           await vcService.updateVoucher(v.id, { isActive: !v.isActive });
           await load();
@@ -157,9 +157,9 @@ export function VouchersView({ tenant, theme, t }: Props) {
 
   const handleDelete = (v: Voucher) => {
     Alert.alert('', t('voucher.deleteConfirm'), [
-      { text: 'キャンセル', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await vcService.deleteVoucher(v.id);
@@ -219,7 +219,7 @@ export function VouchersView({ tenant, theme, t }: Props) {
           </Text>
           {v.expiryDate ? (
             <Text style={[s.metaText, { color: theme.subtext }]}>
-              期限: {fmtDate(v.expiryDate)}
+              {t('voucher.expiryLabel', { date: fmtDate(v.expiryDate) })}
             </Text>
           ) : null}
         </View>
@@ -270,7 +270,7 @@ export function VouchersView({ tenant, theme, t }: Props) {
     <View style={{ flex: 1 }}>
       <View style={s.toolbar}>
         <Text style={[s.countLabel, { color: theme.subtext }]}>
-          {items.filter((v) => v.isActive).length}件 有効
+          {t('voucher.activeCount', { count: String(items.filter((v) => v.isActive).length) })}
         </Text>
         <TouchableOpacity
           style={[s.addBtn, { backgroundColor: theme.primary }]}

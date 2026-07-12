@@ -21,20 +21,7 @@ import * as scheduleService from '../services/schedule';
 import * as seatTypeService from '../services/seatTypes';
 import type { UnlockWindow, SeatType, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
-
-function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
-function formatDate(d: Date): string {
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-}
-
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-function dateLabel(d: Date): string {
-  return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
-}
+import { formatDateKey, dateLabel, pad2 } from '../utils/dateFormat';
 
 function buildDateList(days: number): Date[] {
   const list: Date[] = [];
@@ -55,7 +42,7 @@ export function ScheduleScreen() {
   const { tenant } = useTenant();
   const insets = useSafeAreaInsets();
 
-  const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState(formatDateKey(new Date()));
   const [windows, setWindows] = useState<UnlockWindow[]>([]);
   const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
   const [loading, setLoading] = useState(false);
@@ -182,12 +169,12 @@ export function ScheduleScreen() {
       <FlatList
         horizontal
         data={DATE_LIST}
-        keyExtractor={(d) => formatDate(d)}
+        keyExtractor={(d) => formatDateKey(d)}
         showsHorizontalScrollIndicator={false}
         style={[s.dateStrip, { borderBottomColor: theme.border }]}
         contentContainerStyle={s.dateStripContent}
         renderItem={({ item }) => {
-          const key = formatDate(item);
+          const key = formatDateKey(item);
           const active = key === selectedDate;
           return (
             <TouchableOpacity

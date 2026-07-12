@@ -18,6 +18,7 @@ import { CastPersonalInfoScreen } from './CastPersonalInfoScreen';
 import { ShiftTimeEditModal } from '../components/ShiftTimeEditModal';
 import * as shiftReqService from '../services/shiftRequests';
 import * as timecardService from '../services/timecard';
+import { WEEKDAYS } from '../utils/dateFormat';
 import type { ShiftRequest, CastShiftDefault } from '../types';
 import type { TodayAttendance } from '../services/timecard';
 
@@ -85,8 +86,6 @@ function buildCalendarGrid(periodStart: string, periodEnd: string): CalendarDay[
   }
   return days;
 }
-
-const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 
 export function CastHomeScreen() {
   const { theme } = useTheme();
@@ -476,7 +475,7 @@ export function CastHomeScreen() {
               {/* カレンダーグリッド */}
               <View style={st.calendarWrap}>
                 <View style={st.weekRow}>
-                  {WEEKDAY_LABELS.map((w, i) => (
+                  {WEEKDAYS.map((w, i) => (
                     <View key={w} style={st.weekCell}>
                       <Text style={[st.weekText, { color: i === 0 ? '#D7263D' : i === 6 ? '#2563EB' : theme.subtext }]}>
                         {w}

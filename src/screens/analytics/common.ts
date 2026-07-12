@@ -3,6 +3,9 @@
 import type { Tenant, ThemeColor } from '../../types';
 import type { TKey } from '../../i18n';
 
+import { WEEKDAYS, pad2, dayLabel } from '../../utils/dateFormat';
+export { WEEKDAYS, pad2, dayLabel };
+
 export type TFunc = (key: TKey, params?: Record<string, string>) => string;
 
 /** AnalyticsScreen（コンテナ）から各ビューへ渡す共通 props。 */
@@ -13,22 +16,9 @@ export type AnalyticsViewProps = {
   yearMonth: string; // 'YYYY-MM'
 };
 
-export function pad2(n: number): string {
-  return n.toString().padStart(2, '0');
-}
-
 /** 円表示（¥12,345）。 */
 export function formatYen(n: number): string {
   return `¥${n.toLocaleString('ja-JP')}`;
-}
-
-export const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
-
-/** 'YYYY-MM-DD' → '7/5(日)'。 */
-export function dayLabel(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return `${m}/${d}(${WEEKDAYS[date.getDay()]})`;
 }
 
 /** 'YYYY-MM' → その月の全日付（'YYYY-MM-DD'・1日〜末日）。 */

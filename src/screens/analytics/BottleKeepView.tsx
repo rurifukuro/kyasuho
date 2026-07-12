@@ -103,16 +103,16 @@ export function BottleKeepView({ tenant, theme, t }: Props) {
       setModalVisible(false);
       await load();
     } catch {
-      Alert.alert('保存に失敗しました');
+      Alert.alert(t('common.saveFailed'));
     }
   };
 
   const toggleActive = (b: BottleKeep) => {
     const msg = b.isActive ? t('bottle.returnConfirm') : t('bottle.reactivateConfirm');
     Alert.alert('', msg, [
-      { text: 'キャンセル', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'OK',
+        text: t('common.ok'),
         onPress: async () => {
           await bkService.updateBottleKeep(b.id, { isActive: !b.isActive });
           await load();
@@ -123,9 +123,9 @@ export function BottleKeepView({ tenant, theme, t }: Props) {
 
   const handleDelete = (b: BottleKeep) => {
     Alert.alert('', t('bottle.deleteConfirm'), [
-      { text: 'キャンセル', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: '削除',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await bkService.deleteBottleKeep(b.id);
@@ -162,11 +162,11 @@ export function BottleKeepView({ tenant, theme, t }: Props) {
         <View style={s.cardMeta}>
           {b.remaining ? (
             <Text style={[s.metaText, { color: theme.subtext }]}>
-              残量: {b.remaining}
+              {t('bottle.remainingLabel', { remaining: b.remaining })}
             </Text>
           ) : null}
           <Text style={[s.metaText, { color: theme.subtext }]}>
-            預: {fmtDate(b.startDate)}
+            {t('bottle.depositLabel', { date: fmtDate(b.startDate) })}
             {b.expiryDate ? ` → ${fmtDate(b.expiryDate)}` : ''}
           </Text>
         </View>
@@ -206,7 +206,7 @@ export function BottleKeepView({ tenant, theme, t }: Props) {
     <View style={{ flex: 1 }}>
       <View style={s.toolbar}>
         <Text style={[s.countLabel, { color: theme.subtext }]}>
-          {items.filter((b) => b.isActive).length}件 保管中
+          {t('bottle.activeCount', { count: String(items.filter((b) => b.isActive).length) })}
         </Text>
         <TouchableOpacity
           style={[s.addBtn, { backgroundColor: theme.primary }]}
