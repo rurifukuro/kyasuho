@@ -4,9 +4,11 @@
 // 「勤怠→給与行の自動生成」（§23: 指名数は ky_reservations から自動集計・手修正可）を担う。
 
 import { supabase } from '../config/supabase';
-import type { Attendance, CastPayroll, PayrollSettings } from '../types';
+import type { Attendance, CastPayroll, HourlyRateTier, PayrollSettings } from '../types';
 import { calcMinutesWorked, calcPayroll, monthRange } from '../utils/payrollCalc';
 import { countCastDrinksByMonth, sumMenuBackByMonth } from './orders';
+import { fetchHourlyRateTiers } from './hourlyRateTiers';
+import { resolveTierRate } from '../domain/payroll/slideTier';
 
 // ── 給与設定（店一律・テナントで1行） ──────────────────────────────
 
@@ -231,7 +233,7 @@ export async function generatePayrollFromAttendance(
   attendance: Attendance[],
   settings: Pick<
     PayrollSettings,
-    'baseHourlyRate' | 'nominationBackRate' | 'lateDeduction'
+    'baseHourlyRate' | 'nominationBackRate' | 'lateDeduction' | 'slideEnabled'
   >,
 ): Promise<number> {
   const existing = await fetchPayrollByMonth(tenantId, yearMonth);
@@ -242,6 +244,17 @@ export async function generatePayrollFromAttendance(
     sumMenuBackByMonth(tenantId, yearMonth),
   ]);
 
+  let tiers: HourlyRateTier[] = [];
+  if (settings.slideEnabled) {
+    tiers = await fetchHourlyRateTiers(tenantId);
+  }
+
+  const castMonthlyNominations = new Map<string, number>();
+  for (const [key, count] of nominations) {
+    const castId = key.split('|')[0];
+    castMonthlyNominations.set(castId, (castMonthlyNominations.get(castId) ?? 0) + count);
+  }
+
   const rows = attendance
     .filter((a) => WORKED_STATUSES.has(a.status))
     .filter((a) => !existingKeys.has(`${a.castId}|${a.date}`))
@@ -250,13 +263,25 @@ export async function generatePayrollFromAttendance(
       const nominationCount = nominations.get(`${a.castId}|${a.date}`) ?? 0;
       const drinkCount = castDrinks.get(`${a.castId}|${a.date}`) ?? 0;
       const menuBack = menuBacks.get(`${a.castId}|${a.date}`) ?? 0;
-      const breakdown = calcPayroll(settings, {
-        minutesWorked,
-        nominationCount,
-        menuBack,
-        otherBack: 0,
-        lateCount: a.status === 'late' ? 1 : 0,
-      });
+
+      let effectiveRate = settings.baseHourlyRate;
+      if (settings.slideEnabled && tiers.length > 0) {
+        const salesTiers = tiers.filter((t) => t.metric === 'monthly_sales');
+        const nomTiers = tiers.filter((t) => t.metric === 'monthly_nominations');
+        if (nomTiers.length > 0) {
+          const monthlyNoms = castMonthlyNominations.get(a.castId) ?? 0;
+          effectiveRate = resolveTierRate(nomTiers, monthlyNoms, settings.baseHourlyRate);
+        }
+        if (salesTiers.length > 0) {
+          const salesRate = resolveTierRate(salesTiers, 0, settings.baseHourlyRate);
+          if (salesRate > effectiveRate) effectiveRate = salesRate;
+        }
+      }
+
+      const breakdown = calcPayroll(
+        { ...settings, baseHourlyRate: effectiveRate },
+        { minutesWorked, nominationCount, menuBack, otherBack: 0, lateCount: a.status === 'late' ? 1 : 0 },
+      );
       return {
         tenant_id: tenantId,
         cast_id: a.castId,
