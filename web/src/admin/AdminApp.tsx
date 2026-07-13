@@ -39,7 +39,8 @@ export default function AdminApp() {
       setSession(data.session);
       setAuthReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'TOKEN_REFRESHED') return;
       setSession(next);
     });
     return () => {
@@ -53,6 +54,7 @@ export default function AdminApp() {
       setTenantError(null);
       return;
     }
+    if (tenant) return;
     setTenantLoading(true);
     setTenantError(null);
     try {
@@ -69,7 +71,7 @@ export default function AdminApp() {
     } finally {
       setTenantLoading(false);
     }
-  }, [session]);
+  }, [session, tenant]);
 
   useEffect(() => {
     void loadTenant();

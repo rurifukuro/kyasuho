@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import type { KyTenant } from '../lib/types';
 
 /** App Store製品ページ（ASCアプリID 6787006154）。アプリ公開後に SHOW_APP_STORE_LINK を true へ（§24）。 */
@@ -78,7 +79,9 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
             </button>
           </div>
         </div>
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );
