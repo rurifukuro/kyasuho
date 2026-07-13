@@ -21,6 +21,9 @@ import * as timecardService from '../services/timecard';
 import { WEEKDAYS } from '../utils/dateFormat';
 import type { ShiftRequest, CastShiftDefault } from '../types';
 import type { TodayAttendance } from '../services/timecard';
+import { DevAnnouncementBanner } from '../components/DevAnnouncementBanner';
+import { NotificationBell } from '../components/NotificationBell';
+import { createNotification } from '../services/notifications';
 
 type ShiftRow = { id: string; date: string; start_at: string; end_at: string };
 type PayrollRow = {
@@ -359,6 +362,14 @@ export function CastHomeScreen() {
             );
             setSubmitted(true);
             Alert.alert(t('shiftSubmit.submitDone'));
+            void createNotification(tenantId!, {
+              type: 'shift_submitted',
+              title: t('notifications.shiftSubmitted'),
+              body: t('notifications.shiftSubmittedBody', { name: castName, period: period.label }),
+              senderRole: 'cast',
+              targetRole: 'admin',
+              senderId: castId,
+            }).catch(() => {});
           } catch {
             Alert.alert(t('common.error'));
           } finally {
@@ -397,10 +408,14 @@ export function CastHomeScreen() {
       <ScrollView
         contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40, paddingHorizontal: 20 }}
       >
-        <Text style={[st.header, { color: theme.primary }]}>{t('castHome.title')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={[st.header, { color: theme.primary }]}>{t('castHome.title')}</Text>
+          <NotificationBell targetRole="cast" tenantId={tenantId ?? undefined} />
+        </View>
         {castName ? (
           <Text style={[st.welcome, { color: theme.text }]}>{t('castHome.welcome')}、{castName}</Text>
         ) : null}
+        <DevAnnouncementBanner audience="cast" />
 
         {loading ? (
           <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />

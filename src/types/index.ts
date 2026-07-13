@@ -424,6 +424,37 @@ export type HourlyRateTier = {
 /** ログインユーザーのロール。owner=店舗オーナー、cast=キャスト個人、none=未紐付け。 */
 export type UserRole = 'owner' | 'cast' | 'none';
 
+// ── お知らせ・通知（§55） ──────────────────────────────────────
+
+export type AnnouncementAudience = 'admin' | 'cast' | 'customer';
+
+export type DevAnnouncement = {
+  id: string;
+  title: string;
+  body: string;
+  audience: AnnouncementAudience[];
+  isActive: boolean;
+  priority: number;
+  publishedAt: string;
+  expiresAt: string | null;
+};
+
+export type NotificationSenderRole = 'admin' | 'cast' | 'system';
+export type NotificationTargetRole = 'admin' | 'cast';
+
+export type InternalNotification = {
+  id: string;
+  tenantId: string;
+  type: string;
+  title: string;
+  body: string;
+  senderRole: NotificationSenderRole;
+  targetRole: NotificationTargetRole;
+  senderId: string | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
 /** キャスト招待（ky_cast_invites）。 */
 export type CastInvite = {
   id: string;

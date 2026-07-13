@@ -24,6 +24,8 @@ import { guardFields } from '../utils/contentGuard';
 import type { Cast, SeatType, Reservation, ReservationStatus, ThemeColor } from '../types';
 import type { TKey } from '../i18n';
 import { formatDateKey, dateLabel, pad2 } from '../utils/dateFormat';
+import { DevAnnouncementBanner } from '../components/DevAnnouncementBanner';
+import { NotificationBell } from '../components/NotificationBell';
 
 function buildDateList(past: number, future: number): Date[] {
   const list: Date[] = [];
@@ -165,7 +167,11 @@ export function ReservationsScreen() {
         <View style={[s.badge, { backgroundColor: theme.primary }]}>
           <Text style={s.badgeText}>{activeCount}</Text>
         </View>
+        <View style={{ marginLeft: 'auto' }}>
+          <NotificationBell targetRole="admin" tenantId={tenant?.id} />
+        </View>
       </View>
+      <DevAnnouncementBanner audience="admin" />
 
       <FlatList
         horizontal

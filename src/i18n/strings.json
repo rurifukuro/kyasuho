@@ -811,5 +811,13 @@
   "csv.expense.headers": { "ja": "日付,カテゴリ,金額,メモ" },
   "reservation.revertClosedWarning": { "ja": "会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。" },
   "sns.openXFailed": { "ja": "Xを開けませんでした" },
-  "sns.openInstagramFailed": { "ja": "Instagramを開けませんでした" }
+  "sns.openInstagramFailed": { "ja": "Instagramを開けませんでした" },
+
+  "notifications.title": { "ja": "通知" },
+  "notifications.empty": { "ja": "通知はありません" },
+  "notifications.markAllRead": { "ja": "すべて既読にする" },
+  "notifications.shiftSubmitted": { "ja": "シフト希望が提出されました" },
+  "notifications.shiftSubmittedBody": { "ja": "{name}さんが{period}のシフト希望を提出しました" },
+  "notifications.fromAdmin": { "ja": "管理者からのお知らせ" },
+  "notifications.fromCast": { "ja": "キャストからの連絡" }
 }
