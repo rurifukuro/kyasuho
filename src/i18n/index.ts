@@ -6,8 +6,8 @@
 
 import core from './strings.json';
 
-// ── 言語コード（MVP は ja のみ。拡張時は 'ja' | 'en' | ... に広げる） ──
-export type Language = 'ja';
+// ── 言語コード（お客様向け画面は5言語・提供者/キャスト側は ja のみ） ──
+export type Language = 'ja' | 'en' | 'zh' | 'ko' | 'fr';
 
 // 全 JSON をマージした単一テーブル（画面追加で JSON を分けたらここに import を足す）
 const STRINGS = { ...core };
@@ -15,13 +15,19 @@ const STRINGS = { ...core };
 // 全画面分のキー集合（tsc が未定義キー参照を検知する）
 export type TKey = keyof typeof STRINGS;
 
-type StringEntry = Record<Language, string>;
+type StringEntry = { ja: string } & Partial<Record<Exclude<Language, 'ja'>, string>>;
 const TABLE = STRINGS as Record<string, StringEntry>;
 
-// ── 言語オプション（設定画面で使用） ────────────────────────────────
+// ── 言語オプション（設定画面で使用。お客様モードは5言語選択可） ──────────
 export const LANGUAGE_OPTIONS: { code: Language; label: string }[] = [
   { code: 'ja', label: '🇯🇵 日本語' },
+  { code: 'en', label: '🇺🇸 English' },
+  { code: 'zh', label: '🇨🇳 中文' },
+  { code: 'ko', label: '🇰🇷 한국어' },
+  { code: 'fr', label: '🇫🇷 Français' },
 ];
+
+export const CUSTOMER_LANGUAGES: Language[] = ['ja', 'en', 'zh', 'ko', 'fr'];
 
 // ── 翻訳取得（ja フォールバック＋{name} パラメータ補間） ──────────────
 export function translate(

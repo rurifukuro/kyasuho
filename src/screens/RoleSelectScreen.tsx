@@ -16,7 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
-import { redeemCastInvite } from '../services/roles';
+import { redeemCastInvite, createCustomerAccount } from '../services/roles';
 import { ensureTenant } from '../services/tenants';
 import type { TKey } from '../i18n';
 
@@ -45,6 +45,23 @@ export function RoleSelectScreen() {
       setLoading(false);
     }
   }, [user, refreshRole, t]);
+
+  const handleCustomerStart = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await createCustomerAccount();
+      if (!result.ok) {
+        setError(t('role.inviteError.generic'));
+      } else {
+        await refreshRole();
+      }
+    } catch {
+      setError(t('role.inviteError.generic'));
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshRole, t]);
 
   const handleRedeem = useCallback(async () => {
     const trimmed = code.trim();
@@ -128,6 +145,23 @@ export function RoleSelectScreen() {
             >
               <Text style={[s.roleBtnTitle, { color: theme.primary }]}>{t('role.castJoin')}</Text>
               <Text style={[s.roleBtnDesc, { color: theme.subtext }]}>{t('role.castJoinDesc')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                s.roleBtn,
+                {
+                  backgroundColor: theme.card,
+                  borderWidth: 2,
+                  borderColor: '#22C55E',
+                },
+              ]}
+              onPress={handleCustomerStart}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Text style={[s.roleBtnTitle, { color: '#22C55E' }]}>{t('role.customerStart')}</Text>
+              <Text style={[s.roleBtnDesc, { color: theme.subtext }]}>{t('role.customerStartDesc')}</Text>
             </TouchableOpacity>
 
             {showInvite && (

@@ -4,6 +4,7 @@ import type { UserRole } from '../types';
 export type RoleResult =
   | { role: 'owner'; tenantId: string }
   | { role: 'cast'; tenantId: string; castId: string }
+  | { role: 'customer'; customerAccountId: string }
   | { role: 'none' };
 
 export async function resolveUserRole(userId: string): Promise<RoleResult> {
@@ -21,7 +22,29 @@ export async function resolveUserRole(userId: string): Promise<RoleResult> {
     .maybeSingle();
   if (cast) return { role: 'cast', tenantId: cast.tenant_id as string, castId: cast.id as string };
 
+  const { data: customer } = await supabase
+    .from('ky_customer_accounts')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (customer) return { role: 'customer', customerAccountId: customer.id as string };
+
   return { role: 'none' };
+}
+
+export async function createCustomerAccount(): Promise<{ ok: boolean; accountId?: string; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'not_authenticated' };
+  const { data, error } = await supabase
+    .from('ky_customer_accounts')
+    .insert({ user_id: user.id, nickname: '' })
+    .select('id')
+    .single();
+  if (error) {
+    if (error.code === '23505') return { ok: false, error: 'already_exists' };
+    throw error;
+  }
+  return { ok: true, accountId: (data as { id: string }).id };
 }
 
 export async function redeemCastInvite(code: string): Promise<{ ok: boolean; error?: string; castId?: string; tenantId?: string }> {

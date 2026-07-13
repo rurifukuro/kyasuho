@@ -421,8 +421,8 @@ export type HourlyRateTier = {
 
 // ── ロール判定（T13 キャストアカウント基盤） ──────────────────────────
 
-/** ログインユーザーのロール。owner=店舗オーナー、cast=キャスト個人、none=未紐付け。 */
-export type UserRole = 'owner' | 'cast' | 'none';
+/** ログインユーザーのロール。owner=店舗オーナー、cast=キャスト個人、customer=お客様、none=未紐付け。 */
+export type UserRole = 'owner' | 'cast' | 'customer' | 'none';
 
 // ── お知らせ・通知（§55） ──────────────────────────────────────
 

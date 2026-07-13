@@ -20,7 +20,9 @@ import { CastsScreen } from './src/screens/CastsScreen';
 import { AnalyticsScreen } from './src/screens/AnalyticsScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { WebView } from 'react-native-webview';
+import { CustomerHomeScreen } from './src/screens/CustomerHomeScreen';
+import { CustomerSettingsScreen } from './src/screens/CustomerSettingsScreen';
+import { CustomerShopScreen } from './src/screens/CustomerShopScreen';
 import { supabase } from './src/config/supabase';
 
 type DevRole = null | 'owner' | 'cast' | 'customer';
@@ -42,7 +44,13 @@ export type RootTabParamList = {
   Settings: undefined;
 };
 
+export type CustomerTabParamList = {
+  CustomerHome: undefined;
+  CustomerSettings: undefined;
+};
+
 const Tab = createBottomTabNavigator<RootTabParamList>();
+const CustomerTab = createBottomTabNavigator<CustomerTabParamList>();
 
 const TAB_ICONS: Record<
   keyof RootTabParamList,
@@ -106,6 +114,60 @@ function Tabs() {
   );
 }
 
+function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
+  const { theme } = useTheme();
+  const { t } = useLanguage();
+  const [shopRoute, setShopRoute] = useState<{ tenantId: string; slug: string } | null>(null);
+
+  if (shopRoute) {
+    return (
+      <CustomerShopScreen
+        tenantId={shopRoute.tenantId}
+        slug={shopRoute.slug}
+        onBack={() => setShopRoute(null)}
+      />
+    );
+  }
+
+  return (
+    <CustomerTab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.subtext,
+        tabBarStyle: { backgroundColor: theme.card, borderTopColor: theme.border },
+      }}
+    >
+      <CustomerTab.Screen
+        name="CustomerHome"
+        options={{
+          tabBarLabel: t('customer.tabHome'),
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="store" color={color} size={size} />
+          ),
+        }}
+      >
+        {() => (
+          <CustomerHomeScreen
+            customerAccountId={customerAccountId}
+            onOpenShop={(tenantId, slug) => setShopRoute({ tenantId, slug })}
+          />
+        )}
+      </CustomerTab.Screen>
+      <CustomerTab.Screen
+        name="CustomerSettings"
+        component={CustomerSettingsScreen}
+        options={{
+          tabBarLabel: t('customer.tabSettings'),
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="cog" color={color} size={size} />
+          ),
+        }}
+      />
+    </CustomerTab.Navigator>
+  );
+}
+
 function RootGate() {
   const { isReady, session, role, roleLoading, roleResult } = useAuth();
   const { t } = useLanguage();
@@ -134,13 +196,15 @@ function RootGate() {
 
   const effectiveRole = (__DEV__ && devRole) || role;
 
+  const customerAccountId =
+    roleResult && 'customerAccountId' in roleResult ? roleResult.customerAccountId : null;
+
   let content: React.ReactNode;
   if (effectiveRole === 'customer') {
     content = (
-      <WebView
-        source={{ uri: `https://rurifukuro.github.io/kyasuho/#/${devSlug}` }}
-        style={{ flex: 1 }}
-      />
+      <NavigationContainer>
+        <CustomerTabs customerAccountId={customerAccountId ?? ''} />
+      </NavigationContainer>
     );
   } else if (effectiveRole === 'cast') {
     content = <CastHomeScreen />;
