@@ -308,7 +308,7 @@ export function RegisterScreen() {
     needsCast: boolean; sortOrder: number; isActive: boolean;
   }) => {
     if (!tenantId) return;
-    const withBack = { ...data, remotePrice: data.remotePrice ?? editingMenuItem?.remotePrice ?? null, backRate: editingMenuItem?.backRate ?? null, backAmount: editingMenuItem?.backAmount ?? null, nominationKind: editingMenuItem?.nominationKind ?? null };
+    const withBack = { ...data, remotePrice: data.remotePrice ?? editingMenuItem?.remotePrice ?? null, backRate: editingMenuItem?.backRate ?? null, backAmount: editingMenuItem?.backAmount ?? null, guestBackRate: editingMenuItem?.guestBackRate ?? null, guestBackAmount: editingMenuItem?.guestBackAmount ?? null, nominationKind: editingMenuItem?.nominationKind ?? null };
     if (editingMenuItem) {
       await menuItemsService.updateMenuItem(editingMenuItem.id, withBack);
     } else {

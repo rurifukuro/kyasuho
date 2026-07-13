@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,7 +31,7 @@ export function SettingsScreen() {
   const { theme, themeKey, setThemeKey } = useTheme();
   const { t } = useLanguage();
   const { signOut } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, updateTenant } = useTenant();
   const insets = useSafeAreaInsets();
 
   const [showTerms, setShowTerms] = useState(false);
@@ -91,6 +92,59 @@ export function SettingsScreen() {
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
+        </View>
+
+        {/* タイマー設定（§49-1） */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionTimer')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={s.row}>
+            <MaterialCommunityIcons name="timer-outline" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('settings.timerEnabled')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.timerEnabledSub')}</Text>
+            </View>
+            <Switch
+              value={tenant?.timerEnabled ?? false}
+              onValueChange={(v) => void updateTenant({ timerEnabled: v })}
+              trackColor={{ false: theme.border, true: theme.primary }}
+            />
+          </View>
+          {tenant?.timerEnabled && (
+            <>
+              <View style={[s.divider, { backgroundColor: theme.border }]} />
+              <View style={s.row}>
+                <MaterialCommunityIcons name="bell-alert-outline" size={20} color={theme.primary} />
+                <View style={s.rowContent}>
+                  <Text style={[s.rowLabel, { color: theme.text }]}>{t('settings.timerAlertMinutes')}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const cur = tenant.timerAlertMinutes ?? 5;
+                      if (cur > 1) void updateTenant({ timerAlertMinutes: cur - 1 });
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <MaterialCommunityIcons name="minus-circle-outline" size={24} color={theme.primary} />
+                  </TouchableOpacity>
+                  <Text style={[s.rowDetail, { color: theme.text, minWidth: 32, textAlign: 'center' }]}>
+                    {tenant.timerAlertMinutes ?? 5}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      const cur = tenant.timerAlertMinutes ?? 5;
+                      if (cur < 30) void updateTenant({ timerAlertMinutes: cur + 1 });
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <MaterialCommunityIcons name="plus-circle-outline" size={24} color={theme.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          )}
         </View>
 
         {/* 顧客管理 */}

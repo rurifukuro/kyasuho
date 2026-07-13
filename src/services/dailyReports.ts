@@ -57,12 +57,12 @@ export async function generateReportSummary(
 ): Promise<{ totalRevenue: number; orderCount: number; guestCount: number; cashExpected: number; castSummary: { castId: string; orderCount: number; revenue: number }[] }> {
   const { data: ordersData, error: ordErr } = await supabase
     .from('ky_orders')
-    .select('id, subtotal, payment_method')
+    .select('id, subtotal, payment_method, guest_count')
     .eq('tenant_id', tenantId)
     .eq('biz_date', bizDate)
     .eq('status', 'closed');
   if (ordErr) throw ordErr;
-  const closedOrders = (ordersData ?? []) as { id: string; subtotal: number; payment_method: string }[];
+  const closedOrders = (ordersData ?? []) as { id: string; subtotal: number; payment_method: string; guest_count: number }[];
 
   const orderIds = closedOrders.map((o) => o.id);
   let castIdsByOrder = new Map<string, string[]>();
@@ -84,6 +84,7 @@ export async function generateReportSummary(
     subtotal: o.subtotal,
     paymentMethod: o.payment_method,
     castIds: castIdsByOrder.get(o.id) ?? [],
+    guestCount: o.guest_count ?? 1,
   }));
 
   return buildDailyReport(inputs);

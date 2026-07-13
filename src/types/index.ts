@@ -333,6 +333,8 @@ export type MenuItem = {
   isActive: boolean;
   backRate: number | null;
   backAmount: number | null;
+  guestBackRate: number | null;
+  guestBackAmount: number | null;
   nominationKind: string | null;
 };
 
@@ -360,6 +362,8 @@ export type Order = {
   paymentMethod: PaymentMethod;
   note: string;
   setDeadlineAt: string | null;
+  guestCount: number;
+  isGuestOrder: boolean;
 };
 
 /** オーダー明細（ky_order_items・スナップショット）。 */

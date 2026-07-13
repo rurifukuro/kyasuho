@@ -2,6 +2,7 @@ export type ClosedOrderInput = {
   subtotal: number;
   paymentMethod: string;
   castIds: string[];
+  guestCount: number;
 };
 
 export type DailyReportSummary = {
@@ -39,7 +40,7 @@ export function buildDailyReport(
   return {
     totalRevenue,
     orderCount: closedOrders.length,
-    guestCount: closedOrders.length,
+    guestCount: closedOrders.reduce((sum, o) => sum + o.guestCount, 0),
     cashExpected,
     castSummary,
   };

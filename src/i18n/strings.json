@@ -619,6 +619,11 @@
   "common.add": { "ja": "追加" },
   "common.back": { "ja": "戻る" },
 
+  "settings.sectionTimer": { "ja": "卓タイマー" },
+  "settings.timerEnabled": { "ja": "タイマー機能" },
+  "settings.timerEnabledSub": { "ja": "セット時間の残り時間を表示" },
+  "settings.timerAlertMinutes": { "ja": "アラート（残り分）" },
+
   "settings.sectionCustomer": { "ja": "顧客管理" },
   "customer.title": { "ja": "顧客管理" },
   "customer.settingsSub": { "ja": "顧客名簿・人物像・スタンプ" },

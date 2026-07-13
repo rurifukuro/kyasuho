@@ -22,6 +22,8 @@ type OrderRow = {
   payment_method: PaymentMethod;
   note: string;
   set_deadline_at: string | null;
+  guest_count: number;
+  is_guest_order: boolean;
 };
 
 type OrderItemRow = {
@@ -54,6 +56,8 @@ function rowToOrder(row: OrderRow): Order {
     paymentMethod: row.payment_method,
     note: row.note,
     setDeadlineAt: row.set_deadline_at,
+    guestCount: row.guest_count ?? 1,
+    isGuestOrder: row.is_guest_order ?? false,
   };
 }
 
@@ -140,6 +144,28 @@ export async function voidOrder(orderId: string): Promise<void> {
   const { error } = await supabase
     .from('ky_orders')
     .update({ status: 'void' })
+    .eq('id', orderId);
+  if (error) throw error;
+}
+
+export async function updateOrderGuestCount(
+  orderId: string,
+  guestCount: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_orders')
+    .update({ guest_count: Math.max(1, guestCount) })
+    .eq('id', orderId);
+  if (error) throw error;
+}
+
+export async function updateOrderGuestFlag(
+  orderId: string,
+  isGuestOrder: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from('ky_orders')
+    .update({ is_guest_order: isGuestOrder })
     .eq('id', orderId);
   if (error) throw error;
 }

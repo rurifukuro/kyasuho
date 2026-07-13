@@ -7,7 +7,7 @@ type TenantContextValue = {
   tenant: Tenant | null;
   loading: boolean;
   refresh: () => Promise<void>;
-  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn'>>) => Promise<void>;
+  updateTenant: (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn' | 'timerEnabled' | 'timerAlertMinutes'>>) => Promise<void>;
 };
 
 const TenantContext = createContext<TenantContextValue | undefined>(undefined);
@@ -63,7 +63,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   }, [load]);
 
   const updateTenant = useCallback(
-    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn'>>) => {
+    async (updates: Partial<Pick<Tenant, 'name' | 'genre' | 'businessInfo' | 'snsLinks' | 'prefecture' | 'area' | 'rankingOptIn' | 'timerEnabled' | 'timerAlertMinutes'>>) => {
       if (!tenant) return;
       const payload: Record<string, unknown> = {};
       if (updates.name !== undefined) payload.name = updates.name;
@@ -73,6 +73,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (updates.prefecture !== undefined) payload.prefecture = updates.prefecture;
       if (updates.area !== undefined) payload.area = updates.area;
       if (updates.rankingOptIn !== undefined) payload.ranking_opt_in = updates.rankingOptIn;
+      if (updates.timerEnabled !== undefined) payload.timer_enabled = updates.timerEnabled;
+      if (updates.timerAlertMinutes !== undefined) payload.timer_alert_minutes = updates.timerAlertMinutes;
       const { error } = await supabase.from('ky_tenants').update(payload).eq('id', tenant.id);
       if (error) throw error;
       await load();
