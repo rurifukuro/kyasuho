@@ -157,13 +157,11 @@ GRANT SELECT (id, tenant_id, category, name, price, needs_cast, sort_order,
 
 -- ── ky_unlock_windows ──（S-4: SEC-15 漏れ修正。anon にも列GRANT追加）
 REVOKE SELECT ON public.ky_unlock_windows FROM anon;
-GRANT SELECT (id, tenant_id, day_of_week, start_slot, end_slot, set_minutes,
-             close_minutes_before, capacity)
+GRANT SELECT (id, tenant_id, date, open_from, close_at, seats, set_minutes)
   ON public.ky_unlock_windows TO anon;
 
 REVOKE SELECT ON public.ky_unlock_windows FROM authenticated;
-GRANT SELECT (id, tenant_id, day_of_week, start_slot, end_slot, set_minutes,
-             close_minutes_before, capacity)
+GRANT SELECT (id, tenant_id, date, open_from, close_at, seats, set_minutes)
   ON public.ky_unlock_windows TO authenticated;
 
 -- ── ky_seat_types ──（S-5: SEC-15 漏れ修正。anon にも列GRANT追加）

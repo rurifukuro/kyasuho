@@ -18,6 +18,25 @@
 --   GRANT SELECT (id, tenant_id, name, name_kana, photo_url, sns_links, bio, accepts_nomination, sort_order)
 --     ON public.ky_casts TO anon;
 
+-- ── 0053のALTER TABLE補完（列が欠落していた場合のガード） ──
+ALTER TABLE public.ky_casts
+  ADD COLUMN IF NOT EXISTS accepts_offschedule_nomination boolean NOT NULL DEFAULT false;
+
+ALTER TABLE public.ky_reservations
+  ADD COLUMN IF NOT EXISTS nomination_type text NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'ky_reservations_nomination_type_check'
+  ) THEN
+    ALTER TABLE public.ky_reservations
+      ADD CONSTRAINT ky_reservations_nomination_type_check
+        CHECK (nomination_type IN ('standard','off_schedule'));
+  END IF;
+END $$;
+
 -- ── ky_shifts: 公開列のみ（updated_at/created_at は不要） ──
 REVOKE SELECT ON public.ky_shifts FROM anon;
 GRANT SELECT (id, tenant_id, cast_id, date, start_at, end_at)
