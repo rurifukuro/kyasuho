@@ -3592,3 +3592,19 @@ SPEC §45-1〜45-2 の基盤層。migration 0053（DB）は既存＝本Revはア
 ### 検証
 - `npx tsc --noEmit` EXIT:0（app）
 - `npx tsc -b` EXIT:0（web）
+
+---
+
+## Rev145 — §45店舗詳細画面（キャスト一覧・シフト・イベント）＋列GRANT migration（2026-07-13）
+
+CustomerShopScreen をプレースホルダから実体化。14日間カレンダー日付選択→出勤キャスト＋シフト時間→シフト外指名→公開イベント一覧。SEC-15準拠のmigration 0057で列GRANT横展開。
+
+### 新規ファイル
+- `supabase/migrations/0057_ky_customer_read_grants.sql` — ky_shifts(6列)/ky_events(9列)に列GRANT to anon、ky_castsにaccepts_offschedule_nomination追加GRANT（SEC-15準拠）
+
+### 変更ファイル
+- `src/screens/CustomerShopScreen.tsx` — プレースホルダ→実体化: 店舗ヘッダー(name/genre/openHours)/14日カレンダー/出勤キャスト(写真/名前/シフト時間/指名OK)/シフト外指名キャスト/公開イベント一覧/将来機能プレースホルダ
+- `src/i18n/strings.json` — customer.workingCasts/noWorkingCasts/nominationOk/offScheduleCasts/offScheduleNote/offScheduleLabel/upcomingEvents の7キー追加（5言語）
+
+### 検証
+- `npx tsc --noEmit` EXIT:0
