@@ -26,6 +26,7 @@ import { ShiftReminderModal } from '../components/ShiftReminderModal';
 import { PointSettingsModal } from '../components/PointSettingsModal';
 import { HelpChatModal } from '../components/HelpChatModal';
 import { SlideTierSettingsModal } from '../components/SlideTierSettingsModal';
+import { SendNotificationModal } from '../components/SendNotificationModal';
 import appJson from '../../app.json';
 
 export function SettingsScreen() {
@@ -46,6 +47,7 @@ export function SettingsScreen() {
   const [showPointSettings, setShowPointSettings] = useState(false);
   const [showHelpChat, setShowHelpChat] = useState(false);
   const [showSlideTier, setShowSlideTier] = useState(false);
+  const [showSendNotification, setShowSendNotification] = useState(false);
 
   const handleSignOut = useCallback(() => {
     Alert.alert(t('settings.signOutConfirmTitle'), t('settings.signOutConfirmBody'), [
@@ -91,6 +93,21 @@ export function SettingsScreen() {
             <View style={s.rowContent}>
               <Text style={[s.rowLabel, { color: theme.text }]}>{t('shiftReminder.title')}</Text>
               <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.shiftReminderSub')}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 通知 */}
+        <Text style={[s.sectionHeader, { color: theme.subtext }]}>
+          {t('settings.sectionNotification')}
+        </Text>
+        <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <TouchableOpacity style={s.row} onPress={() => setShowSendNotification(true)}>
+            <MaterialCommunityIcons name="message-text-outline" size={20} color={theme.primary} />
+            <View style={s.rowContent}>
+              <Text style={[s.rowLabel, { color: theme.text }]}>{t('notifications.sendToCast')}</Text>
+              <Text style={[s.rowSub, { color: theme.subtext }]}>{t('settings.sendNotificationSub')}</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color={theme.subtext} />
           </TouchableOpacity>
@@ -342,6 +359,10 @@ export function SettingsScreen() {
       <SlideTierSettingsModal
         visible={showSlideTier}
         onClose={() => setShowSlideTier(false)}
+      />
+      <SendNotificationModal
+        visible={showSendNotification}
+        onClose={() => setShowSendNotification(false)}
       />
     </View>
   );

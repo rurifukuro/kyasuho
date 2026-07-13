@@ -1,6 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { DevAnnouncementBanner } from '../components/DevAnnouncementBanner';
+import { AdminNotificationBell } from './AdminNotificationBell';
 import type { KyTenant } from '../lib/types';
 
 /** App Store製品ページ（ASCアプリID 6787006154）。アプリ公開後に SHOW_APP_STORE_LINK を true へ（§24）。 */
@@ -74,11 +76,13 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
         <div className="admin-header">
           <div className="admin-shop-name">{tenant.name}</div>
           <div className="admin-header-actions">
+            <AdminNotificationBell tenantId={tenant.id} />
             <button type="button" className="admin-btn" onClick={() => void handleLogout()}>
               ログアウト
             </button>
           </div>
         </div>
+        <DevAnnouncementBanner audience="admin" />
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>

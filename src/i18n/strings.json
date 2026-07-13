@@ -819,5 +819,15 @@
   "notifications.shiftSubmitted": { "ja": "シフト希望が提出されました" },
   "notifications.shiftSubmittedBody": { "ja": "{name}さんが{period}のシフト希望を提出しました" },
   "notifications.fromAdmin": { "ja": "管理者からのお知らせ" },
-  "notifications.fromCast": { "ja": "キャストからの連絡" }
+  "notifications.fromCast": { "ja": "キャストからの連絡" },
+  "notifications.sendToCast": { "ja": "キャストへ通知を送る" },
+  "notifications.inputTitle": { "ja": "タイトル" },
+  "notifications.inputTitlePlaceholder": { "ja": "お知らせのタイトル" },
+  "notifications.inputBody": { "ja": "本文（任意）" },
+  "notifications.inputBodyPlaceholder": { "ja": "詳細を入力…" },
+  "notifications.sendBtn": { "ja": "送信" },
+  "notifications.sent": { "ja": "キャストへ通知を送信しました" },
+  "notifications.titleRequired": { "ja": "タイトルを入力してください" },
+  "settings.sectionNotification": { "ja": "通知" },
+  "settings.sendNotificationSub": { "ja": "キャスト全員にお知らせを送信" }
 }

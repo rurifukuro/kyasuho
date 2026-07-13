@@ -10,6 +10,7 @@ import { Calendar } from './Calendar';
 import { CustomerTimeline } from './CustomerTimeline';
 import { ReservationModal } from './ReservationModal';
 import { ReservationEditModal } from './ReservationEditModal';
+import { DevAnnouncementBanner } from './DevAnnouncementBanner';
 import type { KyReservation } from '../lib/types';
 
 interface SelectedSlot {
@@ -91,6 +92,7 @@ export function TenantPage() {
 
   return (
     <div className="tenant-page">
+      <DevAnnouncementBanner audience="customer" />
       <header className="store-header">
         <h1>{tenant.name}</h1>
         {tenant.genre && <p className="store-genre">{tenant.genre}</p>}
