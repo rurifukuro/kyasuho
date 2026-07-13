@@ -46,6 +46,8 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
   const [needsCast, setNeedsCast] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [sortStr, setSortStr] = useState('0');
+  const [guestBackRateStr, setGuestBackRateStr] = useState('');
+  const [guestBackAmountStr, setGuestBackAmountStr] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -58,6 +60,8 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
         setNeedsCast(editing.needsCast);
         setIsActive(editing.isActive);
         setSortStr(String(editing.sortOrder));
+        setGuestBackRateStr(editing.guestBackRate != null ? String(editing.guestBackRate) : '');
+        setGuestBackAmountStr(editing.guestBackAmount != null ? String(editing.guestBackAmount) : '');
       } else {
         setCategory('set');
         setName('');
@@ -66,6 +70,8 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
         setNeedsCast(false);
         setIsActive(true);
         setSortStr('0');
+        setGuestBackRateStr('');
+        setGuestBackAmountStr('');
       }
       setSubmitting(false);
     }
@@ -177,6 +183,32 @@ export function MenuEditModal({ visible, onClose, editing, onSave, onDelete }: {
           style={[s.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
           value={sortStr}
           onChangeText={(v) => setSortStr(v.replace(/[^0-9]/g, ''))}
+          keyboardType="number-pad"
+        />
+
+        <Text style={[s.label, { color: theme.subtext }]}>{t('menu.guestBackRate')}</Text>
+        <TextInput
+          style={[s.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
+          value={guestBackRateStr}
+          onChangeText={(v) => {
+            setGuestBackRateStr(v.replace(/[^0-9.]/g, ''));
+            if (v.trim()) setGuestBackAmountStr('');
+          }}
+          placeholder={t('menu.guestBackRatePlaceholder')}
+          placeholderTextColor={theme.subtext}
+          keyboardType="decimal-pad"
+        />
+
+        <Text style={[s.label, { color: theme.subtext }]}>{t('menu.guestBackAmount')}</Text>
+        <TextInput
+          style={[s.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card }]}
+          value={guestBackAmountStr}
+          onChangeText={(v) => {
+            setGuestBackAmountStr(v.replace(/[^0-9]/g, ''));
+            if (v.trim()) setGuestBackRateStr('');
+          }}
+          placeholder={t('menu.guestBackAmountPlaceholder')}
+          placeholderTextColor={theme.subtext}
           keyboardType="number-pad"
         />
 

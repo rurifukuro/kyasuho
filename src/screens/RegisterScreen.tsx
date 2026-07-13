@@ -496,6 +496,60 @@ export function RegisterScreen() {
             />
           </View>
 
+          {/* 人数・ゲストフラグ（§54-1/§54-2） */}
+          <View style={s.section}>
+            <Text style={[s.sectionLabel, { color: theme.subtext }]}>{t('register.guestCount')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  style={[s.qtyBtn, { borderColor: theme.border }]}
+                  onPress={() => {
+                    if (!activeOrderId) return;
+                    const cur = orders.find((o) => o.id === activeOrderId)?.guestCount ?? 1;
+                    if (cur > 1) void ordersService.updateOrderGuestCount(activeOrderId, cur - 1).then(loadOrders);
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>−</Text>
+                </TouchableOpacity>
+                <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700', minWidth: 24, textAlign: 'center' }}>
+                  {orders.find((o) => o.id === activeOrderId)?.guestCount ?? 1}
+                </Text>
+                <TouchableOpacity
+                  style={[s.qtyBtn, { borderColor: theme.border }]}
+                  onPress={() => {
+                    if (!activeOrderId) return;
+                    const cur = orders.find((o) => o.id === activeOrderId)?.guestCount ?? 1;
+                    void ordersService.updateOrderGuestCount(activeOrderId, cur + 1).then(loadOrders);
+                  }}
+                >
+                  <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>＋</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+                  borderColor: (orders.find((o) => o.id === activeOrderId)?.isGuestOrder) ? theme.primary : theme.border,
+                  backgroundColor: (orders.find((o) => o.id === activeOrderId)?.isGuestOrder) ? theme.primary + '15' : 'transparent',
+                }}
+                onPress={() => {
+                  if (!activeOrderId) return;
+                  const cur = orders.find((o) => o.id === activeOrderId)?.isGuestOrder ?? false;
+                  void ordersService.updateOrderGuestFlag(activeOrderId, !cur).then(loadOrders);
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="account-star"
+                  size={16}
+                  color={(orders.find((o) => o.id === activeOrderId)?.isGuestOrder) ? theme.primary : theme.subtext}
+                />
+                <Text style={{ fontSize: 13, color: (orders.find((o) => o.id === activeOrderId)?.isGuestOrder) ? theme.primary : theme.subtext }}>
+                  {t('register.guestOrder')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* 顧客紐付け */}
           <View style={s.section}>
             <Text style={[s.sectionLabel, { color: theme.subtext }]}>{t('register.linkCustomer')}</Text>
@@ -577,7 +631,14 @@ export function RegisterScreen() {
             {orderItems.length > 0 && (
               <View style={s.subtotalRow}>
                 <Text style={[s.subtotalLabel, { color: theme.subtext }]}>{t('register.subtotal')}</Text>
-                <Text style={[s.subtotalAmt, { color: theme.text }]}>{formatYen(subtotal)}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[s.subtotalAmt, { color: theme.text }]}>{formatYen(subtotal)}</Text>
+                  {(orders.find((o) => o.id === activeOrderId)?.guestCount ?? 1) > 1 && (
+                    <Text style={{ fontSize: 12, color: theme.subtext, marginTop: 2 }}>
+                      {t('register.perPerson', { amount: formatYen(Math.ceil(subtotal / (orders.find((o) => o.id === activeOrderId)?.guestCount ?? 1))) })}
+                    </Text>
+                  )}
+                </View>
               </View>
             )}
           </View>
