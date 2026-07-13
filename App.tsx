@@ -124,6 +124,7 @@ function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
       <CustomerShopScreen
         tenantId={shopRoute.tenantId}
         slug={shopRoute.slug}
+        customerAccountId={customerAccountId}
         onBack={() => setShopRoute(null)}
       />
     );

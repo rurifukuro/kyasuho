@@ -861,5 +861,8 @@
   "customer.offScheduleCasts": { "ja": "シフト外指名可能", "en": "Off-schedule nomination", "zh": "班外指名", "ko": "스케줄 외 지명 가능", "fr": "Nomination hors planning" },
   "customer.offScheduleNote": { "ja": "この日のシフトはありませんが、指名リクエストを受け付けています", "en": "Not scheduled today, but accepting nomination requests", "zh": "今天不在班但接受指名请求", "ko": "오늘 스케줄은 없지만 지명 요청을 받고 있습니다", "fr": "Non planifié(e) aujourd'hui, mais accepte les demandes de nomination" },
   "customer.offScheduleLabel": { "ja": "シフト外指名受付中", "en": "Off-schedule nomination available", "zh": "班外可指名", "ko": "스케줄 외 지명 접수 중", "fr": "Nomination hors planning disponible" },
-  "customer.upcomingEvents": { "ja": "イベント", "en": "Events", "zh": "活动", "ko": "이벤트", "fr": "Événements" }
+  "customer.upcomingEvents": { "ja": "イベント", "en": "Events", "zh": "活动", "ko": "이벤트", "fr": "Événements" },
+  "customer.memberQrTitle": { "ja": "会員QR", "en": "Membership QR", "zh": "会员二维码", "ko": "회원 QR", "fr": "QR membre" },
+  "customer.memberQrHint": { "ja": "お会計時にこのQRをスタッフに見せてください", "en": "Show this QR to staff at checkout", "zh": "结账时请出示此二维码", "ko": "계산 시 이 QR을 직원에게 보여주세요", "fr": "Montrez ce QR au personnel lors du paiement" },
+  "customer.memberQrClose": { "ja": "閉じる", "en": "Close", "zh": "关闭", "ko": "닫기", "fr": "Fermer" }
 }

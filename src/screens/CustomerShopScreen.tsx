@@ -6,10 +6,12 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Modal,
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../config/supabase';
@@ -17,6 +19,7 @@ import { supabase } from '../config/supabase';
 type Props = {
   tenantId: string;
   slug: string;
+  customerAccountId: string;
   onBack: () => void;
 };
 
@@ -46,11 +49,12 @@ function toDateStr(d: Date): string {
 
 const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
 
-export function CustomerShopScreen({ tenantId, onBack }: Props) {
+export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Props) {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
 
+  const [qrVisible, setQrVisible] = useState(false);
   const [shop, setShop] = useState<ShopInfo | null>(null);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -144,6 +148,9 @@ export function CustomerShopScreen({ tenantId, onBack }: Props) {
           <Text style={[s.shopName, { color: theme.text }]} numberOfLines={1}>{shop?.name}</Text>
           {shop?.genre ? <Text style={[s.shopGenre, { color: theme.subtext }]}>{shop.genre}</Text> : null}
         </View>
+        <TouchableOpacity onPress={() => setQrVisible(true)} style={s.qrBtn}>
+          <MaterialCommunityIcons name="qrcode" size={26} color={theme.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
@@ -267,6 +274,29 @@ export function CustomerShopScreen({ tenantId, onBack }: Props) {
           <Text style={[s.futureText, { color: theme.subtext }]}>{t('customer.shopDetailPlaceholder')}</Text>
         </View>
       </ScrollView>
+
+      {/* Membership QR modal */}
+      <Modal visible={qrVisible} transparent animationType="fade" onRequestClose={() => setQrVisible(false)}>
+        <TouchableOpacity
+          style={s.qrOverlay}
+          activeOpacity={1}
+          onPress={() => setQrVisible(false)}
+        >
+          <View style={[s.qrModal, { backgroundColor: theme.card }]}>
+            <Text style={[s.qrTitle, { color: theme.text }]}>{t('customer.memberQrTitle')}</Text>
+            <View style={s.qrWrap}>
+              <QRCode value={`ky:member:${customerAccountId}`} size={200} backgroundColor="#FFFFFF" color="#111111" />
+            </View>
+            <Text style={[s.qrHint, { color: theme.subtext }]}>{t('customer.memberQrHint')}</Text>
+            <TouchableOpacity
+              style={[s.qrCloseBtn, { backgroundColor: theme.primary }]}
+              onPress={() => setQrVisible(false)}
+            >
+              <Text style={s.qrCloseText}>{t('customer.memberQrClose')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -283,6 +313,7 @@ const s = StyleSheet.create({
     gap: 8,
   },
   backBtn: { padding: 4 },
+  qrBtn: { padding: 4 },
   shopName: { fontSize: 18, fontWeight: '700' },
   shopGenre: { fontSize: 13, marginTop: 2 },
   infoRow: {
@@ -345,4 +376,11 @@ const s = StyleSheet.create({
     gap: 8,
   },
   futureText: { fontSize: 13, textAlign: 'center' },
+  qrOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' },
+  qrModal: { borderRadius: 20, padding: 24, alignItems: 'center', width: 300, gap: 16 },
+  qrTitle: { fontSize: 18, fontWeight: '700' },
+  qrWrap: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12 },
+  qrHint: { fontSize: 13, textAlign: 'center', lineHeight: 18 },
+  qrCloseBtn: { paddingHorizontal: 32, paddingVertical: 10, borderRadius: 8 },
+  qrCloseText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });
