@@ -854,5 +854,12 @@
   "customer.settingsLegal": { "ja": "法的情報", "en": "Legal", "zh": "法律信息", "ko": "법적 정보", "fr": "Mentions légales" },
   "customer.settingsContact": { "ja": "お問い合わせ", "en": "Contact Us", "zh": "联系我们", "ko": "문의하기", "fr": "Nous contacter" },
   "customer.settingsAccount": { "ja": "アカウント", "en": "Account", "zh": "账户", "ko": "계정", "fr": "Compte" },
-  "customer.shopDetailPlaceholder": { "ja": "予約・メニュー・ポイントは今後のアップデートで利用できるようになります", "en": "Reservations, menu, and points will be available in future updates", "zh": "预约、菜单和积分将在未来更新中可用", "ko": "예약, 메뉴, 포인트는 향후 업데이트에서 이용 가능합니다", "fr": "Les réservations, le menu et les points seront disponibles dans les prochaines mises à jour" }
+  "customer.shopDetailPlaceholder": { "ja": "予約・メニュー・ポイントは今後のアップデートで利用できるようになります", "en": "Reservations, menu, and points will be available in future updates", "zh": "预约、菜单和积分将在未来更新中可用", "ko": "예약, 메뉴, 포인트는 향후 업데이트에서 이용 가능합니다", "fr": "Les réservations, le menu et les points seront disponibles dans les prochaines mises à jour" },
+  "customer.workingCasts": { "ja": "{date} の出勤キャスト", "en": "On duty {date}", "zh": "{date} 上班", "ko": "{date} 출근 캐스트", "fr": "En service le {date}" },
+  "customer.noWorkingCasts": { "ja": "この日の出勤はまだ登録されていません", "en": "No one is scheduled for this day yet", "zh": "这天还没有排班", "ko": "이 날은 아직 출근이 등록되지 않았습니다", "fr": "Personne n'est prévu ce jour" },
+  "customer.nominationOk": { "ja": "指名OK", "en": "Nomination OK", "zh": "可指名", "ko": "지명 가능", "fr": "Nomination OK" },
+  "customer.offScheduleCasts": { "ja": "シフト外指名可能", "en": "Off-schedule nomination", "zh": "班外指名", "ko": "스케줄 외 지명 가능", "fr": "Nomination hors planning" },
+  "customer.offScheduleNote": { "ja": "この日のシフトはありませんが、指名リクエストを受け付けています", "en": "Not scheduled today, but accepting nomination requests", "zh": "今天不在班但接受指名请求", "ko": "오늘 스케줄은 없지만 지명 요청을 받고 있습니다", "fr": "Non planifié(e) aujourd'hui, mais accepte les demandes de nomination" },
+  "customer.offScheduleLabel": { "ja": "シフト外指名受付中", "en": "Off-schedule nomination available", "zh": "班外可指名", "ko": "스케줄 외 지명 접수 중", "fr": "Nomination hors planning disponible" },
+  "customer.upcomingEvents": { "ja": "イベント", "en": "Events", "zh": "活动", "ko": "이벤트", "fr": "Événements" }
 }
