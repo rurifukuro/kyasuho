@@ -889,5 +889,17 @@
   "customer.reserveCastUnavailable": { "ja": "指名キャストはこの時間に出勤していません", "en": "Nominated cast is not available at this time", "zh": "指名的工作人员此时段不在班", "ko": "지명 캐스트가 이 시간에 출근하지 않습니다", "fr": "Le cast désigné n'est pas disponible à cette heure" },
   "customer.reserveSuccessTitle": { "ja": "予約完了", "en": "Reservation confirmed", "zh": "预约成功", "ko": "예약 완료", "fr": "Réservation confirmée" },
   "customer.reserveSuccessBody": { "ja": "予約が完了しました。席番号: {seat}", "en": "Your reservation is confirmed. Seat: {seat}", "zh": "预约成功。座位号：{seat}", "ko": "예약이 완료되었습니다. 좌석번호: {seat}", "fr": "Réservation confirmée. Place : {seat}" },
-  "customer.shopDetailFuture": { "ja": "メニュー・ポイントは今後のアップデートで利用できるようになります", "en": "Menu and points will be available in future updates", "zh": "菜单和积分将在未来更新中可用", "ko": "메뉴, 포인트는 향후 업데이트에서 이용 가능합니다", "fr": "Le menu et les points seront disponibles dans les prochaines mises à jour" }
+  "customer.shopDetailFuture": { "ja": "メニューは今後のアップデートで利用できるようになります", "en": "Menu ordering will be available in future updates", "zh": "菜单将在未来更新中可用", "ko": "메뉴는 향후 업데이트에서 이용 가능합니다", "fr": "Le menu sera disponible dans les prochaines mises à jour" },
+  "customer.pointTitle": { "ja": "ポイントカード", "en": "Point Card", "zh": "积分卡", "ko": "포인트 카드", "fr": "Carte de points" },
+  "customer.pointBalance": { "ja": "保有ポイント", "en": "Balance", "zh": "当前积分", "ko": "보유 포인트", "fr": "Solde" },
+  "customer.pointRewards": { "ja": "特典", "en": "Rewards", "zh": "奖励", "ko": "특전", "fr": "Récompenses" },
+  "customer.pointHistory": { "ja": "ポイント履歴", "en": "History", "zh": "积分记录", "ko": "포인트 이력", "fr": "Historique" },
+  "customer.pointEarn": { "ja": "付与", "en": "Earn", "zh": "获得", "ko": "적립", "fr": "Gagné" },
+  "customer.pointRedeem": { "ja": "使用", "en": "Used", "zh": "使用", "ko": "사용", "fr": "Utilisé" },
+  "customer.pointAdjust": { "ja": "調整", "en": "Adj.", "zh": "调整", "ko": "조정", "fr": "Ajust." },
+  "customer.pointRedeemConfirmTitle": { "ja": "特典交換", "en": "Redeem Reward", "zh": "兑换奖励", "ko": "특전 교환", "fr": "Échanger la récompense" },
+  "customer.pointRedeemConfirmBody": { "ja": "「{name}」（{pts}pt）と交換しますか？", "en": "Redeem \"{name}\" ({pts}pt)?", "zh": "要兑换「{name}」({pts}pt)吗？", "ko": "「{name}」({pts}pt)로 교환할까요?", "fr": "Échanger « {name} » ({pts}pt) ?" },
+  "customer.pointRedeemAction": { "ja": "交換する", "en": "Redeem", "zh": "兑换", "ko": "교환하기", "fr": "Échanger" },
+  "customer.pointRedeemStoreOnly": { "ja": "スタッフにお申し出ください", "en": "Please ask staff", "zh": "请向工作人员申请", "ko": "직원에게 말씀해주세요", "fr": "Veuillez demander au personnel" },
+  "customer.pointRedeemStoreOnlyBody": { "ja": "特典の交換はお店のスタッフが操作します。会員QRを提示してください。", "en": "Staff will process the reward. Please show your membership QR.", "zh": "奖励由店员操作，请出示会员二维码。", "ko": "특전 교환은 직원이 처리합니다. 회원 QR을 보여주세요.", "fr": "L'échange est effectué par le personnel. Montrez votre QR membre." }
 }

@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../config/supabase';
 import { CustomerReservationModal } from './CustomerReservationModal';
+import { CustomerPointSection } from '../components/CustomerPointSection';
 
 type Props = {
   tenantId: string;
@@ -269,6 +270,9 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Prop
             ))}
           </>
         )}
+
+        {/* Point card */}
+        <CustomerPointSection tenantId={tenantId} />
 
         {/* Reserve button */}
         <TouchableOpacity
