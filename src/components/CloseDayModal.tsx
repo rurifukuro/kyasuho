@@ -34,6 +34,9 @@ export function CloseDayModal({ visible, onClose, onClosed }: Props) {
   const [cashActual, setCashActual] = useState('');
   const [memo, setMemo] = useState('');
   const [alreadyClosed, setAlreadyClosed] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
 
   const load = useCallback(async () => {
     if (!tenantId || !visible) return;
@@ -42,8 +45,17 @@ export function CloseDayModal({ visible, onClose, onClosed }: Props) {
       const bizDate = todayStr();
 
       const existing = await dailyReportsService.fetchDailyReport(tenantId, bizDate);
-      if (existing?.closedAt) {
+      if (existing?.closedAt && !unlocked) {
         setAlreadyClosed(true);
+        setSummary({
+          totalRevenue: existing.totalRevenue,
+          orderCount: existing.orderCount,
+          guestCount: existing.guestCount,
+          cashExpected: existing.cashExpected,
+          castSummary: (existing.castSummary ?? []) as { castId: string; orderCount: number; revenue: number }[],
+        });
+        setCashActual(existing.cashActual != null ? String(existing.cashActual) : '');
+        setMemo(existing.memo ?? '');
         setLoading(false);
         return;
       }
@@ -59,15 +71,42 @@ export function CloseDayModal({ visible, onClose, onClosed }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [tenantId, visible]);
+  }, [tenantId, visible, unlocked]);
 
   useEffect(() => {
     if (visible) {
       setCashActual('');
       setMemo('');
+      setUnlocked(false);
+      setPassword('');
+      setAuthError('');
       void load();
     }
   }, [visible, load]);
+
+  const handleUnlock = async () => {
+    if (!password.trim()) return;
+    setAuthError('');
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error('no_user');
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: password.trim(),
+      });
+      if (error) {
+        setAuthError(t('closeDay.wrongPassword'));
+      } else {
+        setUnlocked(true);
+        setAlreadyClosed(false);
+      }
+    } catch {
+      setAuthError(t('closeDay.wrongPassword'));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleConfirm = () => {
     if (!summary) return;
@@ -121,8 +160,28 @@ export function CloseDayModal({ visible, onClose, onClosed }: Props) {
         </View>
       ) : alreadyClosed ? (
         <View style={s.center}>
-          <MaterialCommunityIcons name="check-circle" size={48} color={theme.primary} />
+          <MaterialCommunityIcons name="lock" size={48} color={theme.primary} />
           <Text style={[s.message, { color: theme.subtext }]}>{t('closeDay.alreadyClosed')}</Text>
+          <Text style={[s.message, { color: theme.text, fontSize: 13, marginTop: 8 }]}>{t('closeDay.unlockHint')}</Text>
+          <TextInput
+            style={[s.input, { borderColor: theme.border, color: theme.text, backgroundColor: theme.card, width: '80%', marginTop: 12 }]}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder={t('closeDay.passwordPlaceholder')}
+            placeholderTextColor={theme.subtext}
+          />
+          {authError !== '' && (
+            <Text style={{ color: '#EF4444', fontSize: 13, marginTop: 6 }}>{authError}</Text>
+          )}
+          <TouchableOpacity
+            style={[s.confirmBtn, { backgroundColor: theme.primary, marginTop: 16, paddingHorizontal: 32 }]}
+            onPress={handleUnlock}
+            disabled={loading || !password.trim()}
+          >
+            <MaterialCommunityIcons name="lock-open-variant" size={18} color="#fff" />
+            <Text style={s.confirmText}>{t('closeDay.unlock')}</Text>
+          </TouchableOpacity>
         </View>
       ) : openCount > 0 ? (
         <View style={s.center}>
