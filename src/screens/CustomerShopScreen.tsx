@@ -15,6 +15,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../config/supabase';
+import { CustomerReservationModal } from './CustomerReservationModal';
 
 type Props = {
   tenantId: string;
@@ -55,6 +56,7 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Prop
   const insets = useSafeAreaInsets();
 
   const [qrVisible, setQrVisible] = useState(false);
+  const [reserveVisible, setReserveVisible] = useState(false);
   const [shop, setShop] = useState<ShopInfo | null>(null);
   const [casts, setCasts] = useState<Cast[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -268,10 +270,20 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Prop
           </>
         )}
 
+        {/* Reserve button */}
+        <TouchableOpacity
+          style={[s.reserveBtn, { backgroundColor: theme.primary }]}
+          onPress={() => setReserveVisible(true)}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="calendar-plus" size={22} color="#fff" />
+          <Text style={s.reserveBtnText}>{t('customer.reserveButton')}</Text>
+        </TouchableOpacity>
+
         {/* Placeholder for future features */}
         <View style={[s.futureSection, { borderColor: theme.border }]}>
           <MaterialCommunityIcons name="clock-fast" size={24} color={theme.border} />
-          <Text style={[s.futureText, { color: theme.subtext }]}>{t('customer.shopDetailPlaceholder')}</Text>
+          <Text style={[s.futureText, { color: theme.subtext }]}>{t('customer.shopDetailFuture')}</Text>
         </View>
       </ScrollView>
 
@@ -297,6 +309,15 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Prop
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <CustomerReservationModal
+        visible={reserveVisible}
+        onClose={() => setReserveVisible(false)}
+        tenantId={tenantId}
+        date={selectedDate}
+        customerAccountId={customerAccountId}
+        onReserved={() => void loadShifts(selectedDate)}
+      />
     </View>
   );
 }
@@ -365,6 +386,17 @@ const s = StyleSheet.create({
   eventTitle: { fontSize: 15, fontWeight: '600' },
   eventTime: { fontSize: 13, marginTop: 2 },
   eventDesc: { fontSize: 13, marginTop: 4 },
+  reserveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  reserveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   futureSection: {
     marginHorizontal: 16,
     marginTop: 32,
