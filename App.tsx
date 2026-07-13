@@ -23,6 +23,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { CustomerHomeScreen } from './src/screens/CustomerHomeScreen';
 import { CustomerSettingsScreen } from './src/screens/CustomerSettingsScreen';
 import { CustomerShopScreen } from './src/screens/CustomerShopScreen';
+import { CustomerOrderScreen } from './src/screens/CustomerOrderScreen';
 import { supabase } from './src/config/supabase';
 
 type DevRole = null | 'owner' | 'cast' | 'customer';
@@ -118,6 +119,16 @@ function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const [shopRoute, setShopRoute] = useState<{ tenantId: string; slug: string } | null>(null);
+  const [orderRoute, setOrderRoute] = useState<{ tenantId: string } | null>(null);
+
+  if (orderRoute) {
+    return (
+      <CustomerOrderScreen
+        tenantId={orderRoute.tenantId}
+        onBack={() => setOrderRoute(null)}
+      />
+    );
+  }
 
   if (shopRoute) {
     return (
@@ -126,6 +137,7 @@ function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
         slug={shopRoute.slug}
         customerAccountId={customerAccountId}
         onBack={() => setShopRoute(null)}
+        onOpenOrder={(tid) => setOrderRoute({ tenantId: tid })}
       />
     );
   }

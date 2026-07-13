@@ -23,6 +23,7 @@ type Props = {
   slug: string;
   customerAccountId: string;
   onBack: () => void;
+  onOpenOrder: (tenantId: string) => void;
 };
 
 type ShopInfo = {
@@ -51,7 +52,7 @@ function toDateStr(d: Date): string {
 
 const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
 
-export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Props) {
+export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpenOrder }: Props) {
   const { theme } = useTheme();
   const { t } = useLanguage();
   const insets = useSafeAreaInsets();
@@ -284,6 +285,16 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack }: Prop
           <Text style={s.reserveBtnText}>{t('customer.reserveButton')}</Text>
         </TouchableOpacity>
 
+        {/* Order button */}
+        <TouchableOpacity
+          style={[s.orderBtn, { borderColor: theme.primary }]}
+          onPress={() => onOpenOrder(tenantId)}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons name="food-fork-drink" size={22} color={theme.primary} />
+          <Text style={[s.orderBtnText, { color: theme.primary }]}>{t('customer.orderButton')}</Text>
+        </TouchableOpacity>
+
         {/* Placeholder for future features */}
         <View style={[s.futureSection, { borderColor: theme.border }]}>
           <MaterialCommunityIcons name="clock-fast" size={24} color={theme.border} />
@@ -401,6 +412,18 @@ const s = StyleSheet.create({
     borderRadius: 12,
   },
   reserveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  orderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+  },
+  orderBtnText: { fontSize: 16, fontWeight: '700' },
   futureSection: {
     marginHorizontal: 16,
     marginTop: 32,
