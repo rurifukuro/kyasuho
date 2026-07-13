@@ -33,6 +33,7 @@ export function CustomerPointSection({ tenantId }: Props) {
   useEffect(() => {
     if (!tenantId) return;
     void (async () => {
+      try {
       const { data: settings } = await supabase
         .from('ky_point_settings')
         .select('enabled, yen_per_point')
@@ -42,13 +43,14 @@ export function CustomerPointSection({ tenantId }: Props) {
       setEnabled(isEnabled);
       if (!isEnabled) { setLoaded(true); return; }
 
-      const [txRes, rewardRes] = await Promise.all([
+      const [txRes, balRes, rewardRes] = await Promise.all([
         supabase
           .from('ky_point_transactions')
           .select('id, kind, points, memo, created_at')
           .eq('tenant_id', tenantId)
           .order('created_at', { ascending: false })
           .limit(50),
+        supabase.rpc('ky_customer_point_balance', { p_tenant_id: tenantId }),
         supabase
           .from('ky_point_rewards')
           .select('id, name, description, points_required')
@@ -58,9 +60,12 @@ export function CustomerPointSection({ tenantId }: Props) {
       ]);
       const txs = (txRes.data as PointTx[] | null) ?? [];
       setHistory(txs);
-      setBalance(txs.reduce((sum, tx) => sum + tx.points, 0));
+      const serverBalance = typeof balRes.data === 'number' ? balRes.data : null;
+      setBalance(serverBalance ?? txs.reduce((sum, tx) => sum + tx.points, 0));
       setRewards((rewardRes.data as Reward[] | null) ?? []);
-      setLoaded(true);
+      } finally {
+        setLoaded(true);
+      }
     })();
   }, [tenantId]);
 
@@ -73,7 +78,6 @@ export function CustomerPointSection({ tenantId }: Props) {
         {
           text: t('customer.pointRedeemAction'),
           onPress: async () => {
-            const customerRef = history[0]?.id ? undefined : undefined;
             Alert.alert(t('customer.pointRedeemStoreOnly'), t('customer.pointRedeemStoreOnlyBody'));
           },
         },

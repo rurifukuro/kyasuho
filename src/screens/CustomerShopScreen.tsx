@@ -20,7 +20,6 @@ import { CustomerPointSection } from '../components/CustomerPointSection';
 
 type Props = {
   tenantId: string;
-  slug: string;
   customerAccountId: string;
   onBack: () => void;
   onOpenOrder: (tenantId: string) => void;
@@ -50,7 +49,10 @@ function toDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土'];
+const WEEKDAY_KEYS = [
+  'common.weekdaySun', 'common.weekdayMon', 'common.weekdayTue', 'common.weekdayWed',
+  'common.weekdayThu', 'common.weekdayFri', 'common.weekdaySat',
+] as const;
 
 export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpenOrder }: Props) {
   const { theme } = useTheme();
@@ -80,22 +82,25 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpen
   useEffect(() => {
     if (!tenantId) return;
     (async () => {
-      const [tenantRes, castsRes, eventsRes] = await Promise.all([
-        supabase.from('ky_tenants').select('name, genre, business_info').eq('id', tenantId).single(),
-        supabase.from('ky_casts').select('id, name, photo_url, accepts_nomination, accepts_offschedule_nomination').eq('tenant_id', tenantId).order('sort_order'),
-        supabase.from('ky_events').select('id, title, description, event_date, start_time, end_time').eq('tenant_id', tenantId).eq('is_public', true).gte('event_date', toDateStr(new Date())).order('event_date').limit(20),
-      ]);
-      if (tenantRes.data) {
-        const bi = (tenantRes.data as Record<string, unknown>).business_info as Record<string, unknown> | null;
-        setShop({
-          name: (tenantRes.data as Record<string, unknown>).name as string,
-          genre: ((tenantRes.data as Record<string, unknown>).genre as string) || null,
-          openHours: (bi?.openHours as string) || null,
-        });
+      try {
+        const [tenantRes, castsRes, eventsRes] = await Promise.all([
+          supabase.from('ky_tenants').select('name, genre, business_info').eq('id', tenantId).single(),
+          supabase.from('ky_casts').select('id, name, photo_url, accepts_nomination, accepts_offschedule_nomination').eq('tenant_id', tenantId).order('sort_order'),
+          supabase.from('ky_events').select('id, title, description, event_date, start_time, end_time').eq('tenant_id', tenantId).eq('is_public', true).gte('event_date', toDateStr(new Date())).order('event_date').limit(20),
+        ]);
+        if (tenantRes.data) {
+          const bi = (tenantRes.data as Record<string, unknown>).business_info as Record<string, unknown> | null;
+          setShop({
+            name: (tenantRes.data as Record<string, unknown>).name as string,
+            genre: ((tenantRes.data as Record<string, unknown>).genre as string) || null,
+            openHours: (bi?.openHours as string) || null,
+          });
+        }
+        setCasts((castsRes.data as Cast[] | null) ?? []);
+        setEvents((eventsRes.data as EventItem[] | null) ?? []);
+      } finally {
+        setLoading(false);
       }
-      setCasts((castsRes.data as Cast[] | null) ?? []);
-      setEvents((eventsRes.data as EventItem[] | null) ?? []);
-      setLoading(false);
     })();
   }, [tenantId]);
 
@@ -140,7 +145,7 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpen
   }
 
   const dateObj = new Date(selectedDate + 'T00:00:00');
-  const dayLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()} (${WEEKDAYS_JA[dateObj.getDay()]})`;
+  const dayLabel = `${dateObj.getMonth() + 1}/${dateObj.getDate()} (${t(WEEKDAY_KEYS[dateObj.getDay()])})`;
 
   return (
     <View style={[s.root, { backgroundColor: theme.background }]}>
@@ -152,9 +157,11 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpen
           <Text style={[s.shopName, { color: theme.text }]} numberOfLines={1}>{shop?.name}</Text>
           {shop?.genre ? <Text style={[s.shopGenre, { color: theme.subtext }]}>{shop.genre}</Text> : null}
         </View>
-        <TouchableOpacity onPress={() => setQrVisible(true)} style={s.qrBtn}>
-          <MaterialCommunityIcons name="qrcode" size={26} color={theme.primary} />
-        </TouchableOpacity>
+        {customerAccountId ? (
+          <TouchableOpacity onPress={() => setQrVisible(true)} style={s.qrBtn}>
+            <MaterialCommunityIcons name="qrcode" size={26} color={theme.primary} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
@@ -178,7 +185,7 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpen
                 activeOpacity={0.7}
               >
                 <Text style={[s.dateChipDay, { color: active ? '#fff' : theme.subtext }]}>
-                  {WEEKDAYS_JA[dt.getDay()]}
+                  {t(WEEKDAY_KEYS[dt.getDay()])}
                 </Text>
                 <Text style={[s.dateChipNum, { color: active ? '#fff' : theme.text }]}>
                   {dt.getDate()}
@@ -312,7 +319,7 @@ export function CustomerShopScreen({ tenantId, customerAccountId, onBack, onOpen
           <View style={[s.qrModal, { backgroundColor: theme.card }]}>
             <Text style={[s.qrTitle, { color: theme.text }]}>{t('customer.memberQrTitle')}</Text>
             <View style={s.qrWrap}>
-              <QRCode value={`ky:member:${customerAccountId}`} size={200} backgroundColor="#FFFFFF" color="#111111" />
+              <QRCode value={customerAccountId ? `ky:member:${customerAccountId}` : 'ky:member:invalid'} size={200} backgroundColor="#FFFFFF" color="#111111" />
             </View>
             <Text style={[s.qrHint, { color: theme.subtext }]}>{t('customer.memberQrHint')}</Text>
             <TouchableOpacity

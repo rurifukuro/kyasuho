@@ -23,7 +23,7 @@ import {
 
 type Props = {
   customerAccountId: string;
-  onOpenShop: (tenantId: string, slug: string) => void;
+  onOpenShop: (tenantId: string) => void;
 };
 
 export function CustomerHomeScreen({ customerAccountId, onOpenShop }: Props) {
@@ -102,7 +102,7 @@ export function CustomerHomeScreen({ customerAccountId, onOpenShop }: Props) {
   const renderItem = useCallback(({ item }: { item: FollowedTenant }) => (
     <TouchableOpacity
       style={[s.shopCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-      onPress={() => onOpenShop(item.tenant_id, item.tenant_slug)}
+      onPress={() => onOpenShop(item.tenant_id)}
       onLongPress={() => handleUnfollow(item)}
       activeOpacity={0.8}
     >

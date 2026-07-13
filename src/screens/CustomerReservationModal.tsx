@@ -60,19 +60,22 @@ export function CustomerReservationModal({
     setSelectedSlot(null);
     setSets(1);
     void (async () => {
-      const [winRes, resvRes, castsRes, shiftRes, stRes] = await Promise.all([
-        supabase.from('ky_unlock_windows').select('open_from, close_at, set_minutes, seats').eq('tenant_id', tenantId).eq('date', date).order('open_from'),
-        supabase.from('ky_reservations').select('slot, set_minutes, seat_no, status').eq('tenant_id', tenantId).eq('date', date).in('status', ['reserved', 'checked_in']),
-        supabase.from('ky_casts').select('id, name, name_kana, accepts_nomination').eq('tenant_id', tenantId),
-        supabase.from('ky_shifts').select('cast_id, start_at, end_at').eq('tenant_id', tenantId).eq('date', date),
-        supabase.from('ky_seat_types').select('id, name, seat_fee, capacity, is_active').eq('tenant_id', tenantId).eq('is_active', true),
-      ]);
-      setWindows((winRes.data as Window[] | null) ?? []);
-      setReservations((resvRes.data as Reservation[] | null) ?? []);
-      setCasts((castsRes.data as Cast[] | null) ?? []);
-      setShifts((shiftRes.data as Shift[] | null) ?? []);
-      setSeatTypes((stRes.data as SeatType[] | null) ?? []);
-      setLoading(false);
+      try {
+        const [winRes, resvRes, castsRes, shiftRes, stRes] = await Promise.all([
+          supabase.from('ky_unlock_windows').select('open_from, close_at, set_minutes, seats').eq('tenant_id', tenantId).eq('date', date).order('open_from'),
+          supabase.from('ky_reservations').select('slot, set_minutes, seat_no, status').eq('tenant_id', tenantId).eq('date', date).in('status', ['reserved', 'checked_in']),
+          supabase.from('ky_casts').select('id, name, name_kana, accepts_nomination').eq('tenant_id', tenantId),
+          supabase.from('ky_shifts').select('cast_id, start_at, end_at').eq('tenant_id', tenantId).eq('date', date),
+          supabase.from('ky_seat_types').select('id, name, seat_fee, capacity, is_active').eq('tenant_id', tenantId).eq('is_active', true),
+        ]);
+        setWindows((winRes.data as Window[] | null) ?? []);
+        setReservations((resvRes.data as Reservation[] | null) ?? []);
+        setCasts((castsRes.data as Cast[] | null) ?? []);
+        setShifts((shiftRes.data as Shift[] | null) ?? []);
+        setSeatTypes((stRes.data as SeatType[] | null) ?? []);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [visible, tenantId, date]);
 
@@ -209,24 +212,10 @@ export function CustomerReservationModal({
 
           <Text style={[st.fieldLabel, { color: theme.subtext }]}>{t('customer.reserveTime')}</Text>
           <Text style={[st.fieldValue, { color: theme.text }]}>
-            {selectedSlot.slot}〜{minutesToSlot(endMinutes)}（{effectiveSets}{t('customer.reserveSetUnit')}）
+            {selectedSlot.slot}〜{minutesToSlot(endMinutes)}
           </Text>
 
-          {maxSets > 1 && (
-            <View style={st.setsRow}>
-              {Array.from({ length: maxSets }, (_, i) => i + 1).map((n) => (
-                <TouchableOpacity
-                  key={n}
-                  style={[st.setBtn, n === effectiveSets && { backgroundColor: theme.primary }]}
-                  onPress={() => setSets(n)}
-                >
-                  <Text style={{ color: n === effectiveSets ? '#fff' : theme.text, fontSize: 14, fontWeight: '600' }}>
-                    {n}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          {/* セット数選択は ky_make_reservation RPC に p_sets が追加されるまで非表示（C-1） */}
 
           <Text style={[st.fieldLabel, { color: theme.subtext }]}>{t('customer.reserveName')}</Text>
           <TextInput
@@ -303,7 +292,7 @@ export function CustomerReservationModal({
           {seatFee > 0 && (
             <View style={[st.feeBox, { borderColor: theme.border }]}>
               <Text style={[st.feeLabel, { color: theme.subtext }]}>{t('customer.reserveSeatFee')}</Text>
-              <Text style={[st.feeValue, { color: theme.text }]}>¥{(seatFee * effectiveSets).toLocaleString()}</Text>
+              <Text style={[st.feeValue, { color: theme.text }]}>¥{seatFee.toLocaleString()}</Text>
             </View>
           )}
 

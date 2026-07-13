@@ -118,7 +118,7 @@ function Tabs() {
 function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
   const { theme } = useTheme();
   const { t } = useLanguage();
-  const [shopRoute, setShopRoute] = useState<{ tenantId: string; slug: string } | null>(null);
+  const [shopRoute, setShopRoute] = useState<{ tenantId: string } | null>(null);
   const [orderRoute, setOrderRoute] = useState<{ tenantId: string } | null>(null);
 
   if (orderRoute) {
@@ -134,7 +134,6 @@ function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
     return (
       <CustomerShopScreen
         tenantId={shopRoute.tenantId}
-        slug={shopRoute.slug}
         customerAccountId={customerAccountId}
         onBack={() => setShopRoute(null)}
         onOpenOrder={(tid) => setOrderRoute({ tenantId: tid })}
@@ -163,7 +162,7 @@ function CustomerTabs({ customerAccountId }: { customerAccountId: string }) {
         {() => (
           <CustomerHomeScreen
             customerAccountId={customerAccountId}
-            onOpenShop={(tenantId, slug) => setShopRoute({ tenantId, slug })}
+            onOpenShop={(tenantId) => setShopRoute({ tenantId })}
           />
         )}
       </CustomerTab.Screen>

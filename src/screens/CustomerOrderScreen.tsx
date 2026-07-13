@@ -8,11 +8,14 @@ import {
   Alert,
   ActivityIndicator,
   StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
+import { KeyboardDoneBar } from '../components/KeyboardDoneBar';
 import { supabase } from '../config/supabase';
 
 type MenuItem = {
@@ -54,16 +57,19 @@ export function CustomerOrderScreen({ tenantId, initialToken, onBack }: Props) {
   useEffect(() => {
     if (!tenantId || !tokenConfirmed) return;
     setLoading(true);
-    supabase
-      .from('ky_menu_items')
-      .select('id, category, name, price, needs_cast, is_active')
-      .eq('tenant_id', tenantId)
-      .eq('is_active', true)
-      .order('sort_order')
-      .then(({ data }) => {
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('ky_menu_items')
+          .select('id, category, name, price, needs_cast, is_active')
+          .eq('tenant_id', tenantId)
+          .eq('is_active', true)
+          .order('sort_order');
         setMenuItems((data as MenuItem[] | null) ?? []);
+      } finally {
         setLoading(false);
-      });
+      }
+    })();
   }, [tenantId, tokenConfirmed]);
 
   const grouped = useMemo(() => {
@@ -144,6 +150,7 @@ export function CustomerOrderScreen({ tenantId, initialToken, onBack }: Props) {
       </View>
 
       {!tokenConfirmed ? (
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={s.tokenSection}>
           <MaterialCommunityIcons name="qrcode-scan" size={48} color={theme.border} />
           <Text style={[s.tokenHint, { color: theme.subtext }]}>{t('customer.orderTokenHint')}</Text>
@@ -164,6 +171,7 @@ export function CustomerOrderScreen({ tenantId, initialToken, onBack }: Props) {
             <Text style={s.tokenBtnText}>{t('customer.orderTokenConfirm')}</Text>
           </TouchableOpacity>
         </View>
+        </KeyboardAvoidingView>
       ) : loading ? (
         <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
       ) : (
@@ -224,6 +232,7 @@ export function CustomerOrderScreen({ tenantId, initialToken, onBack }: Props) {
           )}
         </>
       )}
+      <KeyboardDoneBar />
     </View>
   );
 }
