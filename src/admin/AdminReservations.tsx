@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyCast, KyReservationFull, KyTenant } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/timeUtils';
 import {
   adminMakeReservation,
+  checkinReservation,
   countNoShowByContacts,
   fetchAllReservations,
   fetchCastList,
+  fetchMonthlyNoShowCount,
   removeReservation,
+  revertCheckin,
   updateReservationStatus,
 } from './adminApi';
 
@@ -48,6 +51,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [noShowMap, setNoShowMap] = useState<Map<string, number>>(new Map());
+  const [monthlyNoShow, setMonthlyNoShow] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,6 +66,8 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
       } else {
         setNoShowMap(new Map());
       }
+      const ym = date.substring(0, 7);
+      fetchMonthlyNoShowCount(tenant.id, ym).then(setMonthlyNoShow).catch(() => {});
     } catch (e) {
       console.warn('[kyasuho] fetchAllReservations failed:', e);
       setError('予約の取得に失敗しました。再読み込みしてください。');
@@ -74,7 +80,8 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     void load();
   }, [load]);
 
-  // §24: Supabase Realtime — 予約の追加・変更を台帳へ自動反映（アプリ/客Webからの書き込みも拾う）
+  // §24: Supabase Realtime — 予約の追加・変更を台帳へ自動反映（デバウンス付き）
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const channel = supabase
       .channel(`ky-reservations-admin-${tenant.id}`)
@@ -82,11 +89,13 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ky_reservations', filter: `tenant_id=eq.${tenant.id}` },
         () => {
-          void load();
+          if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+          reloadTimerRef.current = setTimeout(() => { void load(); }, 300);
         },
       )
       .subscribe();
     return () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
       void supabase.removeChannel(channel);
     };
   }, [tenant.id, load]);
@@ -110,6 +119,12 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     [items],
   );
 
+  const statusCounts = useMemo(() => {
+    const counts = { reserved: 0, checked_in: 0, cancelled: 0, no_show: 0 };
+    for (const r of items) counts[r.status]++;
+    return counts;
+  }, [items]);
+
   const changeStatus = async (
     row: KyReservationFull,
     status: KyReservationFull['status'],
@@ -123,6 +138,36 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
     } catch (e) {
       console.warn('[kyasuho] updateReservationStatus failed:', e);
       window.alert('ステータスの変更に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleCheckin = async (row: KyReservationFull) => {
+    setBusyId(row.id);
+    try {
+      await checkinReservation(tenant.id, row);
+      await load();
+    } catch (e) {
+      console.warn('[kyasuho] checkinReservation failed:', e);
+      window.alert('来店処理に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleRevertCheckin = async (row: KyReservationFull) => {
+    if (!window.confirm(`${row.customer_name} 様を予約中に戻しますか？\n紐付きの未会計伝票は取消されます。`)) return;
+    setBusyId(row.id);
+    try {
+      const { closedCount } = await revertCheckin(tenant.id, row.id);
+      if (closedCount > 0) {
+        window.alert('会計済みの伝票が残っています。取消が必要な場合はレジ画面から手動で対応してください。');
+      }
+      await load();
+    } catch (e) {
+      console.warn('[kyasuho] revertCheckin failed:', e);
+      window.alert('予約中への復帰に失敗しました。');
     } finally {
       setBusyId(null);
     }
@@ -183,6 +228,10 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
         setAddError('この日時に受付枠がありません。先に「受付設定」で枠を作成してください。');
         return;
       }
+      if (result.error === 'cast_not_available') {
+        setAddError('指名キャストはこの時間に出勤していないか、指名を受け付けていません。');
+        return;
+      }
       setAddName('');
       setAddContact('');
       setAddParty('1');
@@ -214,6 +263,11 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
         </button>
         <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
           有効な予約 {activeCount} 件
+          {statusCounts.no_show > 0 && (
+            <span className="admin-badge st-no_show" style={{ marginLeft: 8, fontSize: 11 }}>
+              無断キャンセル {statusCounts.no_show} 件
+            </span>
+          )}
         </span>
         <button
           type="button"
@@ -332,6 +386,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                 <th>指名</th>
                 <th>連絡先</th>
                 <th>メモ</th>
+                <th>注文予定</th>
                 <th>状態</th>
                 <th>操作</th>
               </tr>
@@ -358,6 +413,17 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                     <td>{row.contact || '—'}</td>
                     <td>{row.note || '—'}</td>
                     <td>
+                      {row.preorder && row.preorder.length > 0 ? (
+                        <span style={{ fontSize: 12 }}>
+                          {(row.preorder as { name: string; qty: number; price: number }[]).map((p, i) => (
+                            <span key={i}>{p.name}×{p.qty}<br /></span>
+                          ))}
+                        </span>
+                      ) : row.menu_undecided ? (
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>当日決定</span>
+                      ) : '—'}
+                    </td>
+                    <td>
                       <span className={`admin-badge st-${row.status}`}>
                         {STATUS_LABELS[row.status]}
                       </span>
@@ -370,7 +436,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                               type="button"
                               className="admin-btn primary"
                               disabled={busy}
-                              onClick={() => void changeStatus(row, 'checked_in')}
+                              onClick={() => void handleCheckin(row)}
                             >
                               来店
                             </button>
@@ -409,7 +475,7 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
                             type="button"
                             className="admin-btn"
                             disabled={busy}
-                            onClick={() => void changeStatus(row, 'reserved')}
+                            onClick={() => void handleRevertCheckin(row)}
                           >
                             予約中に戻す
                           </button>
@@ -441,6 +507,12 @@ export function AdminReservations({ tenant }: { tenant: KyTenant }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {monthlyNoShow > 0 && (
+        <div style={{ marginTop: 16, padding: '10px 14px', background: '#fef3c7', borderRadius: 8, fontSize: 13 }}>
+          <strong>📊 {date.substring(0, 7).replace('-', '年')}月</strong>の無断キャンセル: <strong style={{ color: '#b91c1c' }}>{monthlyNoShow}件</strong>
         </div>
       )}
     </div>

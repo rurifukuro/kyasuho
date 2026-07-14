@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KyCast, KyOrder, KyOrderItem, KyTenant } from '../lib/types';
+import { supabase } from '../lib/supabase';
 import { formatDate } from '../lib/timeUtils';
 import { fetchOrdersByDate, fetchOrderItems, fetchCastList } from './adminApi';
 
@@ -58,6 +59,26 @@ export function AdminOrders({ tenant }: { tenant: KyTenant }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // §24: Supabase Realtime — アプリ側のレジ操作をリアルタイム反映（デバウンス付き）
+  const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const channel = supabase
+      .channel(`ky-orders-admin-${tenant.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ky_orders', filter: `tenant_id=eq.${tenant.id}` },
+        () => {
+          if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+          reloadTimerRef.current = setTimeout(() => { void load(); }, 300);
+        },
+      )
+      .subscribe();
+    return () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      void supabase.removeChannel(channel);
+    };
+  }, [tenant.id, load]);
 
   const castNameById = new Map(casts.map((c) => [c.id, c.name]));
 

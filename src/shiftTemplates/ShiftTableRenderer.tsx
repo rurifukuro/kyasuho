@@ -7,15 +7,28 @@
 
 import type { CSSProperties } from 'react';
 import type { ShiftFontKey, ShiftPlacement, ShiftTemplateDefinition } from './definitions';
-import { MOTIF_CHARS } from './definitions';
+import { FONT_CATALOG, MOTIF_CHARS } from './definitions';
 
 function cellBgWithAlpha(hex: string, alpha?: number): string {
+  if (hex === 'transparent') return 'rgba(0,0,0,0)';
   if (alpha === undefined || alpha >= 1) return hex;
+  if (hex.startsWith('rgba')) return hex;
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   if (isNaN(r)) return hex;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function resolveTransparentBg(cellBg: string, alpha: number | undefined, isPreview: boolean): string {
+  if (cellBg === 'transparent') {
+    return isPreview ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0)';
+  }
+  return cellBgWithAlpha(cellBg, alpha);
+}
+
+function transparentBorder(cellBg: string, isPreview: boolean): string | undefined {
+  return isPreview && cellBg === 'transparent' ? '1px dashed rgba(150,150,150,0.5)' : undefined;
 }
 
 function outlineStyle(color: string): string {
@@ -25,7 +38,7 @@ function outlineStyle(color: string): string {
   const shadow = lum > 128 ? '#000000' : '#FFFFFF';
   return `1px 1px 2px ${shadow}, -1px -1px 2px ${shadow}, 1px -1px 2px ${shadow}, -1px 1px 2px ${shadow}`;
 }
-import type { ShiftDayData } from './shiftData';
+import type { ShiftDayData, ShiftEventDay } from './shiftData';
 import {
   WEEKDAY_LABELS,
   daysInMonth,
@@ -34,15 +47,16 @@ import {
   yearMonthLabel,
 } from './shiftData';
 
-/** 抽象フォントキー → CSSフォントスタック（日本語システムフォント） */
+/** 抽象フォントキー → CSSフォントスタック */
 export const FONT_STACKS: Record<ShiftFontKey, string> = {
   'sans-jp':
     "'Noto Sans JP', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo', sans-serif",
   'serif-jp':
     "'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', 'MS PMincho', serif",
   'rounded-jp':
-    "'Hiragino Maru Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Meiryo', sans-serif",
-};
+    "'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Noto Sans JP', sans-serif",
+  ...Object.fromEntries(FONT_CATALOG.map(f => [f.key, f.family])),
+} as Record<ShiftFontKey, string>;
 
 const PADDING = 48;
 
@@ -78,14 +92,20 @@ type Props = {
   dailyDate?: string; // 'YYYY-MM-DD'（daily-lineup用）
   bgImageUrl?: string | null; // §22-3: 店舗テンプレ背景画像
   placement?: ShiftPlacement | null; // §22-3: AI解析による配置情報
+  eventDays?: ShiftEventDay[];
+  pageInfo?: { page: number; total: number };
+  isPreview?: boolean; // §22-7: trueならtransparentセルをガイド表示
 };
 
-export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement }: Props) {
+export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, dailyDate, bgImageUrl, placement, eventDays, pageInfo, isPreview }: Props) {
+  const eventMap = new Map((eventDays ?? []).map((e) => [e.date, e.label]));
   const p = def.palette;
   const deco = def.decorations;
   const motif = deco.motif && deco.motif !== 'none' ? MOTIF_CHARS[deco.motif] : null;
   const headerFont = FONT_STACKS[def.fonts.header];
   const bodyFont = FONT_STACKS[def.fonts.body];
+  const isBand = deco.headerStyle === 'ribbon' || deco.headerStyle === 'banner';
+  const isBanner = deco.headerStyle === 'banner';
 
   const rootStyle: CSSProperties = {
     position: 'relative',
@@ -143,6 +163,9 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
         </>
       ) : null}
 
+      {/* 外周フレーム装飾（Rev76・店舗テンプレ背景時は背景側のデザインを尊重して非表示） */}
+      {!bgImageUrl ? <FrameLayer def={def} /> : null}
+
       {/* ヘッダー */}
       <div style={{ position: 'relative', textAlign: 'center', paddingBottom: 28 }}>
         {logoUrl ? (
@@ -159,21 +182,28 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
           <span
             style={{
               display: 'inline-block',
+              position: 'relative',
               fontFamily: headerFont,
               fontSize: 56,
               fontWeight: 700,
-              color: deco.headerStyle === 'ribbon' ? '#FFFFFF' : p.headerText,
-              backgroundColor: deco.headerStyle === 'ribbon' ? p.accent : undefined,
-              paddingTop: deco.headerStyle === 'ribbon' ? 8 : undefined,
-              paddingRight: deco.headerStyle === 'ribbon' ? 48 : undefined,
-              paddingBottom: deco.headerStyle === 'ribbon' ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
-              paddingLeft: deco.headerStyle === 'ribbon' ? 48 : undefined,
+              color: isBand ? '#FFFFFF' : p.headerText,
+              backgroundColor: isBand ? p.accent : undefined,
+              paddingTop: isBand ? 8 : undefined,
+              paddingRight: isBand ? 48 : undefined,
+              paddingBottom: isBand ? 8 : deco.headerStyle === 'underline' ? 10 : undefined,
+              paddingLeft: isBand ? 48 : undefined,
               borderRadius: deco.headerStyle === 'ribbon' ? deco.cornerRadius + 6 : undefined,
               borderBottom:
                 deco.headerStyle === 'underline' ? `5px solid ${p.accent}` : undefined,
               lineHeight: 1.25,
             }}
           >
+            {isBanner ? (
+              <>
+                <span style={bannerTailStyle(p.accent, 'left')} />
+                <span style={bannerTailStyle(p.accent, 'right')} />
+              </>
+            ) : null}
             {motif ? (
               <span style={{ fontSize: 34, verticalAlign: 'middle', marginRight: 20 }}>
                 {motif}
@@ -189,6 +219,11 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
             ) : null}
           </span>
         </div>
+        {pageInfo && pageInfo.total > 1 ? (
+          <div style={{ marginTop: 8, fontSize: 22, color: p.dayLabel, fontWeight: 600 }}>
+            {pageInfo.page}/{pageInfo.total}
+          </div>
+        ) : null}
       </div>
 
       {/* 本体 */}
@@ -200,15 +235,156 @@ export function ShiftTableRenderer({ def, days, yearMonth, storeName, logoUrl, d
           storeName={storeName}
           placement={placement}
           dailyDate={dailyDate}
+          isPreview={isPreview}
         />
       ) : def.layout === 'daily-lineup' && dailyDate ? (
-        <DailyLineup def={def} days={days} dailyDate={dailyDate} />
+        <DailyLineup def={def} days={days} dailyDate={dailyDate} eventMap={eventMap} />
       ) : def.layout === 'month-grid' ? (
-        <MonthGrid def={def} days={days} yearMonth={yearMonth} />
+        <MonthGrid def={def} days={days} yearMonth={yearMonth} eventMap={eventMap} />
       ) : (
-        <WeekRows def={def} days={days} />
+        <WeekRows def={def} days={days} eventMap={eventMap} />
       )}
     </div>
+  );
+}
+
+// ── banner見出し（Rev76）: 両端に切込みテールが付く帯 ──
+
+/** 帯の実高さ = fontSize56 × lineHeight1.25 + 縦padding8×2 */
+const BANNER_BAND_H = 86;
+
+function bannerTailStyle(accent: string, side: 'left' | 'right'): CSSProperties {
+  const style: CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    width: 0,
+    height: 0,
+    borderStyle: 'solid',
+    borderTopWidth: BANNER_BAND_H / 2,
+    borderBottomWidth: BANNER_BAND_H / 2,
+    borderTopColor: accent,
+    borderBottomColor: accent,
+    opacity: 0.85,
+  };
+  if (side === 'left') {
+    style.left = -34; // 帯と2px重ねて継ぎ目を消す（テール全幅36）
+    style.borderRightWidth = 22;
+    style.borderRightColor = accent;
+    style.borderLeftWidth = 14;
+    style.borderLeftColor = 'transparent'; // 透明側が切込みになる
+  } else {
+    style.right = -34;
+    style.borderLeftWidth = 22;
+    style.borderLeftColor = accent;
+    style.borderRightWidth = 14;
+    style.borderRightColor = 'transparent';
+  }
+  return style;
+}
+
+// ── 外周フレーム装飾（Rev76・frame: ShiftFrameStyle） ──
+
+function FrameLayer({ def }: { def: ShiftTemplateDefinition }) {
+  const frame = def.decorations.frame ?? 'none';
+  if (frame === 'none') return null;
+  const accent = def.palette.accent;
+  const radius = def.decorations.cornerRadius;
+  const base: CSSProperties = { position: 'absolute', pointerEvents: 'none' };
+
+  if (frame === 'double') {
+    return (
+      <>
+        <div
+          style={{
+            ...base,
+            top: 12,
+            left: 12,
+            right: 12,
+            bottom: 12,
+            border: `3px solid ${accent}`,
+            borderRadius: radius + 8,
+            opacity: 0.8,
+          }}
+        />
+        <div
+          style={{
+            ...base,
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: 20,
+            border: `1px solid ${accent}`,
+            borderRadius: radius + 4,
+            opacity: 0.55,
+          }}
+        />
+      </>
+    );
+  }
+
+  if (frame === 'dashed') {
+    return (
+      <div
+        style={{
+          ...base,
+          top: 14,
+          left: 14,
+          right: 14,
+          bottom: 14,
+          border: `3px dashed ${accent}`,
+          borderRadius: radius + 6,
+          opacity: 0.7,
+        }}
+      />
+    );
+  }
+
+  if (frame === 'lace') {
+    // 上下端に半円スカラップ（円の半分をルートの overflow:hidden で切ってレース風にする）
+    const dots = Array.from({ length: Math.ceil(def.size.w / 44) }, (_, i) => i);
+    const row = (edge: 'top' | 'bottom') => (
+      <div
+        style={{
+          ...base,
+          ...(edge === 'top' ? { top: -16 } : { bottom: -16 }),
+          left: 0,
+          right: 0,
+          height: 32,
+          display: 'flex',
+          justifyContent: 'space-around',
+        }}
+      >
+        {dots.map((i) => (
+          <div
+            key={i}
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: accent, opacity: 0.3 }}
+          />
+        ))}
+      </div>
+    );
+    return (
+      <>
+        {row('top')}
+        {row('bottom')}
+      </>
+    );
+  }
+
+  // corner-motif: 四隅にモチーフ文字（motif未指定テンプレは装飾記号にフォールバック）
+  const m = def.decorations.motif;
+  const ch = m && m !== 'none' ? MOTIF_CHARS[m] : '❖';
+  const corner = (pos: CSSProperties, key: string) => (
+    <div key={key} style={{ ...base, ...pos, fontSize: 60, lineHeight: 1, color: accent, opacity: 0.55 }}>
+      {ch}
+    </div>
+  );
+  return (
+    <>
+      {corner({ top: 14, left: 18 }, 'tl')}
+      {corner({ top: 14, right: 18 }, 'tr')}
+      {corner({ bottom: 14, left: 18 }, 'bl')}
+      {corner({ bottom: 14, right: 18 }, 'br')}
+    </>
   );
 }
 
@@ -218,10 +394,12 @@ function MonthGrid({
   def,
   days,
   yearMonth,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   yearMonth: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
@@ -297,12 +475,14 @@ function MonthGrid({
           const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
           const casts = byDate.get(date) ?? [];
           const wd = i % 7;
+          const eventLabel = eventMap.get(date);
+          const evColor = p.eventAccent ?? p.accent;
           return (
             <div
               key={date}
               style={{
                 backgroundColor: p.cellBg,
-                border: `1px solid ${p.cellBorder}`,
+                border: eventLabel ? `3px solid ${evColor}` : `1px solid ${p.cellBorder}`,
                 borderRadius: deco.cornerRadius,
                 padding: '4px 5px',
                 overflow: 'hidden',
@@ -310,6 +490,11 @@ function MonthGrid({
                 flexDirection: 'column',
               }}
             >
+              {eventLabel ? (
+                <div style={{ background: evColor, margin: '-4px -5px 3px', padding: '1px 5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+                </div>
+              ) : null}
               <div
                 style={{
                   fontSize: 18,
@@ -393,7 +578,7 @@ function wrChipsPerRow(s: WeekRowsSizes, colW: number): number {
   return Math.max(1, Math.floor((chipArea + s.chipGap) / (s.chipW + s.chipGap)));
 }
 
-function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayData[] }) {
+function WeekRows({ def, days, eventMap }: { def: ShiftTemplateDefinition; days: ShiftDayData[]; eventMap: Map<string, string> }) {
   const p = def.palette;
   const deco = def.decorations;
 
@@ -491,14 +676,21 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
             const wd = weekdayOf(d.date);
             const dayNum = Number(d.date.slice(8, 10));
             const monthNum = Number(d.date.slice(5, 7));
+            const eventLabel = eventMap.get(d.date);
+            const evColor = p.eventAccent ?? p.accent;
             const shown =
               d.casts.length <= maxChips
                 ? d.casts
                 : d.casts.slice(0, Math.max(1, maxChips - 1));
             const rest = d.casts.length - shown.length;
             return (
+              <div key={d.date}>
+              {eventLabel ? (
+                <div style={{ background: evColor, padding: '2px 10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: s.nameFs, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+                </div>
+              ) : null}
               <div
-                key={d.date}
                 style={{
                   display: 'flex',
                   alignItems: 'flex-start',
@@ -593,6 +785,7 @@ function WeekRows({ def, days }: { def: ShiftTemplateDefinition; days: ShiftDayD
                   ) : null}
                 </div>
               </div>
+              </div>
             );
           })}
         </div>
@@ -617,20 +810,25 @@ function DailyLineup({
   def,
   days,
   dailyDate,
+  eventMap,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
   dailyDate: string;
+  eventMap: Map<string, string>;
 }) {
   const p = def.palette;
   const deco = def.decorations;
   const dayData = days.find(d => d.date === dailyDate);
   const casts = dayData?.casts ?? [];
   const count = casts.length;
+  const eventLabel = eventMap.get(dailyDate);
+  const evColor = p.eventAccent ?? p.accent;
 
   const gap = deco.cellGap + 4;
   const availW = def.size.w - PADDING * 2;
-  const availH = def.size.h - PADDING * 2 - 140;
+  const eventBannerH = eventLabel ? 44 : 0;
+  const availH = def.size.h - PADDING * 2 - 140 - eventBannerH;
 
   const cols = count <= 2 ? count || 1 : count <= 4 ? 2 : count <= 9 ? 3 : count <= 16 ? 4 : 5;
   const maxVisible = cols * Math.floor((availH + gap) / (Math.floor((availW - gap * (cols - 1)) / cols) * 0.7 + gap));
@@ -644,34 +842,45 @@ function DailyLineup({
   const cellH = Math.min(Math.floor((availH - gap * (rows - 1)) / rows), cellW * 1.35);
   const photoSize = Math.min(cellW - 24, cellH - 80, 200);
 
+  const eventBanner = eventLabel ? (
+    <div style={{ background: evColor, borderRadius: deco.cornerRadius, padding: '6px 16px', textAlign: 'center', marginBottom: 8 }}>
+      <span style={{ fontSize: 20, fontWeight: 700, color: '#FFFFFF' }}>{eventLabel}</span>
+    </div>
+  ) : null;
+
   if (count === 0) {
     return (
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: p.dayLabel,
-          fontSize: 28,
-        }}
-      >
-        この日の出勤予定はありません
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {eventBanner}
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: p.dayLabel,
+            fontSize: 28,
+          }}
+        >
+          この日の出勤予定はありません
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        flex: 1,
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap,
-        alignContent: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      {eventBanner}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap,
+          alignContent: 'center',
+          justifyContent: 'center',
+        }}
+      >
       {shown.map((c, i) => (
         <div
           key={i}
@@ -765,11 +974,15 @@ function DailyLineup({
           </span>
         </div>
       )}
+      </div>
     </div>
   );
 }
 
 // ── カスタム配置レンダラー（§22-3: 店舗テンプレート画像＋AI検出配置） ──
+
+/** §22-8: セル矩形（px・inset適用済み） */
+type CellRectPx = { x: number; y: number; w: number; h: number };
 
 function CustomPlacement({
   def,
@@ -778,6 +991,7 @@ function CustomPlacement({
   storeName,
   placement: pl,
   dailyDate,
+  isPreview,
 }: {
   def: ShiftTemplateDefinition;
   days: ShiftDayData[];
@@ -785,6 +999,7 @@ function CustomPlacement({
   storeName: string;
   placement: ShiftPlacement;
   dailyDate?: string;
+  isPreview?: boolean;
 }) {
   const W = def.size.w;
   const H = def.size.h;
@@ -815,10 +1030,42 @@ function CustomPlacement({
     ? (days.find((d) => d.date === dailyDate)?.casts ?? [])
     : [];
 
-  const maxPerCell = Math.max(1, Math.floor((cellH - inset * 2 - 24) / 28));
+  const isTransparent = pl.cellBg === 'transparent';
+  const cellBgResolved = resolveTransparentBg(pl.cellBg, pl.cellBgAlpha, !!isPreview);
+  const cellBorder = transparentBorder(pl.cellBg, !!isPreview);
+
+  // §22-8: セル矩形（px・inset適用済み）。cellRects の上書きがあれば等分割より優先。
+  // row はヘッダー行を含むグリッド行インデックス。
+  const rectFor = (row: number, col: number): CellRectPx => {
+    const ovr = pl.cellRects?.[row * pl.cols + col];
+    if (ovr) {
+      return {
+        x: ovr.x * W + inset,
+        y: ovr.y * H + inset,
+        w: Math.max(8, ovr.w * W - inset * 2),
+        h: Math.max(8, ovr.h * H - inset * 2),
+      };
+    }
+    return {
+      x: gridX + col * cellW + inset,
+      y: gridY + row * cellH + inset,
+      w: cellW - inset * 2,
+      h: cellH - inset * 2,
+    };
+  };
 
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, width: W, height: H }}>
+      {/* §22-7: 透明セル注記バナー（プレビューのみ） */}
+      {isPreview && isTransparent ? (
+        <div style={{
+          position: 'absolute', top: 4, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 10, background: 'rgba(0,0,0,0.6)', color: '#fff',
+          padding: '4px 12px', borderRadius: 4, fontSize: 11, whiteSpace: 'nowrap',
+        }}>
+          透明セル：出力画像では完全に透明になります
+        </div>
+      ) : null}
       {/* タイトル領域: 元テキストを覆い、新しいタイトルを描画 */}
       <div
         style={{
@@ -827,7 +1074,8 @@ function CustomPlacement({
           top: titleY + inset,
           width: titleW - inset * 2,
           height: titleH - inset * 2,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved,
+          border: cellBorder,
           borderRadius: 8,
           display: 'flex',
           alignItems: 'center',
@@ -864,34 +1112,38 @@ function CustomPlacement({
 
       {/* ヘッダー行（曜日ラベル） */}
       {pl.hasHeaderRow && !isDaily
-        ? WEEKDAY_LABELS.map((w, ci) => (
-            <div
-              key={`hdr-${ci}`}
-              style={{
-                position: 'absolute',
-                left: gridX + ci * cellW + inset,
-                top: gridY + inset,
-                width: cellW - inset * 2,
-                height: cellH - inset * 2,
-                backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: Math.min(20, cellW * 0.12),
-                fontWeight: 700,
-                color: ci === 0 ? pl.accentColor : pl.textColor,
-                textShadow: pl.textOutline ? outlineStyle(ci === 0 ? pl.accentColor : pl.textColor) : undefined,
-              }}
-            >
-              {w}
-            </div>
-          ))
+        ? WEEKDAY_LABELS.map((w, ci) => {
+            const r = rectFor(0, ci);
+            return (
+              <div
+                key={`hdr-${ci}`}
+                style={{
+                  position: 'absolute',
+                  left: r.x,
+                  top: r.y,
+                  width: r.w,
+                  height: r.h,
+                  backgroundColor: cellBgResolved,
+                  border: cellBorder,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: Math.min(20, (r.w + inset * 2) * 0.12),
+                  fontWeight: 700,
+                  color: ci === 0 ? pl.accentColor : pl.textColor,
+                  textShadow: pl.textOutline ? outlineStyle(ci === 0 ? pl.accentColor : pl.textColor) : undefined,
+                }}
+              >
+                {w}
+              </div>
+            );
+          })
         : null}
 
       {/* データセル */}
       {isDaily
-        ? renderDailyCells(dailyCasts, pl, gridX, gridY + (pl.hasHeaderRow ? cellH : 0), cellW, cellH, inset, maxPerCell)
-        : renderMonthlyCells(byDate, yearMonth, total, offset, pl, gridX, gridY + dataRowStart * cellH, cellW, cellH, inset, maxPerCell)}
+        ? renderDailyCells(dailyCasts, pl, rectFor, dataRowStart, cellBgResolved, cellBorder)
+        : renderMonthlyCells(byDate, yearMonth, total, offset, pl, rectFor, dataRowStart, cellBgResolved, cellBorder)}
     </div>
   );
 }
@@ -902,12 +1154,10 @@ function renderMonthlyCells(
   total: number,
   offset: number,
   pl: ShiftPlacement,
-  startX: number,
-  startY: number,
-  cellW: number,
-  cellH: number,
-  inset: number,
-  maxPerCell: number,
+  rectFor: (row: number, col: number) => CellRectPx,
+  rowOffset: number,
+  cellBgResolved?: string,
+  cellBorder?: string,
 ): React.JSX.Element[] {
   const elements: React.JSX.Element[] = [];
   for (let day = 1; day <= total; day++) {
@@ -916,12 +1166,10 @@ function renderMonthlyCells(
     const row = Math.floor(idx / 7);
     const date = `${yearMonth}-${String(day).padStart(2, '0')}`;
     const casts = byDate.get(date) ?? [];
+    const { x, y, w, h } = rectFor(rowOffset + row, col);
+    const maxPerCell = Math.max(1, Math.floor((h - 24) / 28));
     const shown = casts.slice(0, maxPerCell);
     const rest = casts.length - shown.length;
-    const x = startX + col * cellW + inset;
-    const y = startY + row * cellH + inset;
-    const w = cellW - inset * 2;
-    const h = cellH - inset * 2;
     const nameFs = Math.min(15, w * 0.085);
     const timeFs = Math.min(12, w * 0.065);
 
@@ -935,7 +1183,8 @@ function renderMonthlyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved ?? cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          border: cellBorder,
           overflow: 'hidden',
           padding: '3px 5px',
           boxSizing: 'border-box',
@@ -992,25 +1241,20 @@ function renderMonthlyCells(
 function renderDailyCells(
   casts: ShiftDayData['casts'],
   pl: ShiftPlacement,
-  startX: number,
-  startY: number,
-  cellW: number,
-  cellH: number,
-  inset: number,
-  _maxPerCell: number,
+  rectFor: (row: number, col: number) => CellRectPx,
+  rowOffset: number,
+  cellBgResolved?: string,
+  cellBorder?: string,
 ): React.JSX.Element[] {
   const elements: React.JSX.Element[] = [];
   const totalSlots = pl.cols * pl.rows;
   const shown = casts.slice(0, totalSlots);
-  const photoSize = Math.min(cellW - inset * 2 - 16, cellH - inset * 2 - 60, 180);
 
   shown.forEach((c, i) => {
     const col = i % pl.cols;
     const row = Math.floor(i / pl.cols);
-    const x = startX + col * cellW + inset;
-    const y = startY + row * cellH + inset;
-    const w = cellW - inset * 2;
-    const h = cellH - inset * 2;
+    const { x, y, w, h } = rectFor(rowOffset + row, col);
+    const photoSize = Math.min(w - 16, h - 60, 180);
 
     elements.push(
       <div
@@ -1021,7 +1265,8 @@ function renderDailyCells(
           top: y,
           width: w,
           height: h,
-          backgroundColor: cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          backgroundColor: cellBgResolved ?? cellBgWithAlpha(pl.cellBg, pl.cellBgAlpha),
+          border: cellBorder,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

@@ -8,6 +8,15 @@ export interface KyTenant {
     openHours?: string;
     tel?: string;
     note?: string;
+    postalCode?: string;
+    theme?: {
+      primaryColor?: string;
+      accentColor?: string;
+      bgImageUrl?: string;
+      cardOpacity?: number;
+    };
+    /** 店舗独自の予約ページURL。未設定なら標準URL（rurifukuro.github.io）へフォールバック。 */
+    customReserveUrl?: string;
   };
   sns_links: { platform: string; url: string }[];
   prefecture: string;
@@ -16,7 +25,23 @@ export interface KyTenant {
   is_suspended: boolean;
   enable_bottle_keep: boolean;
   enable_vouchers: boolean;
+  timer_enabled: boolean;
+  timer_alert_minutes: number;
+  nomination_kinds_enabled: boolean;
+  sns_post_templates: SnsPostTemplates;
 }
+
+export type SnsPostTemplate = {
+  header: string;
+  group_heading: string;
+  line: string;
+  footer: string;
+};
+
+export type SnsPostTemplates = {
+  monthly?: SnsPostTemplate;
+  daily?: SnsPostTemplate;
+};
 
 export interface KyUnlockWindow {
   id: string;
@@ -34,10 +59,12 @@ export interface KyCast {
   name: string;
   name_kana: string;
   photo_url: string | null;
+  sns_links: { label: string; url: string }[];
   bio: string;
   accepts_nomination: boolean;
   sort_order: number;
-  user_id: string | null;
+  /** auth連携uid。管理面（authenticated）のみ取得＝anonの列GRANT外（0046）。 */
+  user_id?: string | null;
 }
 
 /** 経費（§27）。 */
@@ -49,6 +76,22 @@ export interface KyExpense {
   amount: number;
   memo: string;
   receipt_url: string | null;
+  source_recurring_id: string | null;
+}
+
+/** 定期固定経費テンプレート（§42）。 */
+export interface KyRecurringExpense {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category: string;
+  amount: number;
+  day_of_month: number;
+  start_month: string;
+  end_month: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 /** 席種・席料（§29）。 */
@@ -101,6 +144,16 @@ export interface KyReservation {
   status: 'reserved' | 'checked_in' | 'cancelled' | 'no_show';
 }
 
+/** 事前オーダー1行のスナップショット（§34(c)）。 */
+export interface KyPreorderItem {
+  menu_item_id: string;
+  category: string;
+  name: string;
+  price: number;
+  qty: number;
+  cast_id?: string | null;
+}
+
 /** 管理Web用＝予約の全列（客Webの KyReservation は anon の列レベルGRANTと同じ公開安全な列だけ）。 */
 export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   seat_no: number | null;
@@ -111,6 +164,8 @@ export interface KyReservationFull extends Omit<KyReservation, 'seat_no'> {
   seat_type_id: string | null;
   note: string;
   created_at: string;
+  preorder: KyPreorderItem[] | null;
+  menu_undecided: boolean;
 }
 
 /** 日別売上（ky_sales・テナント×日付で1行）。金額は円。 */
@@ -139,10 +194,17 @@ export interface KyMenuItem {
   category: KyMenuCategory;
   name: string;
   price: number;
+  remote_price: number | null;
   needs_cast: boolean;
   sort_order: number;
   is_active: boolean;
+  back_rate: number | null;
+  back_amount: number | null;
+  nomination_kind: string | null;
 }
+
+/** anon（客Web）が読めるメニュー列＝back_rate/back_amount を除く（0045 列GRANTと対で保守）。 */
+export type KyMenuItemPublic = Omit<KyMenuItem, 'back_rate' | 'back_amount'>;
 
 /** 伝票ステータス（§25-2）。 */
 export type KyOrderStatus = 'open' | 'closed' | 'void';
@@ -167,6 +229,7 @@ export interface KyOrder {
   change: number;
   payment_method: KyPaymentMethod;
   note: string;
+  set_deadline_at: string | null;
 }
 
 /** オーダー明細（ky_order_items・スナップショット）。 */
@@ -180,6 +243,7 @@ export interface KyOrderItem {
   price: number;
   qty: number;
   cast_id: string | null;
+  back_each: number | null;
 }
 
 export type KyAttendanceStatus = 'present' | 'late' | 'early_leave' | 'absent' | 'substitute';
@@ -200,6 +264,7 @@ export interface KyAttendance {
   check_in_at: string | null; // HH:MM（null=未入力）
   check_out_at: string | null;
   note: string;
+  edited_by_owner: boolean;
 }
 
 /** 給与計算設定（ky_payroll_settings・店一律・テナントで1行）。 */
@@ -208,8 +273,20 @@ export interface KyPayrollSettings {
   tenant_id: string;
   base_hourly_rate: number;
   nomination_back_rate: number;
-  drink_back_rate: number;
+  default_back_rate: number;
   late_deduction: number;
+  slide_enabled: boolean;
+}
+
+export type KySlideMetric = 'monthly_sales' | 'monthly_nominations';
+
+export interface KyHourlyRateTier {
+  id: string;
+  tenant_id: string;
+  metric: KySlideMetric;
+  threshold: number;
+  hourly_rate: number;
+  sort_order: number;
 }
 
 /** キャスト日別給与（ky_cast_payroll・キャスト×日付で1行）。金額は円・勤務時間は分単位。 */
@@ -223,7 +300,7 @@ export interface KyCastPayroll {
   nomination_count: number;
   nomination_back: number;
   drink_count: number;
-  drink_back: number;
+  menu_back: number;
   other_back: number;
   deductions: number;
   total_pay: number;
@@ -307,7 +384,7 @@ export type DayStatus = 'available' | 'low' | 'full';
 export interface MakeReservationResult {
   id?: string;
   seat_no?: number;
-  error?: 'no_available_seat' | 'not_unlocked';
+  error?: 'no_available_seat' | 'not_unlocked' | 'duplicate_contact' | 'cast_not_available' | 'no_seat_types' | 'bad_request';
 }
 
 export interface VerifyPinResult {
@@ -318,4 +395,108 @@ export interface VerifyPinResult {
 export interface CancelResult {
   ok: boolean;
   error?: 'not_found' | 'pin_mismatch' | 'not_cancellable' | 'too_many_attempts';
+}
+
+export type KyShiftRequestStatus = 'requested' | 'approved' | 'rejected';
+
+export interface KyShiftRequest {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  date: string;
+  start_at: string;
+  end_at: string;
+  note: string;
+  time_source: 'default' | 'custom';
+  status: KyShiftRequestStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KyShiftSubmission {
+  id: string;
+  tenant_id: string;
+  cast_id: string;
+  period_start: string;
+  period_end: string;
+  submitted_at: string;
+}
+
+export interface KyShiftReminderSettings {
+  tenant_id: string;
+  enabled: boolean;
+  period_type: string;
+  deadline_day: number;
+  remind_days_before: number;
+  repeat_daily: boolean;
+  remind_hour: number;
+  updated_at: string;
+}
+
+export interface KyPointSettings {
+  tenant_id: string;
+  enabled: boolean;
+  yen_per_point: number;
+  updated_at: string;
+}
+
+export interface KyPointReward {
+  id: string;
+  tenant_id: string;
+  points_required: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── 在庫管理（§47） ──────────────────────────────────────────────
+
+export type KyInventoryMoveKind = 'in' | 'sale' | 'adjust' | 'out';
+
+export interface KyInventoryItem {
+  id: string;
+  tenant_id: string;
+  name: string;
+  unit: string;
+  menu_item_id: string | null;
+  stock_qty: number;
+  alert_threshold: number | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KyInventoryMove {
+  id: string;
+  tenant_id: string;
+  item_id: string;
+  kind: KyInventoryMoveKind;
+  qty: number;
+  order_id: string | null;
+  memo: string;
+  created_at: string;
+}
+
+// ── 日報（§49-2） ──────────────────────────────────────────────
+
+export interface KyDailyReport {
+  id: string;
+  tenant_id: string;
+  business_date: string;
+  total_revenue: number;
+  order_count: number;
+  guest_count: number;
+  cast_summary: unknown[];
+  cash_expected: number;
+  cash_actual: number | null;
+  cash_diff: number | null;
+  memo: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  created_at: string;
+  updated_at: string;
 }

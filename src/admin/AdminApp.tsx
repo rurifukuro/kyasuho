@@ -21,7 +21,11 @@ import { AdminCastPerformance } from './AdminCastPerformance';
 import { AdminEvents } from './AdminEvents';
 import { AdminBottleKeep } from './AdminBottleKeep';
 import { AdminVouchers } from './AdminVouchers';
+import { AdminInventory } from './AdminInventory';
+import { AdminDailyReports } from './AdminDailyReports';
 import { AdminSettings } from './AdminSettings';
+import { AdminHelp } from './AdminHelp';
+import { AdminReports } from './AdminReports';
 import { AdminBilling } from './AdminBilling';
 import './admin.css';
 
@@ -37,7 +41,8 @@ export default function AdminApp() {
       setSession(data.session);
       setAuthReady(true);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'TOKEN_REFRESHED') return;
       setSession(next);
     });
     return () => {
@@ -51,6 +56,7 @@ export default function AdminApp() {
       setTenantError(null);
       return;
     }
+    if (tenant) return;
     setTenantLoading(true);
     setTenantError(null);
     try {
@@ -67,7 +73,7 @@ export default function AdminApp() {
     } finally {
       setTenantLoading(false);
     }
-  }, [session]);
+  }, [session, tenant]);
 
   useEffect(() => {
     void loadTenant();
@@ -131,8 +137,12 @@ export default function AdminApp() {
         <Route path="customers" element={<AdminCustomers tenant={tenant} />} />
         <Route path="cast-performance" element={<AdminCastPerformance tenant={tenant} />} />
         <Route path="events" element={<AdminEvents tenant={tenant} />} />
+        <Route path="inventory" element={<AdminInventory tenant={tenant} />} />
+        <Route path="daily-reports" element={<AdminDailyReports tenant={tenant} />} />
         <Route path="bottle-keep" element={<AdminBottleKeep tenant={tenant} />} />
         <Route path="vouchers" element={<AdminVouchers tenant={tenant} />} />
+        <Route path="help" element={<AdminHelp tenant={tenant} />} />
+        <Route path="reports" element={<AdminReports tenant={tenant} />} />
         <Route path="billing" element={<AdminBilling tenant={tenant} />} />
         <Route path="settings" element={<AdminSettings tenant={tenant} onTenantUpdate={handleTenantUpdate} />} />
         <Route path="*" element={<Navigate to="/admin/reservations" replace />} />

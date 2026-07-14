@@ -1,6 +1,6 @@
 // web/src/admin/AdminShiftImage.tsx — シフト表画像生成（SPEC §3-I／§22・Web=主戦場）
 //
-// テンプレギャラリー（20種）→ プレビュー → カスタマイズ（色・モチーフ・レイアウト・サイズ）
+// テンプレギャラリー（40種）→ プレビュー → カスタマイズ（色・モチーフ・レイアウト・サイズ）
 // → PNGダウンロード（html-to-image・等倍オフスクリーンノードをキャプチャ）
 // → お気に入り保存（ky_shift_templates.custom_settings に上書き差分を保存）
 
@@ -8,9 +8,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toPng } from 'html-to-image';
 import type { KyCast, KyShift, KyShiftTemplate, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import { reserveUrlFor } from '../lib/reserveUrl';
 import {
   addShiftTemplate,
   fetchCastList,
+  fetchEvents,
+  fetchPayrollSettings,
   fetchShiftTemplateList,
   fetchShiftsByMonth,
   removeShiftTemplate,
@@ -18,6 +21,7 @@ import {
   uploadShiftBackground,
 } from './adminApi';
 import type {
+  ShiftFontKey,
   ShiftLayout,
   ShiftMotif,
   ShiftPlacement,
@@ -26,15 +30,33 @@ import type {
 } from '../shiftTemplates/definitions';
 import {
   CATEGORY_LABELS,
+  FONT_CATALOG,
+  FONT_CATEGORY_LABELS,
   MOTIF_CHARS,
   SHIFT_TEMPLATES,
   defaultFreeformPlacement,
   findTemplate,
+  normalizeFontKey,
 } from '../shiftTemplates/definitions';
+import { FONT_STACKS } from '../shiftTemplates/ShiftTableRenderer';
 import { detectGridFromImage } from '../shiftTemplates/gridDetect';
-import { buildShiftDays } from '../shiftTemplates/shiftData';
+import { buildShiftDays, splitDailyPages } from '../shiftTemplates/shiftData';
+import type { ShiftEventDay } from '../shiftTemplates/shiftData';
 import { buildAiDefinition, extractAiDesign } from '../shiftTemplates/aiDesign';
+import {
+  buildDailyPostText as buildDailyPost,
+  buildMonthlyPostText,
+  DEFAULT_DAILY_TEMPLATE,
+  DEFAULT_MONTHLY_TEMPLATE,
+  estimateXLength,
+  extractXHandle,
+} from '../domain/sns/buildPostText';
+import type { PostCastEntry } from '../domain/sns/buildPostText';
+import { updateSnsPostTemplates } from './adminApi';
+import type { KyPayrollSettings, SnsPostTemplate, SnsPostTemplates } from '../lib/types';
+import { estimateLaborCost } from '../domain/payroll/estimateLaborCost';
 import { ShiftTableRenderer } from '../shiftTemplates/ShiftTableRenderer';
+import { ShiftPreviewOverlay } from './ShiftPreviewOverlay';
 
 const DEFAULT_TEMPLATE: ShiftTemplateDefinition = SHIFT_TEMPLATES[0]!;
 
@@ -61,9 +83,23 @@ type ShiftOverrides = {
   castName?: string;
   motif?: ShiftMotif;
   layout?: ShiftLayout;
+  fontHeader?: ShiftFontKey;
+  fontBody?: ShiftFontKey;
 };
 
-const MOTIF_OPTIONS: ShiftMotif[] = ['none', 'stars', 'hearts', 'flowers', 'sakura', 'lightning'];
+const MOTIF_OPTIONS: ShiftMotif[] = [
+  'none',
+  'stars',
+  'hearts',
+  'flowers',
+  'sakura',
+  'lightning',
+  'ribbon',
+  'cross',
+  'moon',
+  'crown',
+  'snow',
+];
 
 function currentMonth(): string {
   return formatDate(new Date()).slice(0, 7);
@@ -97,6 +133,10 @@ function parseCustomSettings(cs: Record<string, unknown>): { ov: ShiftOverrides;
   if (motif && (MOTIF_OPTIONS as string[]).includes(motif)) ov.motif = motif as ShiftMotif;
   const layout = str(cs['layout']);
   if (layout === 'month-grid' || layout === 'week-rows') ov.layout = layout;
+  const fontHeader = str(cs['fontHeader']);
+  if (fontHeader && fontHeader in FONT_STACKS) ov.fontHeader = fontHeader as ShiftFontKey;
+  const fontBody = str(cs['fontBody']);
+  if (fontBody && fontBody in FONT_STACKS) ov.fontBody = fontBody as ShiftFontKey;
   const aspect: Aspect = cs['aspect'] === '9:16' ? '9:16' : '4:5';
   return { ov, aspect };
 }
@@ -111,6 +151,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
   const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly');
   const [dailyDate, setDailyDate] = useState(formatDate(new Date()));
+  const [dailyPageIdx, setDailyPageIdx] = useState(0);
 
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE.id);
   const [ov, setOv] = useState<ShiftOverrides>({});
@@ -127,26 +168,53 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
   const [analyzeBusy, setAnalyzeBusy] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
+  const [eventDays, setEventDays] = useState<ShiftEventDay[]>([]);
+  const [payrollSettings, setPayrollSettings] = useState<KyPayrollSettings | null>(null);
+
   // AIデザイン（§22: Edge Function ky-shift-design → buildAiDefinition で完全定義化）
+
   const [aiDef, setAiDef] = useState<ShiftTemplateDefinition | null>(null);
   const [aiMood, setAiMood] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const [showTmplEditor, setShowTmplEditor] = useState(false);
+
   const exportRef = useRef<HTMLDivElement>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+
+  const handlePreviewClick = useCallback(async () => {
+    const node = exportRef.current;
+    if (!node) return;
+    try {
+      const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
+      setPreviewSrc(dataUrl);
+    } catch (e) {
+      console.warn('[kyasuho] preview capture failed:', e);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [shiftRows, castRows, favRows] = await Promise.all([
+      const [shiftRows, castRows, favRows, evRows, ps] = await Promise.all([
         fetchShiftsByMonth(tenant.id, yearMonth),
         fetchCastList(tenant.id),
         fetchShiftTemplateList(tenant.id),
+        fetchEvents(tenant.id),
+        fetchPayrollSettings(tenant.id).catch(() => null),
       ]);
       setShifts(shiftRows);
       setCasts(castRows);
       setFavorites(favRows);
+      setPayrollSettings(ps);
+      const ym = yearMonth;
+      setEventDays(
+        evRows
+          .filter(e => e.event_date.startsWith(`${ym}-`))
+          .map(e => ({ date: e.event_date, label: e.title })),
+      );
     } catch (e) {
       console.warn('[kyasuho] fetchShiftsByMonth failed:', e);
       setError('シフトデータの取得に失敗しました。再読み込みしてください。');
@@ -179,6 +247,29 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     return buildShiftDays(flatRows, yearMonth);
   }, [shifts, castById, yearMonth]);
 
+  const laborEstimate = useMemo(() => {
+    if (!payrollSettings?.base_hourly_rate) return null;
+    const allShifts = days.flatMap(d => d.casts.map(c => ({ start: c.start, end: c.end })));
+    if (allShifts.length === 0) return null;
+    return estimateLaborCost(allShifts, payrollSettings.base_hourly_rate);
+  }, [days, payrollSettings]);
+
+  const dailyPages = useMemo(() => {
+    if (viewMode !== 'daily') return [];
+    const dayData = days.find(d => d.date === dailyDate);
+    if (!dayData) return [{ date: dailyDate, casts: [] as typeof days[0]['casts'] }];
+    return splitDailyPages(dayData);
+  }, [days, dailyDate, viewMode]);
+
+  const dailyTotalPages = dailyPages.length;
+  const safeDailyPage = Math.min(dailyPageIdx, dailyTotalPages - 1);
+  const currentDailyPage = dailyPages[Math.max(0, safeDailyPage)];
+
+  const dailyDaysForPage = useMemo(() => {
+    if (!currentDailyPage) return days;
+    return [currentDailyPage];
+  }, [currentDailyPage, days]);
+
   const base =
     aiDef && templateId === aiDef.id ? aiDef : (findTemplate(templateId) ?? DEFAULT_TEMPLATE);
 
@@ -194,14 +285,40 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     if (ov.headerText) palette.headerText = ov.headerText;
     if (ov.castName) palette.castName = ov.castName;
     const layout = viewMode === 'daily' ? 'daily-lineup' as const : (ov.layout ?? base.layout);
+    const fonts = {
+      header: ov.fontHeader ?? base.fonts.header,
+      body: ov.fontBody ?? base.fonts.body,
+    };
     return {
       ...base,
       size,
       palette,
       layout,
+      fonts,
       decorations: { ...base.decorations, motif: ov.motif ?? base.decorations.motif ?? 'none' },
     };
   }, [base, ov, aspect, viewMode]);
+
+  const reserveUrl = reserveUrlFor(tenant);
+  const buildSnsText = useCallback(() => {
+    const templates = tenant.sns_post_templates ?? {};
+    if (viewMode === 'daily') {
+      const tmpl = templates.daily ?? DEFAULT_DAILY_TEMPLATE;
+      const dayData = days.find(d => d.date === dailyDate);
+      const entries: PostCastEntry[] = (dayData?.casts ?? []).map(c => {
+        const cast = casts.find(cc => cc.name === c.name);
+        return {
+          name: c.name,
+          nameKana: cast?.name_kana ?? c.name,
+          start: c.start,
+          xHandle: extractXHandle(cast?.sns_links ?? []),
+        };
+      });
+      return buildDailyPost(tmpl, tenant.name, dailyDate, entries, reserveUrl);
+    }
+    const tmpl = templates.monthly ?? DEFAULT_MONTHLY_TEMPLATE;
+    return buildMonthlyPostText(tmpl, tenant.name, yearMonth, reserveUrl);
+  }, [viewMode, tenant, days, dailyDate, casts, yearMonth, reserveUrl]);
 
   const hasCustom = Object.keys(ov).length > 0;
 
@@ -210,17 +327,35 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     setOv({}); // テンプレを切り替えたらカスタマイズはリセット（そのテンプレ本来の姿を見せる）
   };
 
+  const hasTransparentCell = placement?.cellBg === 'transparent';
+
   const handleDownload = async () => {
     const node = exportRef.current;
     if (!node || exporting) return;
+
+    let useWhiteBg = false;
+    if (hasTransparentCell) {
+      useWhiteBg = !window.confirm(
+        '透明セルを使用中です。SNSでは黒背景で表示される場合があります。\n\n' +
+        '「OK」→ 透明のままダウンロード\n' +
+        '「キャンセル」→ 白背景でダウンロード',
+      );
+    }
+
     setExporting(true);
     try {
-      const dataUrl = await toPng(node, { pixelRatio: 1, cacheBust: true });
+      const opts: Parameters<typeof toPng>[1] = { pixelRatio: 1, cacheBust: true };
+      if (useWhiteBg) opts.backgroundColor = '#FFFFFF';
+      const dataUrl = await toPng(node, opts);
       const a = document.createElement('a');
       a.href = dataUrl;
-      a.download = viewMode === 'daily'
-        ? `kyasuho_daily_${dailyDate}.png`
-        : `kyasuho_shift_${yearMonth}.png`;
+      if (viewMode === 'daily' && dailyTotalPages > 1) {
+        a.download = `kyasuho_daily_${dailyDate}_${safeDailyPage + 1}.png`;
+      } else if (viewMode === 'daily') {
+        a.download = `kyasuho_daily_${dailyDate}.png`;
+      } else {
+        a.download = `kyasuho_shift_${yearMonth}.png`;
+      }
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -264,7 +399,11 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
     try {
       const isAi = base.category === 'ai';
       const cs = isAi ? { ...ov, aspect, ai: extractAiDesign(base) } : { ...ov, aspect };
-      if (bgImageUrl) (cs as Record<string, unknown>)['bgImageUrl'] = bgImageUrl;
+      if (bgImageUrl) {
+        (cs as Record<string, unknown>)['bgImageUrl'] = bgImageUrl;
+        // 'shop'保存でもフォント等の元テンプレを復元できるようベースIDを保存（AIベース時は ai を優先）
+        if (!isAi) (cs as Record<string, unknown>)['baseTemplateId'] = base.id;
+      }
       if (placement) (cs as Record<string, unknown>)['placement'] = placement;
       const tplKey = bgImageUrl ? 'shop' : isAi ? 'ai' : base.id;
       await addShiftTemplate({
@@ -301,6 +440,17 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
       return;
     }
     if (fav.template_key === 'shop') {
+      // 保存時のベーステンプレを復元（フォント等は def 経由で効くため）。無ければ現状維持＝後方互換
+      const aiRaw = fav.custom_settings['ai'];
+      if (aiRaw && typeof aiRaw === 'object') {
+        const aiBase = buildAiDefinition(aiRaw, `ai-${Date.now()}`);
+        setAiDef(aiBase);
+        setTemplateId(aiBase.id);
+      } else {
+        const baseId = fav.custom_settings['baseTemplateId'];
+        const baseDef = typeof baseId === 'string' ? findTemplate(baseId) : undefined;
+        if (baseDef) setTemplateId(baseDef.id);
+      }
       setOv(parsed.ov);
       setAspect(parsed.aspect);
       return;
@@ -392,17 +542,20 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               const nd = shiftDay(dailyDate, -1);
               setDailyDate(nd);
               setYearMonth(nd.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               ◀ 前日
             </button>
             <input type="date" value={dailyDate} onChange={(e) => {
               setDailyDate(e.target.value);
               setYearMonth(e.target.value.slice(0, 7));
+              setDailyPageIdx(0);
             }} />
             <button type="button" className="admin-btn" onClick={() => {
               const nd = shiftDay(dailyDate, 1);
               setDailyDate(nd);
               setYearMonth(nd.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               翌日 ▶
             </button>
@@ -410,9 +563,19 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
               const today = formatDate(new Date());
               setDailyDate(today);
               setYearMonth(today.slice(0, 7));
+              setDailyPageIdx(0);
             }}>
               今日
             </button>
+            {dailyTotalPages > 1 ? (
+              <>
+                <span style={{ margin: '0 8px', color: '#888' }}>|</span>
+                <button type="button" className="admin-btn" disabled={safeDailyPage <= 0} onClick={() => setDailyPageIdx(i => Math.max(0, i - 1))}>◀</button>
+                <span style={{ margin: '0 6px', fontWeight: 600 }}>{safeDailyPage + 1}/{dailyTotalPages}</span>
+                <button type="button" className="admin-btn" disabled={safeDailyPage >= dailyTotalPages - 1} onClick={() => setDailyPageIdx(i => i + 1)}>▶</button>
+                {dailyTotalPages >= 5 ? <span style={{ margin: '0 6px', color: '#d97706', fontSize: 13 }}>⚠ 5枚以上（X投稿は4枚まで）</span> : null}
+              </>
+            ) : null}
           </>
         )}
         <span className="admin-spacer" />
@@ -426,6 +589,13 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         </button>
       </div>
 
+      {laborEstimate && (
+        <div style={{ padding: '8px 14px', background: '#f0fdf4', borderRadius: 8, fontSize: 13, marginBottom: 8, display: 'flex', gap: 16, alignItems: 'center' }}>
+          <span>💰 見込み人件費（時給 ¥{payrollSettings!.base_hourly_rate.toLocaleString()} × {Math.floor(laborEstimate.totalMinutes / 60)}時間{laborEstimate.totalMinutes % 60 > 0 ? `${laborEstimate.totalMinutes % 60}分` : ''}）</span>
+          <strong style={{ color: '#15803d' }}>¥{laborEstimate.estimatedCost.toLocaleString()}</strong>
+        </div>
+      )}
+
       {error ? <p className="admin-error">{error}</p> : null}
       {!loading && days.length === 0 ? (
         <p className="admin-note">
@@ -438,14 +608,18 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         <div className="shift-preview-col">
           <div
             className="shift-preview-box"
-            style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE }}
+            style={{ width: def.size.w * PREVIEW_SCALE, height: def.size.h * PREVIEW_SCALE, cursor: 'zoom-in' }}
+            onClick={() => void handlePreviewClick()}
+            role="button"
+            tabIndex={0}
+            aria-label="クリックで拡大表示"
           >
             <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
-              <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} />
+              <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} isPreview />
             </div>
           </div>
           <p className="admin-note">
-            プレビュー（縮小表示）。ダウンロードは {def.size.w}×{def.size.h}px で出力されます。
+            クリックで拡大表示。ダウンロードは {def.size.w}×{def.size.h}px で出力されます。
           </p>
         </div>
 
@@ -502,7 +676,7 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
 
           <div className="admin-card" style={{ marginBottom: 0 }}>
             <div className="admin-section-title" style={{ margin: '0 0 8px' }}>
-              テンプレート（20種）
+              テンプレート（{SHIFT_TEMPLATES.length}種）
             </div>
             {GROUPED.map(([cat, list]) => (
               <div key={cat}>
@@ -591,6 +765,54 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="shift-control-row">
+              <span className="shift-control-label">ヘッダーフォント</span>
+              <select
+                className="admin-select"
+                value={normalizeFontKey(ov.fontHeader ?? base.fonts.header)}
+                onChange={(e) => {
+                  const v = e.target.value as ShiftFontKey;
+                  const baseNorm = normalizeFontKey(base.fonts.header);
+                  setOv((o) => v === baseNorm ? (() => { const { fontHeader: _, ...rest } = o; return rest; })() : { ...o, fontHeader: v });
+                }}
+                style={{ fontFamily: FONT_STACKS[ov.fontHeader ?? base.fonts.header] }}
+              >
+                {Object.entries(FONT_CATEGORY_LABELS).map(([cat, catLabel]) => (
+                  <optgroup key={cat} label={catLabel}>
+                    {FONT_CATALOG.filter(f => f.category === cat).map(f => (
+                      <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div className="shift-control-row">
+              <span className="shift-control-label">本文フォント</span>
+              <select
+                className="admin-select"
+                value={normalizeFontKey(ov.fontBody ?? base.fonts.body)}
+                onChange={(e) => {
+                  const v = e.target.value as ShiftFontKey;
+                  const baseNorm = normalizeFontKey(base.fonts.body);
+                  setOv((o) => v === baseNorm ? (() => { const { fontBody: _, ...rest } = o; return rest; })() : { ...o, fontBody: v });
+                }}
+                style={{ fontFamily: FONT_STACKS[ov.fontBody ?? base.fonts.body] }}
+              >
+                {Object.entries(FONT_CATEGORY_LABELS).map(([cat, catLabel]) => (
+                  <optgroup key={cat} label={catLabel}>
+                    {FONT_CATALOG.filter(f => f.category === cat).map(f => (
+                      <option key={f.key} value={f.key} style={{ fontFamily: f.family }}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </div>
 
             <div className="shift-control-row">
@@ -765,20 +987,22 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
         </div>
       </div>
 
-      {/* SNS投稿（§31） */}
+      {/* SNS投稿（§31＋§40-3） */}
       <div className="admin-card" style={{ marginTop: 16 }}>
         <div className="admin-section-title" style={{ margin: '0 0 8px' }}>SNS投稿</div>
         <p className="admin-note" style={{ marginTop: 0 }}>
           シフト表画像をダウンロードした後、SNSで共有できます。投稿文をコピーしてご利用ください。
         </p>
+        <div style={{ marginTop: 8, padding: 12, background: '#f8f9fa', borderRadius: 8, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#333' }}>
+          {buildSnsText()}
+          {(() => { const len = estimateXLength(buildSnsText()); return len > 280 ? <div style={{ marginTop: 8, color: '#d97706', fontWeight: 600 }}>⚠ X字数目安: {len}/280（超過。投稿時に編集してください）</div> : null; })()}
+        </div>
         <div className="admin-btn-row" style={{ marginTop: 8 }}>
           <button
             type="button"
             className="admin-btn primary"
             onClick={() => {
-              const text = viewMode === 'daily'
-                ? buildDailyPostText(dailyDate, days, tenant.slug)
-                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = buildSnsText();
               window.open(`https://x.com/intent/post?text=${encodeURIComponent(text)}`, '_blank');
             }}
           >
@@ -788,47 +1012,50 @@ export function AdminShiftImage({ tenant }: { tenant: KyTenant }) {
             type="button"
             className="admin-btn"
             onClick={() => {
-              const text = viewMode === 'daily'
-                ? buildDailyPostText(dailyDate, days, tenant.slug)
-                : buildWebPostText(yearMonth, casts, shifts, tenant.slug);
+              const text = buildSnsText();
               void navigator.clipboard.writeText(text).then(() => window.alert('投稿文をコピーしました'));
             }}
           >
             投稿文をコピー
           </button>
+          <button type="button" className="admin-btn" onClick={() => setShowTmplEditor(true)}>
+            テンプレ編集
+          </button>
         </div>
       </div>
+
+      {showTmplEditor ? (
+        <SnsTemplateEditor
+          templates={tenant.sns_post_templates ?? {}}
+          tenantId={tenant.id}
+          storeName={tenant.name}
+          yearMonth={yearMonth}
+          dailyDate={dailyDate}
+          days={days}
+          casts={casts}
+          reserveUrl={reserveUrl}
+          onClose={() => setShowTmplEditor(false)}
+          onSave={(t) => {
+            (tenant as unknown as Record<string, unknown>).sns_post_templates = t;
+            setShowTmplEditor(false);
+          }}
+        />
+      ) : null}
 
       {/* PNG出力用の等倍オフスクリーンノード（プレビューのscaleを避けて確実に実寸で撮る） */}
       <div style={{ position: 'fixed', left: -20000, top: 0 }} aria-hidden="true">
         <div ref={exportRef}>
-          <ShiftTableRenderer def={def} days={days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} />
+          <ShiftTableRenderer def={def} days={viewMode === 'daily' ? dailyDaysForPage : days} yearMonth={yearMonth} storeName={tenant.name} dailyDate={viewMode === 'daily' ? dailyDate : undefined} bgImageUrl={bgImageUrl} placement={placement} eventDays={eventDays} pageInfo={viewMode === 'daily' && dailyTotalPages > 1 ? { page: safeDailyPage + 1, total: dailyTotalPages } : undefined} />
         </div>
       </div>
+
+      {previewSrc && (
+        <ShiftPreviewOverlay src={previewSrc} onClose={() => setPreviewSrc(null)} />
+      )}
     </div>
   );
 }
 
-function buildWebPostText(
-  yearMonth: string,
-  casts: KyCast[],
-  shifts: KyShift[],
-  slug: string,
-): string {
-  const [y, m] = yearMonth.split('-').map(Number);
-  const monthLabel = `${y}年${m}月`;
-  const castIds = [...new Set(shifts.map(s => s.cast_id))];
-  const names = castIds
-    .map(id => casts.find(c => c.id === id)?.name)
-    .filter(Boolean)
-    .join('・');
-  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
-  const lines = [`${monthLabel}のシフトが出ました！`];
-  if (names) lines.push(`出勤キャスト: ${names}`);
-  lines.push('');
-  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
-  return lines.join('\n');
-}
 
 function PlacementEditor({
   placement: pl,
@@ -837,10 +1064,49 @@ function PlacementEditor({
   placement: ShiftPlacement;
   onChange: (p: ShiftPlacement) => void;
 }) {
+  // §22-8: セル個別調整（ロック解除）で選択中のセルindex（行×cols＋列・ヘッダー行含む）
+  const [cellSel, setCellSel] = useState<number | null>(null);
+
   const setGrid = (key: keyof ShiftPlacement['gridArea'], v: number) =>
     onChange({ ...pl, gridArea: { ...pl.gridArea, [key]: v } });
   const setTitle = (key: keyof ShiftPlacement['titleArea'], v: number) =>
     onChange({ ...pl, titleArea: { ...pl.titleArea, [key]: v } });
+
+  const totalRows = pl.rows + (pl.hasHeaderRow ? 1 : 0);
+  const unlockCount = Object.keys(pl.cellRects ?? {}).length;
+
+  // セルの既定矩形（グリッド等分割・0-1比率）＝ロック解除の初期値
+  const defaultRect = (idx: number) => {
+    const row = Math.floor(idx / pl.cols);
+    const col = idx % pl.cols;
+    return {
+      x: pl.gridArea.x + (col * pl.gridArea.w) / pl.cols,
+      y: pl.gridArea.y + (row * pl.gridArea.h) / totalRows,
+      w: pl.gridArea.w / pl.cols,
+      h: pl.gridArea.h / totalRows,
+    };
+  };
+  const setCellRect = (idx: number, key: 'x' | 'y' | 'w' | 'h', v: number) => {
+    const cur = pl.cellRects?.[idx] ?? defaultRect(idx);
+    onChange({ ...pl, cellRects: { ...pl.cellRects, [idx]: { ...cur, [key]: v } } });
+  };
+  const resetCell = (idx: number) => {
+    if (!pl.cellRects?.[idx]) return;
+    const next = { ...pl.cellRects };
+    delete next[idx];
+    onChange({ ...pl, cellRects: Object.keys(next).length > 0 ? next : undefined });
+  };
+  // 列数・行数・ヘッダー変更＝セルindexの意味が変わるため個別調整はリセット
+  const changeStructure = (patch: Partial<ShiftPlacement>) => {
+    setCellSel(null);
+    onChange({ ...pl, ...patch, cellRects: undefined });
+  };
+  const cellLabel = (idx: number) => {
+    const row = Math.floor(idx / pl.cols);
+    const col = (idx % pl.cols) + 1;
+    if (pl.hasHeaderRow && row === 0) return `ヘッダー行 ${col}列目`;
+    return `${row + (pl.hasHeaderRow ? 0 : 1)}行目 ${col}列目`;
+  };
 
   return (
     <div className="placement-editor">
@@ -866,22 +1132,76 @@ function PlacementEditor({
         行列・ヘッダー
       </div>
       <div className="placement-slider-grid">
-        <label>列数 <input type="range" min="1" max="14" value={pl.cols} onChange={(e) => onChange({ ...pl, cols: Number(e.target.value) })} /> {pl.cols}</label>
-        <label>行数 <input type="range" min="1" max="10" value={pl.rows} onChange={(e) => onChange({ ...pl, rows: Number(e.target.value) })} /> {pl.rows}</label>
+        <label>列数 <input type="range" min="1" max="14" value={pl.cols} onChange={(e) => changeStructure({ cols: Number(e.target.value) })} /> {pl.cols}</label>
+        <label>行数 <input type="range" min="1" max="10" value={pl.rows} onChange={(e) => changeStructure({ rows: Number(e.target.value) })} /> {pl.rows}</label>
         <label>余白 <input type="range" min="0" max="10" value={pl.cellInset} onChange={(e) => onChange({ ...pl, cellInset: Number(e.target.value) })} /> {pl.cellInset}px</label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={pl.hasHeaderRow} onChange={(e) => onChange({ ...pl, hasHeaderRow: e.target.checked })} />
+          <input type="checkbox" checked={pl.hasHeaderRow} onChange={(e) => changeStructure({ hasHeaderRow: e.target.checked })} />
           ヘッダー行あり
         </label>
       </div>
+      <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
+        セル個別調整（ロック解除）{unlockCount > 0 ? ` — 調整済み ${unlockCount}セル` : ''}
+      </div>
+      <p className="admin-note" style={{ margin: '0 0 6px' }}>
+        マスをクリックして選ぶと、そのセルだけ位置とサイズを自由に動かせます（●＝調整済み）。列数・行数・ヘッダーを変えると個別調整はリセットされます。
+      </p>
+      <div className="cell-pick-grid" style={{ gridTemplateColumns: `repeat(${pl.cols}, 1fr)` }}>
+        {Array.from({ length: totalRows * pl.cols }, (_, idx) => (
+          <button
+            key={idx}
+            type="button"
+            className={`cell-pick${cellSel === idx ? ' selected' : ''}${pl.cellRects?.[idx] ? ' edited' : ''}`}
+            title={cellLabel(idx)}
+            aria-label={cellLabel(idx)}
+            onClick={() => setCellSel(cellSel === idx ? null : idx)}
+          >
+            {pl.cellRects?.[idx] ? '●' : ''}
+          </button>
+        ))}
+      </div>
+      {cellSel != null && cellSel < totalRows * pl.cols ? (() => {
+        const r = pl.cellRects?.[cellSel] ?? defaultRect(cellSel);
+        return (
+          <>
+            <div className="admin-note" style={{ margin: '6px 0 4px', fontWeight: 600 }}>
+              選択中: {cellLabel(cellSel)}
+            </div>
+            <div className="placement-slider-grid">
+              <label>X <input type="range" min="0" max="1000" value={Math.round(r.x * 1000)} onChange={(e) => setCellRect(cellSel, 'x', Number(e.target.value) / 1000)} /> {(r.x * 100).toFixed(1)}%</label>
+              <label>Y <input type="range" min="0" max="1000" value={Math.round(r.y * 1000)} onChange={(e) => setCellRect(cellSel, 'y', Number(e.target.value) / 1000)} /> {(r.y * 100).toFixed(1)}%</label>
+              <label>幅 <input type="range" min="10" max="1000" value={Math.round(r.w * 1000)} onChange={(e) => setCellRect(cellSel, 'w', Number(e.target.value) / 1000)} /> {(r.w * 100).toFixed(1)}%</label>
+              <label>高さ <input type="range" min="10" max="1000" value={Math.round(r.h * 1000)} onChange={(e) => setCellRect(cellSel, 'h', Number(e.target.value) / 1000)} /> {(r.h * 100).toFixed(1)}%</label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              <button type="button" className="admin-btn" disabled={!pl.cellRects?.[cellSel]} onClick={() => resetCell(cellSel)}>
+                このセルを元に戻す
+              </button>
+              <button type="button" className="admin-btn" disabled={unlockCount === 0} onClick={() => { setCellSel(null); onChange({ ...pl, cellRects: undefined }); }}>
+                全セルを元に戻す
+              </button>
+            </div>
+          </>
+        );
+      })() : null}
       <div className="admin-section-title" style={{ margin: '8px 0 6px', fontSize: 13 }}>
         配色
       </div>
       <div className="shift-color-row">
         <label className="shift-color-item">
           セル背景
-          <input type="color" value={pl.cellBg} onChange={(e) => onChange({ ...pl, cellBg: e.target.value })} />
+          <input type="color" value={pl.cellBg === 'transparent' ? '#ffffff' : pl.cellBg} disabled={pl.cellBg === 'transparent'} onChange={(e) => onChange({ ...pl, cellBg: e.target.value })} />
         </label>
+        <div className="shift-color-item">
+          透明
+          <button
+            type="button"
+            className={`transparent-swatch${pl.cellBg === 'transparent' ? ' selected' : ''}`}
+            aria-pressed={pl.cellBg === 'transparent'}
+            title={pl.cellBg === 'transparent' ? '透明を解除（白に戻す）' : 'セル背景を透明にする'}
+            onClick={() => onChange({ ...pl, cellBg: pl.cellBg === 'transparent' ? '#FFFFFF' : 'transparent' })}
+          />
+        </div>
         <label className="shift-color-item">
           テキスト
           <input type="color" value={pl.textColor} onChange={(e) => onChange({ ...pl, textColor: e.target.value })} />
@@ -899,7 +1219,7 @@ function PlacementEditor({
         可読性ガード
       </div>
       <div className="placement-slider-grid">
-        <label>セル不透明度 <input type="range" min="0" max="100" value={Math.round((pl.cellBgAlpha ?? 1) * 100)} onChange={(e) => onChange({ ...pl, cellBgAlpha: Number(e.target.value) / 100 })} /> {Math.round((pl.cellBgAlpha ?? 1) * 100)}%</label>
+        <label style={{ opacity: pl.cellBg === 'transparent' ? 0.4 : 1 }}>セル不透明度 <input type="range" min="0" max="100" value={Math.round((pl.cellBgAlpha ?? 1) * 100)} disabled={pl.cellBg === 'transparent'} onChange={(e) => onChange({ ...pl, cellBgAlpha: Number(e.target.value) / 100 })} /> {pl.cellBg === 'transparent' ? '—' : `${Math.round((pl.cellBgAlpha ?? 1) * 100)}%`}</label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={pl.textOutline ?? false} onChange={(e) => onChange({ ...pl, textOutline: e.target.checked })} />
           文字の縁取り（背景画像上で読みやすくする）
@@ -909,19 +1229,154 @@ function PlacementEditor({
   );
 }
 
-function buildDailyPostText(
-  date: string,
-  days: import('../shiftTemplates/shiftData').ShiftDayData[],
-  slug: string,
-): string {
-  const [, m, d] = date.split('-').map(Number);
-  const wd = ['日', '月', '火', '水', '木', '金', '土'][new Date(date).getDay()]!;
-  const dayData = days.find(dd => dd.date === date);
-  const names = dayData?.casts.map(c => c.name).join('・') ?? '';
-  const reserveUrl = `https://rurifukuro.github.io/kyasuho/#/${slug}`;
-  const lines = [`本日 ${m}/${d}(${wd}) の出勤キャスト`];
-  if (names) lines.push(names);
-  lines.push('');
-  lines.push(`ご予約はこちら ▼\n${reserveUrl}`);
-  return lines.join('\n');
+// ── SNS投稿テンプレート編集モーダル（§40-3） ──────────────────────────
+
+const PLACEHOLDERS_DAILY = [
+  { key: '{{store_name}}', label: '店名' },
+  { key: '{{date}}', label: '日付' },
+  { key: '{{time}}', label: '時間帯' },
+  { key: '{{name}}', label: 'キャスト名' },
+  { key: '{{account}}', label: 'Xアカウント' },
+  { key: '{{reservation_url}}', label: '予約URL' },
+];
+const PLACEHOLDERS_MONTHLY = [
+  { key: '{{store_name}}', label: '店名' },
+  { key: '{{month}}', label: '月' },
+  { key: '{{reservation_url}}', label: '予約URL' },
+];
+
+function SnsTemplateEditor({
+  templates,
+  tenantId,
+  storeName,
+  yearMonth,
+  dailyDate,
+  days,
+  casts,
+  reserveUrl,
+  onClose,
+  onSave,
+}: {
+  templates: SnsPostTemplates;
+  tenantId: string;
+  storeName: string;
+  yearMonth: string;
+  dailyDate: string;
+  days: import('../shiftTemplates/shiftData').ShiftDayData[];
+  casts: KyCast[];
+  reserveUrl: string;
+  onClose: () => void;
+  onSave: (t: SnsPostTemplates) => void;
+}) {
+  const [tab, setTab] = useState<'daily' | 'monthly'>('daily');
+  const [daily, setDaily] = useState<SnsPostTemplate>(templates.daily ?? DEFAULT_DAILY_TEMPLATE);
+  const [monthly, setMonthly] = useState<SnsPostTemplate>(templates.monthly ?? DEFAULT_MONTHLY_TEMPLATE);
+  const [saving, setSaving] = useState(false);
+
+  const cur = tab === 'daily' ? daily : monthly;
+  const setCur = tab === 'daily' ? setDaily : setMonthly;
+  const placeholders = tab === 'daily' ? PLACEHOLDERS_DAILY : PLACEHOLDERS_MONTHLY;
+
+  const preview = useMemo(() => {
+    if (tab === 'daily') {
+      const dayData = days.find(d => d.date === dailyDate);
+      const entries: PostCastEntry[] = (dayData?.casts ?? []).map(c => {
+        const cast = casts.find(cc => cc.name === c.name);
+        return { name: c.name, nameKana: cast?.name_kana ?? c.name, start: c.start, xHandle: extractXHandle(cast?.sns_links ?? []) };
+      });
+      return buildDailyPost(daily, storeName, dailyDate, entries, reserveUrl);
+    }
+    return buildMonthlyPostText(monthly, storeName, yearMonth, reserveUrl);
+  }, [tab, daily, monthly, storeName, yearMonth, dailyDate, days, casts, reserveUrl]);
+
+  const xLen = estimateXLength(preview);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const next: SnsPostTemplates = { daily, monthly };
+      await updateSnsPostTemplates(tenantId, next);
+      onSave(next);
+    } catch (e) {
+      console.warn('[kyasuho] updateSnsPostTemplates:', e);
+      window.alert('保存に失敗しました');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const insertPlaceholder = (ph: string) => {
+    setCur(prev => ({ ...prev, footer: prev.footer + ph }));
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: 24, width: 640, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>投稿テンプレート編集</h3>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="admin-btn" onClick={onClose} style={{ fontSize: 16, padding: '2px 8px' }}>✕</button>
+        </div>
+
+        <div className="admin-btn-row" style={{ marginBottom: 12 }}>
+          <button type="button" className={`admin-btn${tab === 'daily' ? ' primary' : ''}`} onClick={() => setTab('daily')}>デイリー</button>
+          <button type="button" className={`admin-btn${tab === 'monthly' ? ' primary' : ''}`} onClick={() => setTab('monthly')}>マンスリー</button>
+        </div>
+
+        <div style={{ marginBottom: 12, fontSize: 13, color: '#6b7280' }}>
+          タップで末尾に挿入:
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 16 }}>
+          {placeholders.map(p => (
+            <button key={p.key} type="button" onClick={() => insertPlaceholder(p.key)} style={{ padding: '3px 10px', background: '#e5e7eb', borderRadius: 4, fontSize: 12, cursor: 'pointer', border: '1px solid #d1d5db' }} title={`フッターに ${p.key} を挿入`}>
+              {p.label} <code style={{ fontSize: 11 }}>{p.key}</code>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          <label style={{ fontSize: 13, fontWeight: 600 }}>ヘッダー
+            <textarea value={cur.header} onChange={e => setCur(prev => ({ ...prev, header: e.target.value }))} rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+          </label>
+          {tab === 'daily' && (
+            <>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>時間帯見出し
+                <textarea value={cur.group_heading} onChange={e => setCur(prev => ({ ...prev, group_heading: e.target.value }))} rows={1} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>キャスト1行
+                <textarea value={cur.line} onChange={e => setCur(prev => ({ ...prev, line: e.target.value }))} rows={1} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+              </label>
+            </>
+          )}
+          <label style={{ fontSize: 13, fontWeight: 600 }}>フッター
+            <textarea value={cur.footer} onChange={e => setCur(prev => ({ ...prev, footer: e.target.value }))} rows={2} style={{ width: '100%', fontFamily: 'inherit', fontSize: 14, padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginTop: 4, boxSizing: 'border-box' }} />
+          </label>
+        </div>
+
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+          プレビュー{' '}
+          {xLen > 280
+            ? <span style={{ color: '#d97706', fontWeight: 400 }}>⚠ {xLen}/280文字</span>
+            : <span style={{ color: '#6b7280', fontWeight: 400 }}>{xLen}/280文字</span>}
+        </div>
+        <div style={{ padding: 12, background: '#f8f9fa', borderRadius: 8, fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: '#333', marginBottom: 16, maxHeight: 200, overflow: 'auto', border: '1px solid #e5e7eb' }}>
+          {preview}
+        </div>
+
+        <div className="admin-btn-row">
+          <button type="button" className="admin-btn primary" disabled={saving} onClick={() => void handleSave()}>
+            {saving ? '保存中…' : '保存'}
+          </button>
+          <button type="button" className="admin-btn" onClick={() => {
+            if (tab === 'daily') setDaily(DEFAULT_DAILY_TEMPLATE);
+            else setMonthly(DEFAULT_MONTHLY_TEMPLATE);
+          }}>
+            既定に戻す
+          </button>
+          <button type="button" className="admin-btn" onClick={onClose}>キャンセル</button>
+        </div>
+      </div>
+    </div>
+  );
 }
+

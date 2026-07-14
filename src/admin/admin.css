@@ -649,6 +649,51 @@
   min-width: 80px;
 }
 
+/* §22-8: セル個別調整（ロック解除）のセル選択グリッド */
+.cell-pick-grid {
+  display: grid;
+  gap: 2px;
+  max-width: 340px;
+}
+
+.cell-pick {
+  min-height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.cell-pick.edited {
+  background: #fdf2f8;
+}
+
+.cell-pick.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+  background: #fce7f3;
+}
+
+/* 「透明」もカラー入力と同じスウォッチ型に統一（市松模様＝透明の慣例表現） */
+.transparent-swatch {
+  width: 52px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  background: conic-gradient(#d7dbe0 0 25%, #fff 0 50%, #d7dbe0 0 75%, #fff 0) 0 0 / 12px 12px;
+}
+
+.transparent-swatch.selected {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
 .shift-fav-item {
   display: flex;
   align-items: center;
@@ -669,4 +714,126 @@
 .shift-fav-base {
   font-size: 12px;
   color: var(--text-secondary);
+}
+
+/* ---- 開発者ダッシュボード（#/dev・§37） ---- */
+
+.dev-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.dev-kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dev-kpi-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.dev-kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-kpi-sub {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.dev-month-nav {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.dev-month-nav h3 {
+  margin: 0;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- ヘルプ（Q&A AIアシスタント・§46） ---- */
+
+.admin-help-card {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 170px);
+  min-height: 380px;
+  max-width: 760px;
+}
+
+.admin-help-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px 12px;
+}
+
+.admin-help-bubble {
+  max-width: 85%;
+  border-radius: 14px;
+  padding: 10px 13px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.admin-help-bubble.user {
+  align-self: flex-end;
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.admin-help-bubble.assistant {
+  align-self: flex-start;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.admin-help-bubble.thinking {
+  color: var(--text-secondary);
+}
+
+.admin-help-disclaimer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  padding: 6px 2px;
+}
+
+.admin-help-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.admin-help-input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
 }

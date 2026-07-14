@@ -9,7 +9,7 @@ export function useCasts(tenantId: string | undefined) {
     if (!tenantId) return;
     supabase
       .from('ky_casts')
-      .select('id, tenant_id, name, name_kana, photo_url, bio, accepts_nomination, sort_order, user_id')
+      .select('id, tenant_id, name, name_kana, photo_url, sns_links, bio, accepts_nomination, sort_order')
       .eq('tenant_id', tenantId)
       .order('sort_order')
       .then(({ data }) => {

@@ -7,10 +7,18 @@ import { useCasts, useSeatTypes, useShifts } from '../hooks/useCasts';
 import { usePublicEvents } from '../hooks/usePublicEvents';
 import { formatDate } from '../lib/timeUtils';
 import { Calendar } from './Calendar';
-import { TimeSlotList } from './TimeSlotList';
+import { CustomerTimeline } from './CustomerTimeline';
 import { ReservationModal } from './ReservationModal';
 import { ReservationEditModal } from './ReservationEditModal';
+import { DevAnnouncementBanner } from './DevAnnouncementBanner';
 import type { KyReservation } from '../lib/types';
+
+interface SelectedSlot {
+  slotMinutes: number;
+  windowStartMin: number;
+  windowEndMin: number;
+  setMinutes: number;
+}
 
 export function TenantPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -18,7 +26,7 @@ export function TenantPage() {
 
   const today = formatDate(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
-  const [selectedSlot, setSelectedSlot] = useState<{ slot: string; setMinutes: number } | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [editTarget, setEditTarget] = useState<KyReservation | null>(null);
   const userPicked = useRef(false);
 
@@ -29,6 +37,23 @@ export function TenantPage() {
   const { seatTypes } = useSeatTypes(tenant?.id);
   const { shifts } = useShifts(tenant?.id, selectedDate);
   const { events } = usePublicEvents(tenant?.id);
+
+  useEffect(() => {
+    const theme = tenant?.business_info?.theme;
+    if (!theme) return;
+    const root = document.documentElement;
+    if (theme.primaryColor) {
+      root.style.setProperty('--primary', theme.primaryColor);
+      root.style.setProperty('--primary-dark', theme.accentColor ?? theme.primaryColor);
+    }
+    if (theme.accentColor) {
+      root.style.setProperty('--primary-dark', theme.accentColor);
+    }
+    return () => {
+      root.style.removeProperty('--primary');
+      root.style.removeProperty('--primary-dark');
+    };
+  }, [tenant?.business_info?.theme]);
 
   useEffect(() => {
     if (!userPicked.current && nextDate && nextDate !== selectedDate) {
@@ -67,6 +92,7 @@ export function TenantPage() {
 
   return (
     <div className="tenant-page">
+      <DevAnnouncementBanner audience="customer" />
       <header className="store-header">
         <h1>{tenant.name}</h1>
         {tenant.genre && <p className="store-genre">{tenant.genre}</p>}
@@ -119,16 +145,21 @@ export function TenantPage() {
         </div>
       )}
 
-      <TimeSlotList
+      <CustomerTimeline
         date={selectedDate}
         windows={windows}
         reservations={reservations}
         casts={casts}
         shifts={shifts}
+        seatTypes={seatTypes}
         totalSeats={totalSeats}
-        onPickSlot={(slot, setMinutes) => {
+        onPickSlot={(slotMinutes, windowStartMin, windowEndMin, setMinutes) => {
           setEditTarget(null);
-          setSelectedSlot({ slot, setMinutes });
+          setSelectedSlot({ slotMinutes, windowStartMin, windowEndMin, setMinutes });
+        }}
+        onPickReservation={(r) => {
+          setSelectedSlot(null);
+          setEditTarget(r);
         }}
       />
 
@@ -158,11 +189,15 @@ export function TenantPage() {
         <ReservationModal
           tenantId={tenant.id}
           date={selectedDate}
-          slot={selectedSlot.slot}
+          initialSlotMinutes={selectedSlot.slotMinutes}
+          windowStartMin={selectedSlot.windowStartMin}
+          windowEndMin={selectedSlot.windowEndMin}
           setMinutes={selectedSlot.setMinutes}
           casts={casts}
           shifts={shifts}
           seatTypes={seatTypes}
+          reservations={reservations}
+          totalSeats={totalSeats}
           onClose={() => setSelectedSlot(null)}
           onReserved={handleReserved}
         />

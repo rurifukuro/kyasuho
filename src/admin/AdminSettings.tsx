@@ -1,7 +1,20 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { KyTenant } from '../lib/types';
-import { updateTenantFlags, updateTenantProfile } from './adminApi';
+import {
+  fetchReminderSettings,
+  updateTenantFlags,
+  updateTenantProfile,
+  upsertReminderSettings,
+  fetchPointSettings,
+  upsertPointSettings,
+  fetchPointRewards,
+  upsertPointReward,
+  deletePointReward,
+} from './adminApi';
+import type { KyPointReward } from '../lib/types';
+import { lookupPostalCode } from '../lib/postalLookup';
+import { resolveArea } from '../lib/areaDict';
 
 const PREFECTURES = [
   '', '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -34,6 +47,11 @@ export function AdminSettings({
   const [prefecture, setPrefecture] = useState(tenant.prefecture ?? '');
   const [area, setArea] = useState(tenant.area ?? '');
   const [rankingOptIn, setRankingOptIn] = useState(tenant.ranking_opt_in ?? false);
+
+  const [postalCode, setPostalCode] = useState(tenant.business_info?.postalCode ?? '');
+  const [customReserveUrl, setCustomReserveUrl] = useState(tenant.business_info?.customReserveUrl ?? '');
+  const [postalBusy, setPostalBusy] = useState(false);
+  const [postalMsg, setPostalMsg] = useState<string | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileMsg, setProfileMsg] = useState<string | null>(null);
 
@@ -44,7 +62,7 @@ export function AdminSettings({
   const [snsBusy, setSnsBusy] = useState(false);
   const [snsMsg, setSnsMsg] = useState<string | null>(null);
 
-  const toggle = async (flag: 'enable_bottle_keep' | 'enable_vouchers') => {
+  const toggle = async (flag: 'enable_bottle_keep' | 'enable_vouchers' | 'nomination_kinds_enabled') => {
     const newVal = !tenant[flag];
     setBusy(true);
     try {
@@ -57,15 +75,48 @@ export function AdminSettings({
     }
   };
 
+  const handlePostalSearch = useCallback(async () => {
+    setPostalBusy(true);
+    setPostalMsg(null);
+    try {
+      const result = await lookupPostalCode(postalCode);
+      if (!result) {
+        setPostalMsg('見つかりませんでした。手入力してください。');
+        return;
+      }
+      setPrefecture(result.prefecture);
+      setAddress(result.city + result.town);
+      setArea(resolveArea(result.city, result.town));
+      setPostalMsg(null);
+    } catch {
+      setPostalMsg('検索に失敗しました。手入力してください。');
+    } finally {
+      setPostalBusy(false);
+    }
+  }, [postalCode]);
+
   const handleProfileSave = useCallback(async (e: FormEvent) => {
     e.preventDefault();
+    const customUrl = customReserveUrl.trim();
+    if (customUrl && !/^https?:\/\//.test(customUrl)) {
+      setProfileMsg('予約ページURLは https:// から始まる形式で入力してください。');
+      return;
+    }
     setProfileBusy(true);
     setProfileMsg(null);
     try {
       const fields = {
         name: storeName.trim(),
         genre: genre.trim(),
-        business_info: { address: address.trim(), openHours: openHours.trim(), tel: tel.trim(), note: note.trim() },
+        business_info: {
+          address: address.trim(),
+          openHours: openHours.trim(),
+          tel: tel.trim(),
+          note: note.trim(),
+          postalCode: postalCode.trim() || undefined,
+          customReserveUrl: customUrl || undefined,
+          ...(tenant.business_info?.theme ? { theme: tenant.business_info.theme } : {}),
+        },
         prefecture,
         area: area.trim(),
         ranking_opt_in: rankingOptIn,
@@ -80,7 +131,7 @@ export function AdminSettings({
     } finally {
       setProfileBusy(false);
     }
-  }, [tenant.id, storeName, genre, address, openHours, tel, note, prefecture, area, rankingOptIn, onTenantUpdate]);
+  }, [tenant.id, tenant.business_info, storeName, genre, address, openHours, tel, note, postalCode, customReserveUrl, prefecture, area, rankingOptIn, onTenantUpdate]);
 
   const handleSnsSave = useCallback(async () => {
     setSnsBusy(true);
@@ -127,9 +178,19 @@ export function AdminSettings({
             <label htmlFor="prof-genre">ジャンル</label>
             <input id="prof-genre" type="text" value={genre} onChange={(e) => setGenre(e.target.value)} placeholder="例：コンカフェ、メイドカフェ" />
           </div>
+          <div className="admin-field">
+            <label htmlFor="prof-postal">郵便番号</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input id="prof-postal" type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="123-4567" style={{ width: 140 }} />
+              <button type="button" className="admin-btn" disabled={postalBusy} onClick={() => void handlePostalSearch()} style={{ whiteSpace: 'nowrap' }}>
+                {postalBusy ? '検索中…' : '住所検索'}
+              </button>
+            </div>
+            {postalMsg && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 4, display: 'block' }}>{postalMsg}</span>}
+          </div>
           <div className="admin-field" style={{ gridColumn: 'span 2' }}>
             <label htmlFor="prof-address">住所</label>
-            <input id="prof-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <input id="prof-address" type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="住所検索で自動入力されます" />
           </div>
           <div className="admin-field">
             <label htmlFor="prof-hours">営業時間</label>
@@ -154,6 +215,21 @@ export function AdminSettings({
           <div className="admin-field" style={{ gridColumn: 'span 2' }}>
             <label htmlFor="prof-note">備考</label>
             <input id="prof-note" type="text" value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <div className="admin-field" style={{ gridColumn: 'span 2' }}>
+            <label htmlFor="prof-reserve-url">予約ページURL（独自URL）</label>
+            <input
+              id="prof-reserve-url"
+              type="text"
+              value={customReserveUrl}
+              onChange={(e) => setCustomReserveUrl(e.target.value)}
+              placeholder="https://..."
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, display: 'block' }}>
+              QRコード・SNS投稿文に使われる予約ページのURLです。空欄の場合は標準の予約ページURLが使われます。
+            </span>
           </div>
         </div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '12px 0', cursor: 'pointer' }}>
@@ -205,6 +281,15 @@ export function AdminSettings({
         </div>
       </div>
 
+      {/* 客ページデザイン（§34-3） */}
+      <ThemeDesignSection tenant={tenant} onTenantUpdate={onTenantUpdate} />
+
+      {/* シフト提出リマインダー */}
+      <ShiftReminderSection tenantId={tenant.id} />
+
+      {/* ポイント・景品設定（§41） */}
+      <PointSettingsSection tenantId={tenant.id} />
+
       {/* オプション機能 */}
       <h3 className="admin-section-title" style={{ marginTop: 24 }}>オプション機能</h3>
       <div className="admin-card">
@@ -244,8 +329,679 @@ export function AdminSettings({
               </span>
             </span>
           </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={tenant.nomination_kinds_enabled}
+              disabled={busy}
+              onChange={() => void toggle('nomination_kinds_enabled')}
+              style={{ width: 18, height: 18 }}
+            />
+            <span>
+              <strong>指名種別（本指名/場内指名）</strong>
+              <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                ONにするとメニュー管理の指名カテゴリで「本指名」「場内指名」を区別できます。
+                それぞれ別料金・別バック率の設定が可能です。
+              </span>
+            </span>
+          </label>
         </div>
       </div>
     </div>
+  );
+}
+
+const DEFAULT_PRIMARY = '#e55381';
+const DEFAULT_ACCENT = '#c03868';
+const DEFAULT_CARD_OPACITY = 0.85;
+
+function ThemeDesignSection({
+  tenant,
+  onTenantUpdate,
+}: {
+  tenant: KyTenant;
+  onTenantUpdate: (patch: Partial<KyTenant>) => void;
+}) {
+  const theme = tenant.business_info?.theme;
+  const [primary, setPrimary] = useState(theme?.primaryColor ?? DEFAULT_PRIMARY);
+  const [accent, setAccent] = useState(theme?.accentColor ?? DEFAULT_ACCENT);
+  const [cardOpacity, setCardOpacity] = useState(theme?.cardOpacity ?? DEFAULT_CARD_OPACITY);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const isDefault =
+    primary === DEFAULT_PRIMARY &&
+    accent === DEFAULT_ACCENT &&
+    cardOpacity === DEFAULT_CARD_OPACITY;
+
+  const handleReset = () => {
+    setPrimary(DEFAULT_PRIMARY);
+    setAccent(DEFAULT_ACCENT);
+    setCardOpacity(DEFAULT_CARD_OPACITY);
+  };
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const bi = tenant.business_info ?? {};
+      const newTheme = isDefault
+        ? undefined
+        : { primaryColor: primary, accentColor: accent, cardOpacity };
+      const newBi = { ...bi, theme: newTheme };
+      await updateTenantProfile(tenant.id, { business_info: newBi });
+      onTenantUpdate({ business_info: newBi });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (err) {
+      console.warn('[kyasuho] theme save failed:', err);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenant.id, tenant.business_info, primary, accent, cardOpacity, isDefault, onTenantUpdate]);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>客ページデザイン</h3>
+      <div className="admin-card">
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+          お客様向け予約ページのカラーを設定できます。未設定の場合は既定のピンクが適用されます。
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="admin-field">
+            <label htmlFor="theme-primary">メインカラー</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="theme-primary"
+                type="color"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value)}
+                style={{ width: 48, height: 36, padding: 2, cursor: 'pointer' }}
+              />
+              <input
+                type="text"
+                value={primary}
+                onChange={(e) => setPrimary(e.target.value)}
+                style={{ width: 90, fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          </div>
+
+          <div className="admin-field">
+            <label htmlFor="theme-accent">アクセントカラー</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                id="theme-accent"
+                type="color"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+                style={{ width: 48, height: 36, padding: 2, cursor: 'pointer' }}
+              />
+              <input
+                type="text"
+                value={accent}
+                onChange={(e) => setAccent(e.target.value)}
+                style={{ width: 90, fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </div>
+          </div>
+
+          <div className="admin-field" style={{ gridColumn: 'span 2' }}>
+            <label htmlFor="theme-opacity">カード透過度: {Math.round(cardOpacity * 100)}%</label>
+            <input
+              id="theme-opacity"
+              type="range"
+              min={0.5}
+              max={1}
+              step={0.05}
+              value={cardOpacity}
+              onChange={(e) => setCardOpacity(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              背景画像使用時のカード背景の透明度です（低い＝透ける）
+            </span>
+          </div>
+
+          {/* ライブプレビュー */}
+          <div
+            style={{
+              gridColumn: 'span 2',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: 16,
+              background: '#faf8f5',
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>プレビュー</div>
+            <div
+              style={{
+                borderRadius: 10,
+                padding: 16,
+                background: `rgba(255,255,255,${cardOpacity})`,
+                border: `1px solid ${primary}22`,
+              }}
+            >
+              <div style={{ fontSize: 15, fontWeight: 700, color: primary, marginBottom: 4 }}>
+                {tenant.name || 'お店の名前'}
+              </div>
+              <div style={{ fontSize: 12, color: '#6b6b6b', marginBottom: 8 }}>
+                {tenant.genre || 'コンカフェ'}
+              </div>
+              <div
+                style={{
+                  display: 'inline-block',
+                  padding: '6px 20px',
+                  borderRadius: 6,
+                  background: primary,
+                  color: '#fff',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                予約する
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: accent,
+                  fontWeight: 600,
+                }}
+              >
+                リンク色のプレビュー
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+          <button
+            type="button"
+            className="admin-btn primary"
+            disabled={saving}
+            onClick={() => void handleSave()}
+          >
+            {saving ? '保存中…' : 'デザインを保存'}
+          </button>
+          <button
+            type="button"
+            className="admin-btn"
+            disabled={isDefault}
+            onClick={handleReset}
+          >
+            既定に戻す
+          </button>
+          {msg && (
+            <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+              {msg}
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function calcNextDeadline(deadlineDay: number): { label: string; remindDate: (daysBefore: number) => string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const thisMonth = new Date(y, m, deadlineDay);
+  const deadline = now <= thisMonth ? thisMonth : new Date(m === 11 ? y + 1 : y, (m + 1) % 12, deadlineDay);
+  const target = new Date(deadline.getFullYear(), deadline.getMonth() + 1, 1);
+  const label = `${deadline.getMonth() + 1}/${deadline.getDate()}（${target.getFullYear()}年${target.getMonth() + 1}月分）`;
+  return {
+    label,
+    remindDate: (daysBefore: number) => {
+      const d = new Date(deadline);
+      d.setDate(d.getDate() - daysBefore);
+      return `${d.getMonth() + 1}/${d.getDate()}`;
+    },
+  };
+}
+
+function ShiftReminderSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [enabled, setEnabled] = useState(false);
+  const [deadlineDay, setDeadlineDay] = useState(20);
+  const [remindDaysBefore, setRemindDaysBefore] = useState(3);
+  const [repeatDaily, setRepeatDaily] = useState(false);
+  const [remindHour, setRemindHour] = useState(12);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchReminderSettings(tenantId)
+      .then((s) => {
+        if (s) {
+          setEnabled(s.enabled);
+          setDeadlineDay(s.deadline_day);
+          setRemindDaysBefore(s.remind_days_before);
+          setRepeatDaily(s.repeat_daily);
+          setRemindHour(s.remind_hour);
+        }
+      })
+      .catch((e) => console.warn('[kyasuho] fetchReminderSettings:', e))
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await upsertReminderSettings(tenantId, {
+        enabled,
+        deadline_day: deadlineDay,
+        remind_days_before: remindDaysBefore,
+        repeat_daily: repeatDaily,
+        remind_hour: remindHour,
+      });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (e) {
+      console.warn('[kyasuho] upsertReminderSettings:', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, enabled, deadlineDay, remindDaysBefore, repeatDaily, remindHour]);
+
+  const { label: deadlineLabel, remindDate } = calcNextDeadline(deadlineDay);
+  const remindDateLabel = remindDate(remindDaysBefore);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>シフト提出リマインダー</h3>
+      <div className="admin-card">
+        {loading ? (
+          <div className="admin-empty">読み込み中…</div>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>
+                <strong>リマインダー通知を有効にする</strong>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  提出期限前に未提出のキャストへ自動でプッシュ通知が届きます。
+                </span>
+              </span>
+            </label>
+
+            {enabled && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="admin-field">
+                  <label htmlFor="rem-deadline">提出期限（毎月）</label>
+                  <select
+                    id="rem-deadline"
+                    value={deadlineDay}
+                    onChange={(e) => setDeadlineDay(Number(e.target.value))}
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>毎月 {d}日</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="rem-before">通知タイミング</label>
+                  <select
+                    id="rem-before"
+                    value={remindDaysBefore}
+                    onChange={(e) => setRemindDaysBefore(Number(e.target.value))}
+                  >
+                    <option value={0}>期限当日</option>
+                    {Array.from({ length: 27 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>期限の {d}日前</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label htmlFor="rem-hour">通知時刻</label>
+                  <select
+                    id="rem-hour"
+                    value={remindHour}
+                    onChange={(e) => setRemindHour(Number(e.target.value))}
+                  >
+                    {Array.from({ length: 24 }, (_, i) => i).map((h) => (
+                      <option key={h} value={h}>{h}:00</option>
+                    ))}
+                  </select>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={repeatDaily}
+                    onChange={(e) => setRepeatDaily(e.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>
+                    <strong>毎日再通知</strong>
+                    <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      初回通知日から期限日まで毎日通知
+                    </span>
+                  </span>
+                </label>
+
+                <div className="admin-card" style={{ gridColumn: 'span 2', background: 'var(--bg-secondary, #f9fafb)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>次回の通知予定</div>
+                  <div style={{ fontSize: 14 }}>
+                    次回の期限: <strong>{deadlineLabel}</strong>
+                  </div>
+                  <div style={{ fontSize: 14, color: 'var(--color-primary, #6366f1)' }}>
+                    通知予定: <strong>
+                      {remindDateLabel}
+                      {repeatDaily ? ` 〜 ${deadlineDay}日` : ''}
+                      {` ${remindHour}:00`}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? '保存中…' : 'リマインダー設定を保存'}
+              </button>
+              {msg && (
+                <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+                  {msg}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function PointSettingsSection({ tenantId }: { tenantId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const [enabled, setEnabled] = useState(false);
+  const [yenPerPoint, setYenPerPoint] = useState(500);
+
+  const [rewards, setRewards] = useState<KyPointReward[]>([]);
+  const [editReward, setEditReward] = useState<Partial<KyPointReward> | null>(null);
+  const [rewardBusy, setRewardBusy] = useState(false);
+  const [rewardMsg, setRewardMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      fetchPointSettings(tenantId),
+      fetchPointRewards(tenantId),
+    ])
+      .then(([s, r]) => {
+        if (s) {
+          setEnabled(s.enabled);
+          setYenPerPoint(s.yen_per_point);
+        }
+        setRewards(r);
+      })
+      .catch((e) => console.warn('[kyasuho] fetchPointSettings:', e))
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  const handleSave = useCallback(async () => {
+    if (yenPerPoint < 1) {
+      setMsg('単価は1以上を指定してください。');
+      return;
+    }
+    setSaving(true);
+    setMsg(null);
+    try {
+      await upsertPointSettings(tenantId, {
+        enabled,
+        yen_per_point: yenPerPoint,
+      });
+      setMsg('保存しました。');
+      window.setTimeout(() => setMsg(null), 3000);
+    } catch (e) {
+      console.warn('[kyasuho] upsertPointSettings:', e);
+      setMsg('保存に失敗しました。');
+    } finally {
+      setSaving(false);
+    }
+  }, [tenantId, enabled, yenPerPoint]);
+
+  const handleRewardSave = useCallback(async () => {
+    if (!editReward) return;
+    const name = (editReward.name ?? '').trim();
+    const pts = editReward.points_required ?? 0;
+    if (!name || pts < 1) {
+      setRewardMsg('景品名と必要ポイント(1以上)は必須です。');
+      return;
+    }
+    setRewardBusy(true);
+    setRewardMsg(null);
+    try {
+      await upsertPointReward(tenantId, {
+        ...editReward,
+        name,
+        points_required: pts,
+      });
+      const fresh = await fetchPointRewards(tenantId);
+      setRewards(fresh);
+      setEditReward(null);
+    } catch (e) {
+      console.warn('[kyasuho] upsertPointReward:', e);
+      setRewardMsg('保存に失敗しました。');
+    } finally {
+      setRewardBusy(false);
+    }
+  }, [tenantId, editReward]);
+
+  const handleRewardDelete = useCallback(async (id: string) => {
+    if (!window.confirm('この景品を削除しますか？')) return;
+    try {
+      await deletePointReward(id);
+      setRewards((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      console.warn('[kyasuho] deletePointReward:', e);
+      window.alert('削除に失敗しました。');
+    }
+  }, []);
+
+  return (
+    <>
+      <h3 className="admin-section-title" style={{ marginTop: 24 }}>ポイント・景品設定</h3>
+      <div className="admin-card">
+        {loading ? (
+          <div className="admin-empty">読み込み中…</div>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={enabled}
+                onChange={(e) => setEnabled(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span>
+                <strong>ポイント制度を有効にする</strong>
+                <span style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  来店金額に応じてポイントを付与し、景品と交換できます。
+                </span>
+              </span>
+            </label>
+
+            {enabled && (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div className="admin-field">
+                    <label htmlFor="pt-yen">ポイント単価（円/1pt）</label>
+                    <input
+                      id="pt-yen"
+                      type="number"
+                      min={1}
+                      value={yenPerPoint}
+                      onChange={(e) => setYenPerPoint(Number(e.target.value))}
+                      style={{ width: 120 }}
+                    />
+                  </div>
+                  <div className="admin-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', paddingBottom: 8 }}>
+                      例: ¥{(yenPerPoint * 10).toLocaleString()} の会計 → 10pt
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
+              <button
+                type="button"
+                className="admin-btn primary"
+                disabled={saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? '保存中…' : 'ポイント設定を保存'}
+              </button>
+              {msg && (
+                <span style={{ fontSize: 13, color: msg.includes('失敗') ? '#dc2626' : '#16a34a' }}>
+                  {msg}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {enabled && (
+        <>
+          <h3 className="admin-section-title" style={{ marginTop: 24 }}>景品カタログ</h3>
+          <div className="admin-card">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>景品名</th>
+                    <th>必要ポイント</th>
+                    <th>説明</th>
+                    <th>有効</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rewards.length === 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        景品が登録されていません
+                      </td>
+                    </tr>
+                  )}
+                  {rewards.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.name}</td>
+                      <td>{r.points_required}pt</td>
+                      <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.description || '—'}
+                      </td>
+                      <td>{r.is_active ? '有効' : '無効'}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="admin-btn" onClick={() => setEditReward({ ...r })}>編集</button>
+                          <button className="admin-btn danger" onClick={() => void handleRewardDelete(r.id)}>削除</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <button
+              type="button"
+              className="admin-btn"
+              style={{ marginTop: 12 }}
+              onClick={() => setEditReward({ name: '', points_required: 10, description: '', is_active: true, sort_order: rewards.length })}
+            >
+              ＋ 景品を追加
+            </button>
+
+            {editReward && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 16,
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  background: 'var(--bg-secondary, #f9fafb)',
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+                  {editReward.id ? '景品を編集' : '景品を追加'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="admin-field">
+                    <label>景品名</label>
+                    <input
+                      type="text"
+                      value={editReward.name ?? ''}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                      required
+                    />
+                  </div>
+                  <div className="admin-field">
+                    <label>必要ポイント</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={editReward.points_required ?? 10}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, points_required: Number(e.target.value) } : prev)}
+                    />
+                  </div>
+                  <div className="admin-field" style={{ gridColumn: 'span 2' }}>
+                    <label>説明（任意）</label>
+                    <input
+                      type="text"
+                      value={editReward.description ?? ''}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                    />
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={editReward.is_active ?? true}
+                      onChange={(e) => setEditReward((prev) => prev ? { ...prev, is_active: e.target.checked } : prev)}
+                    />
+                    有効
+                  </label>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="admin-btn primary" disabled={rewardBusy} onClick={() => void handleRewardSave()}>
+                    {rewardBusy ? '保存中…' : '保存'}
+                  </button>
+                  <button className="admin-btn" onClick={() => { setEditReward(null); setRewardMsg(null); }}>キャンセル</button>
+                  {rewardMsg && (
+                    <span style={{ fontSize: 13, color: rewardMsg.includes('失敗') ? '#dc2626' : '#e67e22' }}>
+                      {rewardMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </>
   );
 }

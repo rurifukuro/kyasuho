@@ -203,6 +203,25 @@ export function AdminSales({ tenant }: { tenant: KyTenant }) {
         <button type="button" className="admin-btn" onClick={handleCsv}>
           CSVダウンロード
         </button>
+        <button type="button" className="admin-btn" onClick={() => {
+          if (sales.length === 0) { window.alert('この月の売上記録がありません。'); return; }
+          const w = window.open('', '_blank');
+          if (!w) return;
+          const [y, m] = yearMonth.split('-');
+          const rows = sales.map((s) =>
+            `<tr><td>${s.date}</td><td style="text-align:right">${yen(s.total_revenue)}</td><td style="text-align:right">${s.set_count}</td><td style="text-align:right">${s.drink_count}</td><td style="text-align:right">${s.nomination_count}</td><td style="text-align:right">${yen(s.other_revenue)}</td><td>${s.note || ''}</td></tr>`
+          ).join('');
+          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>売上帳票 ${y}年${Number(m)}月 - ${tenant.name}</title>
+<style>body{font-family:sans-serif;padding:20px;max-width:800px;margin:0 auto}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px}th{background:#f3f4f6;text-align:left}h1{font-size:18px}.summary{margin:12px 0;font-size:14px}.summary b{font-size:16px}@media print{body{padding:0}}</style>
+</head><body>
+<h1>${tenant.name} 売上帳票</h1><p>${y}年${Number(m)}月</p>
+<div class="summary">月間売上合計: <b>${yen(summary.total)}</b>（${summary.days}日営業 / セット${summary.sets} / ドリンク${summary.drinks} / 指名${summary.nominations}）</div>
+<table><thead><tr><th>日付</th><th>総売上</th><th>セット</th><th>ドリンク</th><th>指名</th><th>その他</th><th>メモ</th></tr></thead><tbody>${rows}</tbody></table>
+<script>window.print()</script></body></html>`);
+          w.document.close();
+        }}>
+          売上帳票印刷
+        </button>
         <button type="button" className="admin-btn primary" onClick={() => openForm(null)}>
           売上を入力
         </button>

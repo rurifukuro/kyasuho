@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import type { KyCast, KyCastInvite, KyShift, KyTenant } from '../lib/types';
+import type { KyCast, KyCastInvite, KyShift, KyShiftRequest, KyShiftSubmission, KyTenant } from '../lib/types';
 import { formatDate } from '../lib/timeUtils';
+import { getTimeOptions } from '../lib/timeOptions';
 import type { KyPayrollSettings } from '../lib/types';
 import {
   addCast,
   addShift,
+  approveShiftRequest,
   createInvite,
   DEFAULT_PAYROLL_SETTINGS,
   deleteInvite,
@@ -13,6 +15,9 @@ import {
   fetchInvites,
   fetchPayrollSettings,
   fetchShiftList,
+  fetchTenantShiftRequests,
+  fetchTenantSubmissions,
+  rejectShiftRequest,
   removeCast,
   removeShift,
   updateCast,
@@ -199,7 +204,7 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
       return;
     }
     if (shiftEnd <= shiftStart) {
-      setShiftFormError('終了時刻は開始時刻より後にしてください（日をまたぐ場合はアプリから登録してください）。');
+      setShiftFormError('退勤時刻は出勤時刻より後にしてください。');
       return;
     }
     setShiftBusy(true);
@@ -443,27 +448,31 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
           </div>
           <div className="admin-field">
             <label htmlFor="shift-start">出勤</label>
-            <input
+            <select
               id="shift-start"
-              type="time"
               className="w-md"
-              step={600}
               value={shiftStart}
               onChange={(e) => setShiftStart(e.target.value)}
               required
-            />
+            >
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <div className="admin-field">
             <label htmlFor="shift-end">退勤</label>
-            <input
+            <select
               id="shift-end"
-              type="time"
               className="w-md"
-              step={600}
               value={shiftEnd}
               onChange={(e) => setShiftEnd(e.target.value)}
               required
-            />
+            >
+              {getTimeOptions().map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
           <button type="submit" className="admin-btn primary" disabled={shiftBusy}>
             {shiftBusy ? '追加中…' : '出勤を追加'}
@@ -532,8 +541,257 @@ export function AdminCasts({ tenant }: { tenant: KyTenant }) {
         );
       })()}
 
+      <ShiftRequestPanel tenant={tenant} casts={casts} onShiftsChanged={loadShifts} />
+
       <CastInvitePanel tenant={tenant} casts={casts} />
     </div>
+  );
+}
+
+// ── シフト希望パネル ──
+
+function getNextMonthPeriod(): { start: string; end: string; label: string } {
+  const now = new Date();
+  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+  const m = (now.getMonth() + 1) % 12;
+  const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+  const last = new Date(y, m + 1, 0).getDate();
+  const end = `${y}-${String(m + 1).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+  return { start, end, label: `${y}年${m + 1}月` };
+}
+
+function ShiftRequestPanel({
+  tenant,
+  casts,
+  onShiftsChanged,
+}: {
+  tenant: KyTenant;
+  casts: KyCast[];
+  onShiftsChanged: () => void;
+}) {
+  const [requests, setRequests] = useState<KyShiftRequest[]>([]);
+  const [submissions, setSubmissions] = useState<KyShiftSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const period = useMemo(() => getNextMonthPeriod(), []);
+
+  const castNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of casts) map.set(c.id, c.name);
+    return map;
+  }, [casts]);
+
+  const submittedCastIds = useMemo(
+    () => new Set(submissions.map((s) => s.cast_id)),
+    [submissions],
+  );
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [reqs, subs] = await Promise.all([
+        fetchTenantShiftRequests(tenant.id, period.start, period.end),
+        fetchTenantSubmissions(tenant.id, period.start),
+      ]);
+      setRequests(reqs);
+      setSubmissions(subs);
+    } catch (e) {
+      console.warn('[kyasuho] shift request load failed:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [tenant.id, period.start, period.end]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const handleApprove = async (req: KyShiftRequest) => {
+    const name = castNameById.get(req.cast_id) ?? 'このキャスト';
+    if (!window.confirm(`${name} の ${req.date} のシフト希望を承認しますか？\n出勤スケジュールに追加されます。`)) return;
+    setBusyId(req.id);
+    try {
+      await approveShiftRequest(req.id, tenant.id);
+      await loadData();
+      onShiftsChanged();
+    } catch (e) {
+      console.warn('[kyasuho] approve failed:', e);
+      window.alert('承認に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleReject = async (req: KyShiftRequest) => {
+    const name = castNameById.get(req.cast_id) ?? 'このキャスト';
+    if (!window.confirm(`${name} の ${req.date} のシフト希望を却下しますか？`)) return;
+    setBusyId(req.id);
+    try {
+      await rejectShiftRequest(req.id);
+      await loadData();
+    } catch (e) {
+      console.warn('[kyasuho] reject failed:', e);
+      window.alert('却下に失敗しました。');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const pending = requests.filter((r) => r.status === 'requested');
+  const processed = requests.filter((r) => r.status !== 'requested');
+
+  return (
+    <>
+      <h3 className="admin-section-title">シフト希望（{period.label}）</h3>
+
+      {loading ? (
+        <div className="admin-empty">読み込み中…</div>
+      ) : (
+        <>
+          <div className="admin-card" style={{ marginBottom: 12 }}>
+            <div className="admin-section-title" style={{ margin: '0 0 8px', fontSize: 14 }}>提出状況</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {casts.map((c) => {
+                const linked = !!c.user_id;
+                const submitted = submittedCastIds.has(c.id);
+                return (
+                  <div
+                    key={c.id}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      background: !linked
+                        ? 'var(--bg-tertiary, #f3f4f6)'
+                        : submitted
+                          ? 'var(--color-success-bg, #dcfce7)'
+                          : 'var(--color-warning-bg, #fef9c3)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {c.name}{' '}
+                    {!linked ? (
+                      <span style={{ color: 'var(--text-secondary)' }}>⚠️ 未連携</span>
+                    ) : submitted ? (
+                      <span style={{ color: 'var(--color-success, #16a34a)' }}>✅ 提出済み</span>
+                    ) : (
+                      <span style={{ color: 'var(--color-warning, #ca8a04)' }}>❌ 未提出</span>
+                    )}
+                  </div>
+                );
+              })}
+              {casts.length === 0 && (
+                <div className="admin-empty" style={{ padding: 0, fontSize: 13 }}>
+                  キャストが登録されていません。
+                </div>
+              )}
+            </div>
+          </div>
+
+          {pending.length > 0 && (
+            <>
+              <div className="admin-section-title" style={{ fontSize: 14, marginBottom: 4 }}>
+                未処理の希望（{pending.length}件）
+              </div>
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>キャスト</th>
+                      <th>日付</th>
+                      <th>出勤</th>
+                      <th>退勤</th>
+                      <th>種別</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.map((req) => (
+                      <tr key={req.id}>
+                        <td>{castNameById.get(req.cast_id) ?? '—'}</td>
+                        <td>{req.date}</td>
+                        <td>{req.start_at.slice(0, 5)}</td>
+                        <td>{req.end_at.slice(0, 5)}</td>
+                        <td>
+                          <span className={`admin-badge ${req.time_source === 'custom' ? 'blue' : 'gray'}`}>
+                            {req.time_source === 'custom' ? '個別' : '基本'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="admin-btn-row">
+                            <button
+                              type="button"
+                              className="admin-btn primary"
+                              disabled={busyId === req.id}
+                              onClick={() => void handleApprove(req)}
+                            >
+                              承認
+                            </button>
+                            <button
+                              type="button"
+                              className="admin-btn danger"
+                              disabled={busyId === req.id}
+                              onClick={() => void handleReject(req)}
+                            >
+                              却下
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {pending.length === 0 && !loading && (
+            <div className="admin-table-wrap" style={{ marginBottom: 12 }}>
+              <div className="admin-empty">未処理のシフト希望はありません。</div>
+            </div>
+          )}
+
+          {processed.length > 0 && (
+            <>
+              <div className="admin-section-title" style={{ fontSize: 14, marginBottom: 4 }}>
+                処理済み（{processed.length}件）
+              </div>
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>キャスト</th>
+                      <th>日付</th>
+                      <th>出勤</th>
+                      <th>退勤</th>
+                      <th>ステータス</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processed.map((req) => (
+                      <tr key={req.id}>
+                        <td>{castNameById.get(req.cast_id) ?? '—'}</td>
+                        <td>{req.date}</td>
+                        <td>{req.start_at.slice(0, 5)}</td>
+                        <td>{req.end_at.slice(0, 5)}</td>
+                        <td>
+                          <span
+                            className={`admin-badge ${req.status === 'approved' ? 'green' : 'red'}`}
+                          >
+                            {req.status === 'approved' ? '承認' : '却下'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </>
   );
 }
 

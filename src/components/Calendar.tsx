@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatDate, getDaysInMonth, getFirstDayOfWeek } from '../lib/timeUtils';
 import { useMonthAvailability } from '../hooks/useUnlockWindows';
+import { WEEKDAY_LABELS as WEEKDAYS } from '../shiftTemplates/shiftData';
 import type { DayStatus } from '../lib/types';
 
 interface CalendarProps {
@@ -8,8 +9,6 @@ interface CalendarProps {
   selectedDate: string;
   onSelectDate: (date: string) => void;
 }
-
-const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
 
 const STATUS_META: Record<DayStatus, { cls: string; mark: string }> = {
   available: { cls: 'avail', mark: '〇' },

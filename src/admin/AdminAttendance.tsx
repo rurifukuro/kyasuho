@@ -142,6 +142,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
         checkInAt: formCheckIn || null,
         checkOutAt: formCheckOut || null,
         note: formNote.trim(),
+        editedByOwner: true,
       });
       setFormOpen(false);
       const savedMonth = formDate.slice(0, 7);
@@ -177,7 +178,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
       return;
     }
     const rows: string[][] = [
-      ['日付', 'キャスト名', '状態', '入店時刻', '退店時刻', '理由'],
+      ['日付', 'キャスト名', '状態', '入店時刻', '退店時刻', '理由', '入力元'],
       ...attendance.map((a) => {
         const reasonLabel = a.reason_category ? REASON_LABELS[a.reason_category] : '';
         const reason = [reasonLabel, a.reason_note].filter(Boolean).join(': ');
@@ -188,6 +189,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
           a.check_in_at ?? '',
           a.check_out_at ?? '',
           reason,
+          a.edited_by_owner ? '店舗修正' : (a.check_in_at ? '本人打刻' : ''),
         ];
       }),
     ];
@@ -212,6 +214,26 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
         <span className="admin-spacer" />
         <button type="button" className="admin-btn" onClick={handleCsv}>
           CSVダウンロード
+        </button>
+        <button type="button" className="admin-btn" onClick={() => {
+          if (attendance.length === 0) { window.alert('この月の勤怠記録がありません。'); return; }
+          const w = window.open('', '_blank');
+          if (!w) return;
+          const [y, m] = yearMonth.split('-');
+          const rows = attendance.map((a) => {
+            const reasonLabel = a.reason_category ? REASON_LABELS[a.reason_category] : '';
+            const reason = [reasonLabel, a.reason_note].filter(Boolean).join(': ');
+            return `<tr><td>${a.date}</td><td>${castNameById.get(a.cast_id) ?? '—'}</td><td>${STATUS_LABELS[a.status]}</td><td>${a.check_in_at ?? ''}</td><td>${a.check_out_at ?? ''}</td><td>${reason}</td></tr>`;
+          }).join('');
+          w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>勤怠帳票 ${y}年${Number(m)}月 - ${tenant.name}</title>
+<style>body{font-family:sans-serif;padding:20px;max-width:800px;margin:0 auto}table{border-collapse:collapse;width:100%;margin:12px 0}th,td{border:1px solid #ccc;padding:6px 10px;font-size:13px}th{background:#f3f4f6;text-align:left}h1{font-size:18px}@media print{body{padding:0}}</style>
+</head><body>
+<h1>${tenant.name} 勤怠帳票</h1><p>${y}年${Number(m)}月（${attendance.length}件）</p>
+<table><thead><tr><th>日付</th><th>キャスト</th><th>状態</th><th>入店</th><th>退店</th><th>理由</th></tr></thead><tbody>${rows}</tbody></table>
+<script>window.print()</script></body></html>`);
+          w.document.close();
+        }}>
+          勤怠帳票印刷
         </button>
         <button type="button" className="admin-btn primary" onClick={() => openForm(null)}>
           勤怠を記録
@@ -377,6 +399,7 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
                     <th>退店</th>
                     <th>理由</th>
                     <th>メモ</th>
+                    <th>入力元</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -395,6 +418,11 @@ export function AdminAttendance({ tenant }: { tenant: KyTenant }) {
                         <td>{row.check_out_at ?? '—'}</td>
                         <td>{reason || '—'}</td>
                         <td>{row.note || '—'}</td>
+                        <td>
+                          {row.edited_by_owner
+                            ? <span className="att-status att-late">店舗修正</span>
+                            : (row.check_in_at ? <span className="att-status att-present">本人打刻</span> : '—')}
+                        </td>
                         <td>
                           <div className="admin-btn-row">
                             <button type="button" className="admin-btn" onClick={() => openForm(row)}>
