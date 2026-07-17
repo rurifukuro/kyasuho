@@ -60,3 +60,30 @@ export const ADDONS: AddonDef[] = [
 export function formatPrice(yen: number): string {
   return `¥${yen.toLocaleString()}`;
 }
+
+// ---- 個数割引ラダー（確定価格表 2026-07-12）----
+// 1個=定価 / 2個=10% / 3個=20% / 4-5個=25% / 6-7個=30% / 8個=¥39,800固定(41%OFF)
+// 丸め: 割引後を最寄りの ¥●,800 へ。
+// 実請求はサーバー（supabase/functions/ky-checkout）が同じ式で解決する＝改定時は両方更新（WEB13）。
+
+export const ALL_IN_PRICE = 39800;
+
+export function ladderRate(count: number): number {
+  if (count >= 8) return 0; // 8個は固定価格（率でなく ALL_IN_PRICE）
+  if (count >= 6) return 0.30;
+  if (count >= 4) return 0.25;
+  if (count === 3) return 0.20;
+  if (count === 2) return 0.10;
+  return 0;
+}
+
+export function roundTo800(x: number): number {
+  return Math.round((x - 800) / 1000) * 1000 + 800;
+}
+
+/** 選択モジュール数と定価合計 → 月額（ラダー＋¥●,800丸め） */
+export function computeMonthlyTotal(count: number, listTotal: number): number {
+  if (count >= 8) return ALL_IN_PRICE;
+  if (count >= 2) return roundTo800(listTotal * (1 - ladderRate(count)));
+  return listTotal;
+}

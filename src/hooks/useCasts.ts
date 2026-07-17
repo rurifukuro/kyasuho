@@ -27,7 +27,7 @@ export function useSeatTypes(tenantId: string | undefined) {
     if (!tenantId) return;
     supabase
       .from('ky_seat_types')
-      .select('*')
+      .select('id, tenant_id, name, seat_fee, sort_order, is_active, capacity')
       .eq('tenant_id', tenantId)
       .eq('is_active', true)
       .order('sort_order')

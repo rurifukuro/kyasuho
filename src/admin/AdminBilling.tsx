@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { KyTenant } from '../lib/types';
 import { supabase } from '../lib/supabase';
-import { MODULES, PACKS, ADDONS, formatPrice } from './billingConfig';
+import { MODULES, PACKS, ADDONS, formatPrice, ladderRate, computeMonthlyTotal } from './billingConfig';
 import type { ModuleKey } from './billingConfig';
 
 export function AdminBilling({ tenant: _tenant }: { tenant: KyTenant }) {
@@ -25,15 +25,10 @@ export function AdminBilling({ tenant: _tenant }: { tenant: KyTenant }) {
   const selectedModules = MODULES.filter(m => selected.has(m.key));
   const totalBeforeDiscount = selectedModules.reduce((sum, m) => sum + m.price, 0);
 
-  const discountRate = selected.size <= 1 ? 0
-    : selected.size <= 2 ? 0.10
-    : selected.size <= 3 ? 0.20
-    : selected.size <= 5 ? 0.25
-    : selected.size <= 7 ? 0.30
-    : 0;
-
+  // 割引ラダー＋¥●,800丸めは billingConfig の共有関数（実請求は ky-checkout が同じ式で解決＝WEB13）
+  const discountRate = ladderRate(selected.size);
   const isAllIn = selected.size === 8;
-  const total = isAllIn ? 39800 : Math.round(totalBeforeDiscount * (1 - discountRate));
+  const total = computeMonthlyTotal(selected.size, totalBeforeDiscount);
 
   const handleCheckout = useCallback(async (priceIds: string[]) => {
     const missing = priceIds.filter(p => !p);
@@ -192,16 +187,20 @@ export function AdminBilling({ tenant: _tenant }: { tenant: KyTenant }) {
 
       <div className="admin-card" style={{ marginBottom: 20 }}>
         <h3 className="admin-section-title">追加パック（都度購入）</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+          準備中です。もうしばらくお待ちください。
+        </p>
+        {/* 購入導線は消費配線（ky_addon_grants→クォータ反映）完成まで無効化。
+            有効化時は onClick={() => void handleCheckout([addon.stripePriceId])} を戻す */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {ADDONS.map(addon => (
             <button
               key={addon.key}
               type="button"
               className="admin-btn"
-              disabled={loading || !addon.stripePriceId}
-              onClick={() => void handleCheckout([addon.stripePriceId])}
+              disabled
             >
-              {addon.name}（{formatPrice(addon.price)}）
+              {addon.name}（{formatPrice(addon.price)}）準備中
             </button>
           ))}
         </div>
@@ -215,7 +214,7 @@ export function AdminBilling({ tenant: _tenant }: { tenant: KyTenant }) {
 
       <div style={{ marginTop: 24, fontSize: 13, color: 'var(--text-secondary)' }}>
         <p>※ 表示価格はすべて税別です。決済時に消費税が加算されます。</p>
-        <p>※ 初月無料トライアル期間中は課金されません。トライアル終了後に自動で有料プランへ移行します。</p>
+        <p>※ 初月無料トライアル期間中は課金されません。トライアル終了後に自動で課金されることはなく、ご契約手続きをいただいた場合のみ課金が始まります。</p>
         <p>※ いつでもキャンセル・プラン変更が可能です。</p>
       </div>
     </div>

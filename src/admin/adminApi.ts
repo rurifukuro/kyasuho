@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { formatDate } from '../lib/timeUtils';
 import type {
   KyAttendance,
   KyBottleKeep,
@@ -150,6 +151,7 @@ export async function adminMakeReservation(input: {
     p_cast_id: input.castId,
     p_note: input.note,
     p_pin: null,
+    p_seat_type_id: null,
   });
   if (error) throw error;
   return data as MakeReservationResult;
@@ -815,7 +817,8 @@ export async function fetchOrderItems(orderId: string): Promise<KyOrderItem[]> {
 export async function fetchMenuItems(tenantId: string): Promise<KyMenuItem[]> {
   const { data, error } = await supabase
     .from('ky_menu_items')
-    .select('*')
+    // 列GRANTテーブルは明示列必須（select('*') は非付与列で42501＝SELECT-SYNC）
+    .select('id, tenant_id, category, name, price, needs_cast, sort_order, is_active, nomination_kind, back_rate, back_amount, remote_price, guest_back_rate, guest_back_amount, created_at, updated_at')
     .eq('tenant_id', tenantId)
     .order('sort_order')
     .order('name');
@@ -967,7 +970,7 @@ export async function countCastDrinksByMonth(
 export async function fetchSeatTypes(tenantId: string): Promise<KySeatType[]> {
   const { data, error } = await supabase
     .from('ky_seat_types')
-    .select('*')
+    .select('id, tenant_id, name, seat_fee, sort_order, is_active, capacity')
     .eq('tenant_id', tenantId)
     .order('sort_order')
     .order('name');
@@ -1321,7 +1324,7 @@ export async function analyzeShiftImage(imageUrl: string): Promise<unknown> {
 export async function fetchEvents(tenantId: string): Promise<KyEvent[]> {
   const { data, error } = await supabase
     .from('ky_events')
-    .select('*')
+    .select('id, tenant_id, title, description, event_date, start_time, end_time, event_type, is_public, created_at')
     .eq('tenant_id', tenantId)
     .order('event_date', { ascending: true });
   if (error) throw error;
@@ -1369,10 +1372,10 @@ export async function deleteEvent(id: string): Promise<void> {
 export async function fetchPublicEvents(tenantId: string): Promise<KyEvent[]> {
   const { data, error } = await supabase
     .from('ky_events')
-    .select('*')
+    .select('id, tenant_id, title, description, event_date, start_time, end_time, event_type, is_public, created_at')
     .eq('tenant_id', tenantId)
     .eq('is_public', true)
-    .gte('event_date', new Date().toISOString().slice(0, 10))
+    .gte('event_date', formatDate(new Date()))
     .order('event_date', { ascending: true });
   if (error) throw error;
   return (data ?? []) as KyEvent[];
@@ -1662,7 +1665,7 @@ export async function fetchPointSettings(
 ): Promise<KyPointSettings | null> {
   const { data, error } = await supabase
     .from('ky_point_settings')
-    .select('*')
+    .select('tenant_id, enabled, yen_per_point, updated_at')
     .eq('tenant_id', tenantId)
     .maybeSingle();
   if (error) throw error;
@@ -1691,7 +1694,7 @@ export async function fetchPointRewards(
 ): Promise<KyPointReward[]> {
   const { data, error } = await supabase
     .from('ky_point_rewards')
-    .select('*')
+    .select('id, tenant_id, points_required, name, description, is_active, sort_order, created_at, updated_at')
     .eq('tenant_id', tenantId)
     .order('sort_order')
     .order('name');

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { formatDate } from '../lib/timeUtils';
 import type { KyEvent } from '../lib/types';
 
 export function usePublicEvents(tenantId: string | undefined) {
@@ -7,10 +8,11 @@ export function usePublicEvents(tenantId: string | undefined) {
 
   useEffect(() => {
     if (!tenantId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = formatDate(new Date());
     supabase
       .from('ky_events')
-      .select('*')
+      // anon の列GRANT範囲に限定（select('*') は非付与列で42501＝SELECT-SYNC）
+      .select('id, tenant_id, title, description, event_date, start_time, end_time, event_type, is_public')
       .eq('tenant_id', tenantId)
       .eq('is_public', true)
       .gte('event_date', today)

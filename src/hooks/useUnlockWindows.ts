@@ -12,7 +12,8 @@ export function useUnlockWindows(tenantId: string | undefined, date: string) {
     setLoading(true);
     supabase
       .from('ky_unlock_windows')
-      .select('*')
+      // anon の列GRANT範囲に限定（select('*') は非付与列で42501＝SELECT-SYNC）
+      .select('id, tenant_id, date, open_from, close_at, seats, set_minutes')
       .eq('tenant_id', tenantId)
       .eq('date', date)
       .order('open_from')
