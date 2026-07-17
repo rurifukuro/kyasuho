@@ -837,3 +837,57 @@
   font-family: inherit;
   line-height: 1.5;
 }
+
+/* ── §55 オーナー向け満足度アンケート（SurveyPrompt） ── */
+.survey-open-btn {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  background: none;
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.survey-open-btn:hover { background: rgba(var(--primary-rgb, 99,102,241), 0.08); }
+.survey-modal { max-width: 520px; }
+.survey-lead { font-weight: 600; margin-bottom: 4px; }
+.survey-intro { color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.5; }
+.survey-section-title { font-weight: 600; font-size: 0.9rem; margin: 0.75rem 0 0.35rem; }
+.survey-star-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.survey-star-label { font-size: 0.85rem; }
+.survey-stars { display: flex; gap: 2px; }
+.survey-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #c9c2ba;
+  padding: 2px;
+}
+.survey-star.filled { color: #f59e0b; }
+.survey-check-row {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.8rem !important;
+  font-weight: 400 !important;
+  color: var(--text-secondary) !important;
+  line-height: 1.5;
+}
+.survey-check-row input { display: inline-block !important; width: auto !important; margin-top: 2px !important; }
+.survey-error { color: var(--danger); font-size: 0.85rem; margin: 0.5rem 0; }
+.survey-footnote {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.75rem;
+}

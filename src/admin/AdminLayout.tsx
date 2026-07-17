@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { DevAnnouncementBanner } from '../components/DevAnnouncementBanner';
+import { SurveyPrompt } from '../components/SurveyPrompt';
 import { AdminNotificationBell } from './AdminNotificationBell';
 import type { KyTenant } from '../lib/types';
 
@@ -85,6 +86,7 @@ export function AdminLayout({ tenant }: { tenant: KyTenant }) {
           </div>
         </div>
         <DevAnnouncementBanner audience="admin" />
+        <SurveyPrompt tenantId={tenant.id} />
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
