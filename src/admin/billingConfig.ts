@@ -61,8 +61,8 @@ export function formatPrice(yen: number): string {
   return `¥${yen.toLocaleString()}`;
 }
 
-// ---- 個数割引ラダー（確定価格表 2026-07-12）----
-// 1個=定価 / 2個=10% / 3個=20% / 4-5個=25% / 6-7個=30% / 8個=¥39,800固定(41%OFF)
+// ---- 個数割引ラダー（改定 2026-07-15・パック優位設計）----
+// 1個=定価 / 2個=5% / 3個=10% / 4-5個=20% / 6-7個=30% / 8個=¥39,800固定
 // 丸め: 割引後を最寄りの ¥●,800 へ。
 // 実請求はサーバー（supabase/functions/ky-checkout）が同じ式で解決する＝改定時は両方更新（WEB13）。
 
@@ -71,9 +71,9 @@ export const ALL_IN_PRICE = 39800;
 export function ladderRate(count: number): number {
   if (count >= 8) return 0; // 8個は固定価格（率でなく ALL_IN_PRICE）
   if (count >= 6) return 0.30;
-  if (count >= 4) return 0.25;
-  if (count === 3) return 0.20;
-  if (count === 2) return 0.10;
+  if (count >= 4) return 0.20;
+  if (count === 3) return 0.10;
+  if (count === 2) return 0.05;
   return 0;
 }
 
