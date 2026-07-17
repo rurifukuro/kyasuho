@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KyTenant } from '../lib/types';
 import { askFaqAi, type FaqChatMessage } from './adminApi';
 
-const CONTACT_FORM_URL = 'https://forms.gle/RMWGLzRdyzdnPSas5';
+const CONTACT_FORM_URL = 'https://forms.gle/tLkxL8YRE1XmpfXs6';
 
 const WELCOME_TEXT =
   'こんにちは！きゃすりんのAIアシスタントです。使い方・料金・トラブルなど、お気軽にご質問ください。';
